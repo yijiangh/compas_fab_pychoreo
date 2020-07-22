@@ -1,0 +1,3 @@
+[submodule "data/robots/abb_irb4600_40_255"]
+	path = data/robots/abb_irb4600_40_255
+	url = https://github.com/gramaziokohler/abb_irb4600_40_255.git
