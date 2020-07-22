@@ -1,3 +1,2 @@
-
 COMPAS>=0.16.1
-
+pybullet_planning>=0.5.0
