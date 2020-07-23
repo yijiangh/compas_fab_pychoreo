@@ -2,9 +2,11 @@ import os
 import tempfile
 from compas.geometry import Frame
 
+import numpy as np
 from pybullet_planning import create_obj
 from pybullet_planning import set_pose
 from pybullet_planning import add_body_name
+from pybullet_planning import joints_from_names
 
 
 def pose_from_frame(frame):
@@ -79,3 +81,29 @@ def convert_mesh_to_body(mesh, frame, name=None):
             add_body_name(pyb_body, name)
     return pyb_body
     # """
+
+def joint_values_from_configuration(c_conf, pb_robot, scale=1.0, joint_names=None):
+    """Convert a compas_fab Configuration to pybullet conf
+
+    Parameters
+    ----------
+    c_conf : compas_fab Configuration
+        [description]
+    pb_robot : int
+        pybullet robot index
+    scale : [type], optional
+        [description], by default MIL2METER
+
+    Returns
+    -------
+    [type]
+        [description]
+    """
+    if scale != 1.0:
+        # data copy here to avoid accidentally overwrite data
+        scaled_c_conf = c_conf.scaled(scale)
+        conf = np.array(scaled_c_conf.values)
+    else:
+        conf = np.array(c_conf.values)
+    joints = joints_from_names(pb_robot, joint_names or scaled_c_conf.joint_names)
+    return joints, conf

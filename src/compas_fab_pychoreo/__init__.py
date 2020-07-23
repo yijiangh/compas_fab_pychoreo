@@ -35,6 +35,7 @@ TEMP = os.path.abspath(os.path.join(HOME, "temp"))
 # Check if package is installed from git
 # If that's the case, try to append the current head's hash to __version__
 try:
+    import compas
     git_head_file = compas._os.absjoin(HOME, '.git', 'HEAD')
 
     if os.path.exists(git_head_file):

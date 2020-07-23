@@ -1,6 +1,6 @@
 from compas.geometry import Frame
 from compas.geometry import Transformation
-from algorithmic_details.ik_solver import fit_within_bounds
+from .ik_solver import fit_within_bounds
 
 
 class InverseKinematicsSolver(object):

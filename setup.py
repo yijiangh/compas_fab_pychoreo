@@ -12,6 +12,13 @@ from setuptools.command.develop import develop
 from setuptools.command.install import install
 
 
+requirements = [
+    # Until COMPAS reaches 1.0, we pin major.minor and allow patch version updates
+    'compas>=0.16.1,<0.17',
+    'compas_fab>=0.11.0',
+    'pybullet_planning>=0.5.0',
+]
+
 here = path.abspath(path.dirname(__file__))
 
 
@@ -23,7 +30,7 @@ def read(*names, **kwargs):
 
 
 long_description = read("README.md")
-requirements = read("requirements.txt").split("\n")
+# requirements = read("requirements.txt").split("\n")
 optional_requirements = {}
 
 setup(
@@ -45,7 +52,6 @@ setup(
         "Operating System :: POSIX",
         "Operating System :: Microsoft :: Windows",
         "Programming Language :: Python",
-        "Programming Language :: Python :: 2.7",
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.4",
         "Programming Language :: Python :: 3.5",
@@ -62,7 +68,7 @@ setup(
     include_package_data=True,
     zip_safe=False,
     install_requires=requirements,
-    python_requires=">=2.7",
+    python_requires=">=3",
     extras_require=optional_requirements,
     entry_points={
         "console_scripts": [],
