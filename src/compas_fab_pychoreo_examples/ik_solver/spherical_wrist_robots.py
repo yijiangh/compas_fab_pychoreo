@@ -3,7 +3,7 @@ import math
 from compas.geometry import Point
 from compas.geometry import Frame
 from compas_fab.robots import Configuration
-from algorithmic_details.ik_solver import inverse_kinematics_spherical_wrist
+from compas_fab_pychoreo_examples.ik_solver.ik_spherical_wrist import inverse_kinematics_spherical_wrist
 
 
 def joint_angles_to_configurations(A1, A2, A3, A4, A5, A6):
@@ -17,7 +17,10 @@ def ik_staubli_txl60(frame_rcf):
     p3 = Point(0.450, 0.020, 0.775)
     p4 = Point(0.520, 0.020, 0.775)
 
-    A1, A2, A3, A4, A5, A6 = inverse_kinematics_spherical_wrist(p1, p2, p3, p4, frame_rcf)
+    result = inverse_kinematics_spherical_wrist(p1, p2, p3, p4, frame_rcf)
+    if result is None:
+        return []
+    A1, A2, A3, A4, A5, A6 = result
 
     for i in range(8):
         A1[i] = -1 * A1[i]
@@ -35,7 +38,10 @@ def ik_abb_irb4600_40_255(frame_rcf):
     p3 = Point(1.446, 0.000, 1.765)
     p4 = Point(1.581, 0.000, 1.765)
 
-    A1, A2, A3, A4, A5, A6 = inverse_kinematics_spherical_wrist(p1, p2, p3, p4, frame_rcf)
+    result = inverse_kinematics_spherical_wrist(p1, p2, p3, p4, frame_rcf)
+    if result is None:
+        return []
+    A1, A2, A3, A4, A5, A6 = result
 
     for i in range(8):
         A1[i] = -1 * A1[i]

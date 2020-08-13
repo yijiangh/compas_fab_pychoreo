@@ -90,7 +90,7 @@ def inverse_kinematics_spherical_wrist(p1, p2, p3, p4, target_frame):
     upper_arm_length = (p3 - p2).length
     pln_offset = math.fabs(p2.y - p1.y)
     axis4_offset_angle = math.atan2(p3.z - p2.z, p3.x - p2.x)
-    wrist = end_frame.to_world_coords(Point(0, 0, wrist_offset))
+    wrist = end_frame.to_world_coordinates(Point(0, 0, wrist_offset))
 
     p1_proj = p1.copy()
     p1_proj.y = p2.y
@@ -131,7 +131,12 @@ def inverse_kinematics_spherical_wrist(p1, p2, p3, p4, target_frame):
         elbow_frame = Frame(p1A, elbow_dir, [0, 0, 1])
         elbow_plane = (p1A, elbow_frame.normal)
 
-        case, (center, radius, normal) = intersection_sphere_sphere(sphere1, sphere2)
+        result = intersection_sphere_sphere(sphere1, sphere2)
+        if result is not None:
+            case, (center, radius, normal) = result
+        else:
+            return None
+
         circle = ((center, normal), radius)
 
         intersect_pt1, intersect_pt2 = intersection_plane_circle(elbow_plane, circle)
@@ -143,8 +148,8 @@ def inverse_kinematics_spherical_wrist(p1, p2, p3, p4, target_frame):
                 elbow_pt = intersect_pt2
             elbow_pt = Point(*elbow_pt)
 
-            elbowx, elbowy, elbowz = elbow_frame.to_local_coords(elbow_pt)
-            wristx, wristy, wristz = elbow_frame.to_local_coords(wrist)
+            elbowx, elbowy, elbowz = elbow_frame.to_local_coordinates(elbow_pt)
+            wristx, wristy, wristz = elbow_frame.to_local_coordinates(wrist)
 
             axis2_angle = math.atan2(elbowy, elbowx)
             axis3_angle = math.pi - axis2_angle + math.atan2(wristy - elbowy, wristx - elbowx) - axis4_offset_angle
@@ -166,7 +171,7 @@ def inverse_kinematics_spherical_wrist(p1, p2, p3, p4, target_frame):
 
                 # // B = TempPlane
                 axis4_frame = Frame(wrist, temp_frame.zaxis, temp_frame.yaxis * -1.0)
-                axis6x, axis6y, axis6z = axis4_frame.to_local_coords(end_frame.point)
+                axis6x, axis6y, axis6z = axis4_frame.to_local_coordinates(end_frame.point)
 
                 axis4_angle = math.atan2(axis6y, axis6x)
                 if k == 1:
@@ -184,14 +189,14 @@ def inverse_kinematics_spherical_wrist(p1, p2, p3, p4, target_frame):
                 axis5_frame = axis4_frame.copy()
                 axis5_frame.transform(Rotation.from_axis_and_angle(axis4_frame.zaxis, axis4_angle))
                 axis5_frame = Frame(wrist, axis5_frame.zaxis * -1, axis5_frame.xaxis)
-                axis6x, axis6y, axis6z = axis5_frame.to_local_coords(end_frame.point)
+                axis6x, axis6y, axis6z = axis5_frame.to_local_coordinates(end_frame.point)
                 axis5_angle = math.atan2(axis6y, axis6x)
                 axis5_angles.append(axis5_angle)
 
                 axis6_frame = axis5_frame.copy()
                 axis6_frame.transform(Rotation.from_axis_and_angle(axis5_frame.zaxis, axis5_angle))
                 axis6_frame = Frame(wrist, axis6_frame.yaxis * -1, axis6_frame.zaxis)
-                endx, endy, endz = axis6_frame.to_local_coords(end_frame.to_world_coords(Point(1, 0, 0)))
+                endx, endy, endz = axis6_frame.to_local_coordinates(end_frame.to_world_coordinates(Point(1, 0, 0)))
                 axis6_angle = math.atan2(endy, endx)
                 axis6_angles.append(axis6_angle)
 

@@ -1,14 +1,14 @@
 from compas.geometry import Frame
 from compas.geometry import Transformation
-from .ik_solver import fit_within_bounds
+from compas_fab_pychoreo_examples.ik_solver.utils import fit_within_bounds
 
 
 class InverseKinematicsSolver(object):
     """Create a custom InverseKinematicsSolver for a robot.
     """
-    # TODO create with class `Tool`, not tool frame!!
 
     def __init__(self, robot, group, function, base_frame=None, tool_frame=None):
+        # TODO create with class `Tool`, not tool_frame!!
 
         self.robot = robot
         self.group = group
@@ -101,8 +101,9 @@ class InverseKinematicsSolver(object):
             # fit configurations within joint bounds (sets those to `None` that are not working)
             self.try_to_fit_configurations_between_bounds(configurations)
             # check collisions for all configurations (sets those to `None` that are not working)
-            if self.robot.client:
-                self.robot.client.check_configurations_for_collision(configurations)
+            # TODO defer collision checking
+            # if self.robot.client:
+            #     self.robot.client.check_configurations_for_collision(configurations)
 
             if return_closest_to_start:
                 diffs = [c.max_difference(start_configuration) for c in configurations if c is not None]

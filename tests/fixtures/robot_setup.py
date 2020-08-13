@@ -30,4 +30,4 @@ def fixed_waam_setup():
     tool_frame_robotA = Frame.from_euler_angles([0.591366, -0.000922, 1.570177], static=True, axes='xyz', point=[-0.002241, -0.000202, 0.505922])
     tool_mesh_robotA = Mesh.from_obj(os.path.join(package_path, "meshes", "collision", "waam_tool.obj"))
     robotA_tool = Tool(tool_mesh_robotA, tool_frame_robotA, collision=tool_mesh_robotA)
-    return urdf_filename, robot, tool_frame_robotA, tool_mesh_robotA, robotA_tool
+    return urdf_filename, robot, robotA_tool

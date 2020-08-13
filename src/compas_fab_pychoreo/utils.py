@@ -1,5 +1,18 @@
 import logging
 
+###########################################
+
+def get_disabled_collisions(semantics):
+    # TODO: move to semantics
+    disabled_collisions = {}
+    for dc in semantics.root.iter('disable_collisions'):
+        link1, link2 = dc.attrib['link1'], dc.attrib['link2']
+        if link1 not in disabled_collisions:
+            disabled_collisions.update({link1: []})
+        disabled_collisions[link1].append(link2)
+    return disabled_collisions
+
+###########################################
 
 def get_logger(name):
     logger = logging.getLogger(name)
