@@ -1,5 +1,4 @@
 from itertools import combinations
-import pybullet
 from pybullet_planning import is_connected, disconnect, connect, load_pybullet, CLIENT, HideOutput
 from pybullet_planning import get_link_pose, link_from_name
 from pybullet_planning import set_joint_positions
@@ -7,7 +6,8 @@ from pybullet_planning import joints_from_names
 from pybullet_planning import inverse_kinematics
 from pybullet_planning import get_movable_joints  # from pybullet_planning.interfaces.robots.joint
 from pybullet_planning import get_joint_names  # from pybullet_planning.interfaces.robots.joint
-from pybullet_planning import set_pose, get_bodies
+from pybullet_planning import set_pose, get_bodies, remove_body, create_attachment
+from pybullet_planning import draw_pose
 
 from compas_fab.backends.interfaces.client import ClientInterface
 from compas_fab_pychoreo.planner import PybulletPlanner
@@ -55,7 +55,7 @@ class PyBulletClient(ClientInterface):
         self.robot_uid = None
         #
         self.collision_objects = {}
-        self.attached_collision_objects = {}
+        self.attachments = {}
         self.planner = PybulletPlanner(self)
 
     # @classmethod
@@ -146,7 +146,7 @@ class PyBulletClient(ClientInterface):
     def remove_collision_mesh(self, name):
         if name in self.collision_objects:
             for body in self.collision_objects[name]:
-                pybullet.removeBody(body)
+                remove_body(body)
         else:
             LOG.warning("Collison object with name '{}' does not exist in scene.".format(name))
 
@@ -168,7 +168,42 @@ class PyBulletClient(ClientInterface):
             set_pose(body, pose_from_frame(frame))
 
     def add_attached_collision_mesh(self, attached_collision_mesh):
-        raise NotImplementedError
+        """Adds an attached collision object to the planning scene.
+
+        Parameters
+        ----------
+        attached_collision_mesh : :class:`compas_fab.robots.AttachedCollisionMesh`
+
+        Returns
+        -------
+        attachment : pybullet Attachment
+        """
+        robot_uid = self.robot_uid
+        tool_attach_link = link_from_name(robot_uid, attached_collision_mesh.link_name)
+        ee_link_pose = get_link_pose(robot_uid, tool_attach_link)
+
+        draw_pose(ee_link_pose)
+
+        mesh = attached_collision_mesh.collision_mesh.mesh
+        name = attached_collision_mesh.collision_mesh.id
+        frame = attached_collision_mesh.collision_mesh.frame
+        print(frame)
+        body = convert_mesh_to_body(mesh, frame, name)
+        # TODO
+        # if name in self.attachments:
+        #     # mimic ROS' behaviour: collision object with same name is replaced
+        #     self.remove_collision_mesh(name)
+        set_pose(body, ee_link_pose)
+        attachment = create_attachment(robot_uid, tool_attach_link, body)
+        attachment.assign()
+        self.attachments[name] = attachment
+        return attachment
 
     def remove_attached_collision_mesh(self, id):
         raise NotImplementedError
+
+    ########################################
+    # ignored collision info
+    @property
+    def self_collision_links(self):
+        pass

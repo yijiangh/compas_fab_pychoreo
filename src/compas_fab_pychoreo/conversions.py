@@ -82,28 +82,28 @@ def convert_mesh_to_body(mesh, frame, name=None):
     return pyb_body
     # """
 
-def joint_values_from_configuration(c_conf, pb_robot, scale=1.0, joint_names=None):
-    """Convert a compas_fab Configuration to pybullet conf
+# def joint_values_from_configuration(c_conf, pb_robot, scale=1.0, joint_names=None):
+#     """Convert a compas_fab Configuration to pybullet conf
 
-    Parameters
-    ----------
-    c_conf : compas_fab Configuration
-        [description]
-    pb_robot : int
-        pybullet robot index
-    scale : [type], optional
-        [description], by default MIL2METER
+#     Parameters
+#     ----------
+#     c_conf : compas_fab Configuration
+#         [description]
+#     pb_robot : int
+#         pybullet robot index
+#     scale : [type], optional
+#         [description], by default MIL2METER
 
-    Returns
-    -------
-    [type]
-        [description]
-    """
-    if scale != 1.0:
-        # data copy here to avoid accidentally overwrite data
-        scaled_c_conf = c_conf.scaled(scale)
-        conf = np.array(scaled_c_conf.values)
-    else:
-        conf = np.array(c_conf.values)
-    joints = joints_from_names(pb_robot, joint_names or scaled_c_conf.joint_names)
-    return joints, conf
+#     Returns
+#     -------
+#     [type]
+#         [description]
+#     """
+#     if scale != 1.0:
+#         # data copy here to avoid accidentally overwrite data
+#         scaled_c_conf = c_conf.scaled(scale)
+#         conf = np.array(scaled_c_conf.values)
+#     else:
+#         conf = np.array(c_conf.values)
+#     joints = joints_from_names(pb_robot, joint_names or scaled_c_conf.joint_names)
+#     return joints, conf

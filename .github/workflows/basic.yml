@@ -41,6 +41,7 @@ jobs:
           python -m pip install cython --install-option="--no-cython-compile"
       - name: Install
         run: |
+          pip install -e git://github.com/compas-dev/compas_fab.git@master#egg=compas_fab
           python -m pip install --no-cache-dir -r requirements-dev.txt
       - name: Run tests
         run: |

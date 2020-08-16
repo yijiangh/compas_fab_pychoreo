@@ -31,3 +31,24 @@ def fixed_waam_setup():
     tool_mesh_robotA = Mesh.from_obj(os.path.join(package_path, "meshes", "collision", "waam_tool.obj"))
     robotA_tool = Tool(tool_mesh_robotA, tool_frame_robotA, collision=tool_mesh_robotA)
     return urdf_filename, robot, robotA_tool
+
+@pytest.fixture
+def abb_irb4600_40_255_setup():
+    HERE = os.path.dirname(__file__)
+    data_dir = os.path.abspath(os.path.join(HERE, "..", "..", "data", 'robots'))
+    urdf_filename = os.path.join(data_dir, 'abb_irb4600_40_255', "urdf", "abb_irb4600_40_255.urdf")
+    srdf_filename = os.path.join(data_dir, 'abb_fixed_waam', "srdf", "abb_irb4600_40_255.srdf")
+    model = RobotModel.from_urdf_file(urdf_filename)
+    semantics = RobotSemantics.from_srdf_file(srdf_filename, model)
+    robot = Robot(model, semantics=semantics)
+    return urdf_filename, robot
+
+@pytest.fixture
+def itj_gripper_path():
+    HERE = os.path.dirname(__file__)
+    return os.path.abspath(os.path.join(HERE, "..", "data", "itj_gripper1.obj"))
+
+@pytest.fixture
+def itj_beam_path():
+    HERE = os.path.dirname(__file__)
+    return os.path.abspath(os.path.join(HERE, "..", "data", "itj_beam1.obj"))

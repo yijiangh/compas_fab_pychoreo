@@ -10,16 +10,16 @@ from itertools import product
 import cProfile
 import pstats
 
-from compas_fab.robots import Configuration
+from compas.datastructures import Mesh
+from compas_fab.robots import Configuration, AttachedCollisionMesh, CollisionMesh
 
 from pybullet_planning import link_from_name, get_link_pose, draw_pose, get_bodies, multiply, Pose, Euler, set_joint_positions, \
-    joints_from_names, quat_angle_between, get_collision_fn
+    joints_from_names, quat_angle_between, get_collision_fn, create_obj, unit_pose
 from pybullet_planning import wait_if_gui, wait_for_duration
 from pybullet_planning import plan_cartesian_motion, plan_cartesian_motion_lg
 from pybullet_planning import randomize, elapsed_time
 
 from compas_fab_pychoreo.client import PyBulletClient
-from compas_fab_pychoreo.utils import get_disabled_collisions
 from compas_fab_pychoreo.conversions import pose_from_frame, frame_from_pose
 from compas_fab_pychoreo_examples.ik_solver import ik_abb_irb4600_40_255, InverseKinematicsSolver, get_ik_fn_from_ikfast
 
@@ -41,102 +41,54 @@ def ik_wrapper(compas_fab_ik_fn):
 
 #####################################
 
-@pytest.mark.client
-def test_client(fixed_waam_setup, viewer):
-    # https://github.com/gramaziokohler/algorithmic_details/blob/e1d5e24a34738822638a157ca29a98afe05beefd/src/algorithmic_details/accessibility/reachability_map.py#L208-L231
-    urdf_filename, robot, _ = fixed_waam_setup
-    # print('disabled collision: ', get_disabled_collisions(robot.semantics))
-    move_group = 'robotA'
-    tool_link_name = robot.get_end_effector_link_name(group=move_group)
+@pytest.mark.collision_check
+def test_collision_checker(abb_irb4600_40_255_setup, itj_gripper_path, itj_beam_path, viewer):
+    urdf_filename, robot = abb_irb4600_40_255_setup
 
-    with PyBulletClient(viewer=viewer) as client:
-        client.load_robot_from_urdf(urdf_filename)
-
-        # * draw EE pose
-        tool_link = link_from_name(client.robot_uid, tool_link_name)
-        tcp_pose = get_link_pose(client.robot_uid, tool_link)
-        draw_pose(tcp_pose)
-
-        assert client.robot_uid in get_bodies()
-
-        wait_if_gui()
-
-@pytest.mark.ik
-@pytest.mark.parametrize("ik_engine", [('default-single'), ('lobster-analytical'), ('ikfast-analytical')])
-def test_ik(fixed_waam_setup, viewer, ik_engine):
-    urdf_filename, robot, robotA_tool = fixed_waam_setup
-
-    move_group = 'robotA'
+    move_group = 'bare_arm'
     base_link_name = robot.get_base_link_name(group=move_group)
     ik_joint_names = robot.get_configurable_joint_names(group=move_group)
-    tool_link_name = robot.get_end_effector_link_name(group=move_group)
+    flange_link_name = robot.get_end_effector_link_name(group=move_group)
+    print(flange_link_name)
     base_frame = robot.get_base_frame(group=move_group)
 
-    if ik_engine == 'default-single':
-        ik_solver = None
-    elif ik_engine == 'lobster-analytical':
-        ik_solver = InverseKinematicsSolver(robot, move_group, ik_abb_irb4600_40_255, base_frame, robotA_tool.frame)
-    elif ik_engine == 'ikfast-analytical':
-        import ikfast_abb_irb4600_40_255
-        ikfast_fn = get_ik_fn_from_ikfast(ikfast_abb_irb4600_40_255.get_ik)
-        ik_solver = InverseKinematicsSolver(robot, move_group, ikfast_fn, base_frame, robotA_tool.frame)
-    else:
-        raise ValueError('invalid ik engine name.')
+    ee_touched_link_names = ['link_5', 'link_6']
+
+    # if ik_engine == 'default-single':
+    #     ik_solver = None
+    # elif ik_engine == 'lobster-analytical':
+    #     ik_solver = InverseKinematicsSolver(robot, move_group, ik_abb_irb4600_40_255, base_frame, robotA_tool.frame)
+    # elif ik_engine == 'ikfast-analytical':
+    #     import ikfast_abb_irb4600_40_255
+    #     ikfast_fn = get_ik_fn_from_ikfast(ikfast_abb_irb4600_40_255.get_ik)
+    #     ik_solver = InverseKinematicsSolver(robot, move_group, ikfast_fn, base_frame, robotA_tool.frame)
+    # else:
+    #     raise ValueError('invalid ik engine name.')
 
     with PyBulletClient(viewer=viewer) as client:
         client.load_robot_from_urdf(urdf_filename)
         client.compas_fab_robot = robot
 
         ik_joints = joints_from_names(client.robot_uid, ik_joint_names)
-        tool_link = link_from_name(client.robot_uid, tool_link_name)
+        # tool_link = link_from_name(client.robot_uid, tool_link_name)
         # robot_base_link = link_from_name(client.robot_uid, base_link_name)
 
-        ee_poses = compute_circle_path()
+        ee_cm = CollisionMesh(Mesh.from_obj(itj_gripper_path), 'gripper')
+        ee_cm.scale(0.001)
+        ee_attachement = AttachedCollisionMesh(ee_cm, flange_link_name, ee_touched_link_names)
+        client.add_attached_collision_mesh(ee_attachement)
 
-        if ik_solver is not None:
-            client.inverse_kinematics = ik_solver.inverse_kinematics_function()
+        # if ik_solver is not None:
+        #     client.inverse_kinematics = ik_solver.inverse_kinematics_function()
 
-        ik_time = 0
-        # ik function sanity check
-        for p in ee_poses:
-            frame_WCF = frame_from_pose(p)
-            st_time = time.time()
-            qs = client.inverse_kinematics(frame_WCF, group=move_group)
-            ik_time += elapsed_time(st_time)
+        wait_if_gui()
 
-            if qs is None:
-                # cprint('no ik solution found!', 'red')
-                assert False, 'no ik solution found!'
-            elif isinstance(qs, list):
-                assert len(qs) > 0 and any([qv is not None for qv in qs]), 'no ik solution found'
-                if len(qs) > 0:
-                    # cprint('{} solutions found!'.format(len(qs)), 'green')
-                    for q in randomize(qs):
-                        if q is not None:
-                            assert isinstance(q, Configuration)
-                            set_joint_positions(client.robot_uid, ik_joints, q.values)
-                            tcp_pose = get_link_pose(client.robot_uid, tool_link)
-                            assert_almost_equal(tcp_pose[0], p[0], decimal=3)
-                            assert_almost_equal(quat_angle_between(tcp_pose[1], p[1]), 0, decimal=3)
-            elif isinstance(qs, Configuration):
-                # cprint('Single solutions found!', 'green')
-                q = qs
-                set_joint_positions(client.robot_uid, ik_joints, q.values)
-                tcp_pose = get_link_pose(client.robot_uid, tool_link)
-                assert_almost_equal(tcp_pose[0], p[0], decimal=3)
-                assert_almost_equal(quat_angle_between(tcp_pose[1], p[1]), 0, decimal=3)
-            else:
-                raise ValueError('invalid ik return.')
-            # cprint('FK - IK agrees.')
-            # wait_if_gui()
-        cprint('{} | Average ik time: {} | avg over {} calls.'.format(ik_engine, ik_time/len(ee_poses), len(ee_poses)), 'cyan')
-
+#####################################
 
 @pytest.mark.skip(reason='not done yet')
 @pytest.mark.circle_path
 def test_circle_cartesian(fixed_waam_setup, viewer):
     urdf_filename, robot, robotA_tool = fixed_waam_setup
-    print('disabled collision: ', get_disabled_collisions(robot.semantics))
 
     move_group = 'robotA'
     base_link_name = robot.get_base_link_name(group=move_group)
@@ -248,5 +200,99 @@ def test_circle_cartesian(fixed_waam_setup, viewer):
                 set_joint_positions(client.robot_uid, ik_joints, conf)
                 wait_for_duration(time_step)
         print('='*20)
+
+        wait_if_gui()
+
+#####################################
+
+@pytest.mark.ik
+@pytest.mark.parametrize("ik_engine", [('default-single'), ('lobster-analytical'), ('ikfast-analytical')])
+def test_ik(fixed_waam_setup, viewer, ik_engine):
+    urdf_filename, robot, robotA_tool = fixed_waam_setup
+
+    move_group = 'robotA'
+    base_link_name = robot.get_base_link_name(group=move_group)
+    ik_joint_names = robot.get_configurable_joint_names(group=move_group)
+    tool_link_name = robot.get_end_effector_link_name(group=move_group)
+    base_frame = robot.get_base_frame(group=move_group)
+
+    if ik_engine == 'default-single':
+        ik_solver = None
+    elif ik_engine == 'lobster-analytical':
+        ik_solver = InverseKinematicsSolver(robot, move_group, ik_abb_irb4600_40_255, base_frame, robotA_tool.frame)
+    elif ik_engine == 'ikfast-analytical':
+        import ikfast_abb_irb4600_40_255
+        ikfast_fn = get_ik_fn_from_ikfast(ikfast_abb_irb4600_40_255.get_ik)
+        ik_solver = InverseKinematicsSolver(robot, move_group, ikfast_fn, base_frame, robotA_tool.frame)
+    else:
+        raise ValueError('invalid ik engine name.')
+
+    with PyBulletClient(viewer=viewer) as client:
+        client.load_robot_from_urdf(urdf_filename)
+        client.compas_fab_robot = robot
+
+        ik_joints = joints_from_names(client.robot_uid, ik_joint_names)
+        tool_link = link_from_name(client.robot_uid, tool_link_name)
+        # robot_base_link = link_from_name(client.robot_uid, base_link_name)
+
+        ee_poses = compute_circle_path()
+
+        if ik_solver is not None:
+            client.inverse_kinematics = ik_solver.inverse_kinematics_function()
+
+        ik_time = 0
+        # ik function sanity check
+        for p in ee_poses:
+            frame_WCF = frame_from_pose(p)
+            st_time = time.time()
+            qs = client.inverse_kinematics(frame_WCF, group=move_group)
+            ik_time += elapsed_time(st_time)
+
+            if qs is None:
+                # cprint('no ik solution found!', 'red')
+                assert False, 'no ik solution found!'
+            elif isinstance(qs, list):
+                assert len(qs) > 0 and any([qv is not None for qv in qs]), 'no ik solution found'
+                if len(qs) > 0:
+                    # cprint('{} solutions found!'.format(len(qs)), 'green')
+                    for q in randomize(qs):
+                        if q is not None:
+                            assert isinstance(q, Configuration)
+                            set_joint_positions(client.robot_uid, ik_joints, q.values)
+                            tcp_pose = get_link_pose(client.robot_uid, tool_link)
+                            assert_almost_equal(tcp_pose[0], p[0], decimal=3)
+                            assert_almost_equal(quat_angle_between(tcp_pose[1], p[1]), 0, decimal=3)
+            elif isinstance(qs, Configuration):
+                # cprint('Single solutions found!', 'green')
+                q = qs
+                set_joint_positions(client.robot_uid, ik_joints, q.values)
+                tcp_pose = get_link_pose(client.robot_uid, tool_link)
+                assert_almost_equal(tcp_pose[0], p[0], decimal=3)
+                assert_almost_equal(quat_angle_between(tcp_pose[1], p[1]), 0, decimal=3)
+            else:
+                raise ValueError('invalid ik return.')
+            # cprint('FK - IK agrees.')
+            # wait_if_gui()
+        cprint('{} | Average ik time: {} | avg over {} calls.'.format(ik_engine, ik_time/len(ee_poses), len(ee_poses)), 'cyan')
+
+###################################################
+
+@pytest.mark.client
+def test_client(fixed_waam_setup, viewer):
+    # https://github.com/gramaziokohler/algorithmic_details/blob/e1d5e24a34738822638a157ca29a98afe05beefd/src/algorithmic_details/accessibility/reachability_map.py#L208-L231
+    urdf_filename, robot, _ = fixed_waam_setup
+    # print('disabled collision: ', get_disabled_collisions(robot.semantics))
+    move_group = 'robotA'
+    tool_link_name = robot.get_end_effector_link_name(group=move_group)
+
+    with PyBulletClient(viewer=viewer) as client:
+        client.load_robot_from_urdf(urdf_filename)
+
+        # * draw EE pose
+        tool_link = link_from_name(client.robot_uid, tool_link_name)
+        tcp_pose = get_link_pose(client.robot_uid, tool_link)
+        draw_pose(tcp_pose)
+
+        assert client.robot_uid in get_bodies()
 
         wait_if_gui()

@@ -1,5 +1,5 @@
 import pytest
-from fixtures.robot_setup import fixed_waam_setup
+from fixtures.robot_setup import *
 
 def pytest_addoption(parser):
     parser.addoption('--viewer', action='store_true', help='Enables the pybullet viewer')

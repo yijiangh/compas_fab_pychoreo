@@ -56,10 +56,12 @@ class PybulletInverseKinematics(InverseKinematics):
         tool_link_name = robot.get_end_effector_link_name(group=group)
         tool_link = link_from_name(robot_uid, tool_link_name)
 
-        sample_fn = get_sample_fn(robot_uid, ik_joints)
-
         target_pose = pose_from_frame(frame_WCF)
-        start_conf_vals = start_configuration.values if start_configuration is not None else sample_fn()
+        if start_configuration is not None:
+            start_conf_vals = start_configuration.values
+        else:
+            sample_fn = get_sample_fn(robot_uid, ik_joints)
+            start_conf_vals = sample_fn()
         set_joint_positions(robot_uid, ik_joints, start_conf_vals)
 
         for _ in range(max_iterations):

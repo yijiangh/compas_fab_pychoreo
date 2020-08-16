@@ -2,8 +2,7 @@ import time
 from compas_fab.backends.interfaces import PlanCartesianMotion
 from compas_fab.backends.interfaces import InverseKinematics
 
-from pybullet_planning import is_connected, get_bodies, WorldSaver, get_collision_fn
-from compas_fab_pychoreo.conversions import joint_values_from_configuration, joints_from_names
+from pybullet_planning import is_connected, get_bodies, WorldSaver, get_collision_fn, joints_from_names
 
 class PybulletPlanCartesianMotion(PlanCartesianMotion):
     def __init__(self, pb_client, robot_uid, ik_instance):

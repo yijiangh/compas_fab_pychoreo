@@ -1,44 +1,55 @@
-from abc import ABCMeta
-from abc import abstractmethod
+from compas_fab_pychoreo.backend_features.configuration_collision_checker import ConfigurationCollisionChecker
+from compas_fab_pychoreo.utils import is_valid_option
 
-class ConfigurationCollisionChecker(object):
-    """Interface for a Planner's robot collision checker feature.  Any implementation of
-    ``ConfigurationCollisionChecker`` must define the method ``configuration_in_collision``.
-    The ``__call__`` magic method allows an instance of an implementation of
-    ``ConfigurationCollisionChecker`` to be treated as its ``configuration_in_collision`` method.
-    See <https://docs.python.org/3/reference/datamodel.html#object.__call__> and
-    <https://en.wikipedia.org/wiki/Function_object#In_Python>.
-    """
-    __metaclass__ = ABCMeta
+from pybullet_planning import set_joint_positions, get_link_pose, get_custom_limits, joints_from_names, link_from_name, \
+    get_collision_fn, get_disabled_collisions
 
-    def __call__(self, configuration, group=None, options=None):
-        return self.configuration_in_collision(configuration, group, options)
+class PybulletConfigurationCollisionChecker(ConfigurationCollisionChecker):
+    def __init__(self, client):
+        self.client = client
 
-    @abstractmethod
-    def configuration_in_collision(self, configuration, group=None, options=None):
-        """....
+    def configuration_in_collision(self, configuration, group=None, options=None, diagnosis=False):
+        """[summary]
 
         Parameters
         ----------
-        configuration : :class:`compas_fab.robots.Configuration`
-            TODO
-        group : str, optional
-            The name of the group to be used in the calculation.
+        configuration: :class:`compas_fab.robots.Configuration`
+        group: str, optional
         options : dict, optional
-            Dictionary containing kwargs for arguments specific to
-            the client being queried.
+            Dictionary containing the following key-value pairs:
+            - "self_collisions": bool, set to True if checking self collisions of the robot, defaults to True
+            - ``"attached_collision_meshes"``: (:obj:`list` of :class:`compas_fab.robots.AttachedCollisionMesh`)
+              Defaults to ``None``.
 
         Returns
         -------
-        bool
-            True if a collision is detected.
+        is_collision : bool
+            True if in collision, False otherwise
         """
-        pass
+        robot_uid = self.client.robot_uid
+        robot = self.client.compas_fab_robot
 
-class PybulletConfigurationCollisionChecker(ConfigurationCollisionChecker):
-    def __init__(self, pb_client, robot_uid):
-        self.pb_client = pb_client
-        self.robot_uid = robot_uid
+        ik_joint_names = robot.get_configurable_joint_names(group=group)
+        ik_joints = joints_from_names(robot_uid, ik_joint_names)
+        # tool_link_name = robot.get_end_effector_link_name(group=group)
+        # tool_link = link_from_name(robot_uid, tool_link_name)
 
-    def configuration_in_collision(self, configuration, group=None, options=None):
-        pass
+        # get disabled self-collision links
+        self_collisions = is_valid_option(options, 'self_collisions', True)
+        # https://github.com/yijiangh/pybullet_planning/blob/dev/tests/test_collisions.py#L76
+        self_collision_disabled_link_names = robot.disabled_collisions
+        self_collision_links = get_disabled_collisions(robot, self_collision_disabled_link_names)
+
+        # attachment
+        attached_collision_meshes = is_valid_option(options, 'attached_collision_meshes', [])
+        attachments = []
+        for acm in attached_collision_meshes:
+            attachments.append(self.client.add_attached_collision_mesh(acm))
+
+        collision_fn = get_collision_fn(self.client.robot_uid, ik_joints, obstacles=[],
+                                               attachments=attachments, self_collisions=self_collisions,
+                                            #    disabled_collisions=disabled_collisions,
+                                            #    extra_disabled_collisions=extra_disabled_collisions,
+                                               custom_limits={})
+
+        return collision_fn(configuration.values, diagnosis=diagnosis)
