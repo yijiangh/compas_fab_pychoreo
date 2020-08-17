@@ -52,3 +52,13 @@ def itj_gripper_path():
 def itj_beam_path():
     HERE = os.path.dirname(__file__)
     return os.path.abspath(os.path.join(HERE, "..", "data", "itj_beam1.obj"))
+
+@pytest.fixture
+def base_plate_path():
+    HERE = os.path.dirname(__file__)
+    return os.path.abspath(os.path.join(HERE, "..", "data", "base_plate.obj"))
+
+@pytest.fixture
+def column_obstacle_path():
+    HERE = os.path.dirname(__file__)
+    return os.path.abspath(os.path.join(HERE, "..", "data", "column_obstacle.obj"))

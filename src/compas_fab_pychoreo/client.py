@@ -1,13 +1,14 @@
 from itertools import combinations
 from pybullet_planning import is_connected, disconnect, connect, load_pybullet, CLIENT, HideOutput
-from pybullet_planning import get_link_pose, link_from_name
+from pybullet_planning import BASE_LINK
+from pybullet_planning import get_link_pose, link_from_name, get_disabled_collisions
 from pybullet_planning import set_joint_positions
 from pybullet_planning import joints_from_names
 from pybullet_planning import inverse_kinematics
 from pybullet_planning import get_movable_joints  # from pybullet_planning.interfaces.robots.joint
 from pybullet_planning import get_joint_names  # from pybullet_planning.interfaces.robots.joint
 from pybullet_planning import set_pose, get_bodies, remove_body, create_attachment
-from pybullet_planning import draw_pose
+from pybullet_planning import draw_pose, get_body_body_disabled_collisions
 
 from compas_fab.backends.interfaces.client import ClientInterface
 from compas_fab_pychoreo.planner import PybulletPlanner
@@ -57,6 +58,8 @@ class PyBulletClient(ClientInterface):
         self.collision_objects = {}
         self.attachments = {}
         self.planner = PybulletPlanner(self)
+        #
+        self.extra_disabled_collisions = set()
 
     # @classmethod
     # def from_robot(cls, robot, urdf_filename=None, viewer=True, verbose=False):
@@ -132,6 +135,8 @@ class PyBulletClient(ClientInterface):
             raise NotImplementedError()
         return frame_from_pose(pose)
 
+    ###########################################################
+
     def add_collision_mesh(self, collision_mesh):
         """
         """
@@ -182,17 +187,17 @@ class PyBulletClient(ClientInterface):
         tool_attach_link = link_from_name(robot_uid, attached_collision_mesh.link_name)
         ee_link_pose = get_link_pose(robot_uid, tool_attach_link)
 
-        draw_pose(ee_link_pose)
-
         mesh = attached_collision_mesh.collision_mesh.mesh
         name = attached_collision_mesh.collision_mesh.id
         frame = attached_collision_mesh.collision_mesh.frame
-        print(frame)
         body = convert_mesh_to_body(mesh, frame, name)
         # TODO
         # if name in self.attachments:
         #     # mimic ROS' behaviour: collision object with same name is replaced
         #     self.remove_collision_mesh(name)
+        # * update attachment collision links
+        for touched_link_name in attached_collision_mesh.touch_links:
+            self.extra_disabled_collisions.add(((robot_uid, link_from_name(robot_uid, touched_link_name)), (body, BASE_LINK)))
         set_pose(body, ee_link_pose)
         attachment = create_attachment(robot_uid, tool_attach_link, body)
         attachment.assign()
@@ -203,7 +208,14 @@ class PyBulletClient(ClientInterface):
         raise NotImplementedError
 
     ########################################
-    # ignored collision info
+
+    def configuration_in_collision(self, *args, **kwargs):
+        return self.planner.configuration_in_collision(*args, **kwargs)
+
+    ########################################
+    # ignored collision info (similar to ROS's Allowed Collision Matrix)
     @property
     def self_collision_links(self):
-        pass
+        # return set of 2-int pair
+        self_collision_disabled_link_names = self.compas_fab_robot.semantics.disabled_collisions
+        return get_disabled_collisions(self.robot_uid, self_collision_disabled_link_names)

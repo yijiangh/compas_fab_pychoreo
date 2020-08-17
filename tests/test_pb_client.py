@@ -42,46 +42,77 @@ def ik_wrapper(compas_fab_ik_fn):
 #####################################
 
 @pytest.mark.collision_check
-def test_collision_checker(abb_irb4600_40_255_setup, itj_gripper_path, itj_beam_path, viewer):
+def test_collision_checker(abb_irb4600_40_255_setup, itj_gripper_path, itj_beam_path, column_obstacle_path, base_plate_path, viewer):
+    # modified from https://github.com/yijiangh/pybullet_planning/blob/dev/tests/test_collisions.py
     urdf_filename, robot = abb_irb4600_40_255_setup
 
     move_group = 'bare_arm'
-    base_link_name = robot.get_base_link_name(group=move_group)
     ik_joint_names = robot.get_configurable_joint_names(group=move_group)
+    ik_joint_types = robot.get_joint_types_by_names(ik_joint_names)
     flange_link_name = robot.get_end_effector_link_name(group=move_group)
-    print(flange_link_name)
-    base_frame = robot.get_base_frame(group=move_group)
 
     ee_touched_link_names = ['link_5', 'link_6']
 
-    # if ik_engine == 'default-single':
-    #     ik_solver = None
-    # elif ik_engine == 'lobster-analytical':
-    #     ik_solver = InverseKinematicsSolver(robot, move_group, ik_abb_irb4600_40_255, base_frame, robotA_tool.frame)
-    # elif ik_engine == 'ikfast-analytical':
-    #     import ikfast_abb_irb4600_40_255
-    #     ikfast_fn = get_ik_fn_from_ikfast(ikfast_abb_irb4600_40_255.get_ik)
-    #     ik_solver = InverseKinematicsSolver(robot, move_group, ikfast_fn, base_frame, robotA_tool.frame)
-    # else:
-    #     raise ValueError('invalid ik engine name.')
+    ee_cm = CollisionMesh(Mesh.from_obj(itj_gripper_path), 'gripper')
+    ee_cm.scale(0.001)
+    ee_acm = AttachedCollisionMesh(ee_cm, flange_link_name, ee_touched_link_names)
+    beam_cm = CollisionMesh(Mesh.from_obj(itj_beam_path), 'beam')
+    beam_cm.scale(0.001)
+    beam_acm = AttachedCollisionMesh(beam_cm, flange_link_name, ee_touched_link_names)
+
+    base_plate_cm = CollisionMesh(Mesh.from_obj(base_plate_path), 'base_plate')
+    column_cm = CollisionMesh(Mesh.from_obj(column_obstacle_path), 'column')
 
     with PyBulletClient(viewer=viewer) as client:
         client.load_robot_from_urdf(urdf_filename)
         client.compas_fab_robot = robot
 
-        ik_joints = joints_from_names(client.robot_uid, ik_joint_names)
+        # ik_joints = joints_from_names(client.robot_uid, ik_joint_names)
         # tool_link = link_from_name(client.robot_uid, tool_link_name)
         # robot_base_link = link_from_name(client.robot_uid, base_link_name)
 
-        ee_cm = CollisionMesh(Mesh.from_obj(itj_gripper_path), 'gripper')
-        ee_cm.scale(0.001)
-        ee_attachement = AttachedCollisionMesh(ee_cm, flange_link_name, ee_touched_link_names)
-        client.add_attached_collision_mesh(ee_attachement)
+        # * add static obstacles
+        client.add_collision_mesh(base_plate_cm)
+        client.add_collision_mesh(column_cm)
 
-        # if ik_solver is not None:
-        #     client.inverse_kinematics = ik_solver.inverse_kinematics_function()
+        # * add attachment
+        client.add_attached_collision_mesh(ee_acm)
+        client.add_attached_collision_mesh(beam_acm)
 
-        wait_if_gui()
+        # safe start conf
+        conf = Configuration(values=[0.]*6, types=ik_joint_types, joint_names=ik_joint_names)
+        assert not client.configuration_in_collision(conf, group=move_group, options={'diagnosis':True})
+
+        # joint over limit
+        conf = Configuration(values=[0., 0., 1.5, 0, 0, 0], types=ik_joint_types, joint_names=ik_joint_names)
+        assert client.configuration_in_collision(conf, group=move_group, options={'diagnosis':True})
+
+        # attached beam-robot body self collision
+        vals = [0.73303828583761843, -0.59341194567807209, 0.54105206811824214, -0.17453292519943295, 1.064650843716541, 1.7278759594743862]
+        conf = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
+        assert client.configuration_in_collision(conf, group=move_group, options={'diagnosis':True})
+
+        # attached beam-obstacle collision
+        # column
+        vals = [0.087266462599716474, -0.19198621771937624, 0.20943951023931956, 0.069813170079773182, 1.2740903539558606, 0.069813170079773182]
+        conf = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
+        assert client.configuration_in_collision(conf, group=move_group, options={'diagnosis':True})
+        # ground
+        vals = [-0.017453292519943295, 0.6108652381980153, 0.20943951023931956, 1.7627825445142729, 1.2740903539558606, 0.069813170079773182]
+        conf = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
+        assert client.configuration_in_collision(conf, group=move_group, options={'diagnosis':True})
+
+        # robot link-obstacle collision
+        # column
+        vals = [-0.41887902047863912, 0.20943951023931956, 0.20943951023931956, 1.7627825445142729, 1.2740903539558606, 0.069813170079773182]
+        conf = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
+        assert client.configuration_in_collision(conf, group=move_group, options={'diagnosis':True})
+        # ground
+        vals = [0.33161255787892263, 1.4660765716752369, 0.27925268031909273, 0.17453292519943295, 0.22689280275926285, 0.54105206811824214]
+        conf = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
+        assert client.configuration_in_collision(conf, group=move_group, options={'diagnosis':True})
+
+        # wait_if_gui()
 
 #####################################
 

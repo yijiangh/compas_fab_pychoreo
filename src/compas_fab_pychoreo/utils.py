@@ -2,6 +2,17 @@ import logging
 
 ###########################################
 
+def values_as_list(dict_data):
+    vals = []
+    for _, v in dict_data.items():
+        if isinstance(v, list):
+            vals.extend(v)
+        else:
+            vals.append(v)
+    return vals
+
+###########################################
+
 def is_valid_option(options, key, default_value):
     return default_value if options is None or key not in options else options[key]
 
