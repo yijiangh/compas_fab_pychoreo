@@ -14,8 +14,10 @@ from setuptools.command.install import install
 
 requirements = [
     # Until COMPAS reaches 1.0, we pin major.minor and allow patch version updates
+    # https://github.com/gramaziokohler/integral_timber_joints/blob/master/requirements.txt
     'compas>=0.16.1,<0.17',
-    'compas_fab>=0.11.0',
+    # 'compas_fab>=0.11.0',
+    'compas_fab @ git+https://git@github.com/compas-dev/compas_fab.git@5163c5619d12e102f5e070731c7f21c139eb4549#egg=compas_fab-0.11.1',
     'pybullet_planning>=0.5.0',
 ]
 

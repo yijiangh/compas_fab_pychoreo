@@ -41,8 +41,8 @@ def ik_wrapper(compas_fab_ik_fn):
 
 #####################################
 
-@pytest.mark.collision_check
-def test_collision_checker(abb_irb4600_40_255_setup, itj_gripper_path, itj_beam_path, column_obstacle_path, base_plate_path, viewer):
+@pytest.mark.collision_check_abb
+def test_collision_checker(abb_irb4600_40_255_setup, itj_TC_PG500_cms, itj_beam_cm, column_obstacle_cm, base_plate_cm, viewer):
     # modified from https://github.com/yijiangh/pybullet_planning/blob/dev/tests/test_collisions.py
     urdf_filename, robot = abb_irb4600_40_255_setup
 
@@ -53,15 +53,8 @@ def test_collision_checker(abb_irb4600_40_255_setup, itj_gripper_path, itj_beam_
 
     ee_touched_link_names = ['link_5', 'link_6']
 
-    ee_cm = CollisionMesh(Mesh.from_obj(itj_gripper_path), 'gripper')
-    ee_cm.scale(0.001)
-    ee_acm = AttachedCollisionMesh(ee_cm, flange_link_name, ee_touched_link_names)
-    beam_cm = CollisionMesh(Mesh.from_obj(itj_beam_path), 'beam')
-    beam_cm.scale(0.001)
-    beam_acm = AttachedCollisionMesh(beam_cm, flange_link_name, ee_touched_link_names)
-
-    base_plate_cm = CollisionMesh(Mesh.from_obj(base_plate_path), 'base_plate')
-    column_cm = CollisionMesh(Mesh.from_obj(column_obstacle_path), 'column')
+    ee_acms = [AttachedCollisionMesh(ee_cm, flange_link_name, ee_touched_link_names) for ee_cm in itj_TC_PG500_cms]
+    beam_acm = AttachedCollisionMesh(itj_beam_cm, flange_link_name, ee_touched_link_names)
 
     with PyBulletClient(viewer=viewer) as client:
         client.load_robot_from_urdf(urdf_filename)
@@ -73,10 +66,11 @@ def test_collision_checker(abb_irb4600_40_255_setup, itj_gripper_path, itj_beam_
 
         # * add static obstacles
         client.add_collision_mesh(base_plate_cm)
-        client.add_collision_mesh(column_cm)
+        client.add_collision_mesh(column_obstacle_cm)
 
         # * add attachment
-        client.add_attached_collision_mesh(ee_acm)
+        for ee_acm in ee_acms:
+            client.add_attached_collision_mesh(ee_acm)
         client.add_attached_collision_mesh(beam_acm)
 
         # safe start conf

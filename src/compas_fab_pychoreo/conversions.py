@@ -77,8 +77,8 @@ def convert_mesh_to_body(mesh, frame, name=None):
         pyb_body = create_obj(tmp_obj_path)
         body_pose = pose_from_frame(frame)
         set_pose(pyb_body, body_pose)
-        if name:
-            add_body_name(pyb_body, name)
+        # if name:
+        #     add_body_name(pyb_body, name)
     return pyb_body
     # """
 
