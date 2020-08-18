@@ -15,7 +15,7 @@ from compas.datastructures import Mesh
 from compas_fab.robots import Configuration, AttachedCollisionMesh, CollisionMesh
 
 from pybullet_planning import link_from_name, get_link_pose, draw_pose, get_bodies, multiply, Pose, Euler, set_joint_positions, \
-    joints_from_names, quat_angle_between, get_collision_fn, create_obj, unit_pose
+    joints_from_names, quat_angle_between, get_collision_fn, create_obj, unit_pose, set_camera_pose
 from pybullet_planning import wait_if_gui, wait_for_duration
 from pybullet_planning import plan_cartesian_motion, plan_cartesian_motion_lg
 from pybullet_planning import randomize, elapsed_time
@@ -74,6 +74,15 @@ def to_rlf_robot_full_conf(robot11_confval, robot12_confval, scale=1e-3):
             )
         )
 
+def rfl_camera(scale=1e-3):
+    camera = {
+        'location': np.array([14830.746366, 17616.580504, 9461.594828])*scale,
+        'target' : np.array([24470.185559, 7976.896428, 2694.413294])*scale,
+        'lens' : 50.0*scale,
+        'up_direction':np.array([0.314401,-0.314409,0.895712])*scale,
+    }
+    return camera
+
 #####################################
 
 @pytest.mark.collision_check_rfl
@@ -87,7 +96,6 @@ def test_collision_checker(rfl_setup, itj_TC_PG1000_cms, itj_beam_cm, itj_rfl_ob
     flange_link_name = robot.get_end_effector_link_name(group=move_group)
 
     ee_touched_link_names = ['robot12_tool0', 'robot12_link_6']
-
     ee_acms = [AttachedCollisionMesh(ee_cm, flange_link_name, ee_touched_link_names) for ee_cm in itj_TC_PG1000_cms]
     beam_acm = AttachedCollisionMesh(itj_beam_cm, flange_link_name, ee_touched_link_names)
 
@@ -97,6 +105,9 @@ def test_collision_checker(rfl_setup, itj_TC_PG1000_cms, itj_beam_cm, itj_rfl_ob
         robot_uid = client.robot_uid
 
         draw_pose(unit_pose(), length=1.)
+
+        cam = rfl_camera()
+        set_camera_pose(cam['target'], cam['location'])
 
         ik_joints = joints_from_names(client.robot_uid, ik_joint_names)
         # tool_link = link_from_name(client.robot_uid, tool_link_name)
@@ -121,6 +132,8 @@ def test_collision_checker(rfl_setup, itj_TC_PG1000_cms, itj_beam_cm, itj_rfl_ob
         start_confval = np.hstack([r12_start_conf_vals[:2]*1e-3, np.radians(r12_start_conf_vals[2:])])
         conf = Configuration(values=start_confval.tolist(), types=ik_joint_types, joint_names=ik_joint_names)
         assert not client.configuration_in_collision(conf, group=move_group, options={'diagnosis':True})
+
+        # TODO add more tests
 
         # conf = Configuration(values=[0.]*6, types=ik_joint_types, joint_names=ik_joint_names)
         # assert not client.configuration_in_collision(conf, group=move_group, options={'diagnosis':True})

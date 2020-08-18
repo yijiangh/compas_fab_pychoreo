@@ -1,13 +1,13 @@
 from itertools import combinations
 from pybullet_planning import is_connected, disconnect, connect, load_pybullet, CLIENT, HideOutput
-from pybullet_planning import BASE_LINK
+from pybullet_planning import BASE_LINK, RED, GREEN
 from pybullet_planning import get_link_pose, link_from_name, get_disabled_collisions
 from pybullet_planning import set_joint_positions
 from pybullet_planning import joints_from_names
 from pybullet_planning import inverse_kinematics
 from pybullet_planning import get_movable_joints  # from pybullet_planning.interfaces.robots.joint
 from pybullet_planning import get_joint_names  # from pybullet_planning.interfaces.robots.joint
-from pybullet_planning import set_pose, get_bodies, remove_body, create_attachment
+from pybullet_planning import set_pose, get_bodies, remove_body, create_attachment, set_color
 from pybullet_planning import draw_pose, get_body_body_disabled_collisions
 
 from compas_fab.backends.interfaces.client import ClientInterface
@@ -137,16 +137,17 @@ class PyBulletClient(ClientInterface):
 
     ###########################################################
 
-    def add_collision_mesh(self, collision_mesh):
+    def add_collision_mesh(self, collision_mesh, color=RED):
         """
         """
         mesh = collision_mesh.mesh
         name = collision_mesh.id
         frame = collision_mesh.frame
-        body = convert_mesh_to_body(mesh, frame, name)
+        body = convert_mesh_to_body(mesh, frame, name, color)
         if name in self.collision_objects:
             self.remove_collision_mesh(name)  # mimic ROS' behaviour: collision object with same name is replaced
         self.collision_objects[name] = [body]
+        return self.collision_objects[name]
 
     def remove_collision_mesh(self, name):
         if name in self.collision_objects:
@@ -155,24 +156,25 @@ class PyBulletClient(ClientInterface):
         else:
             LOG.warning("Collison object with name '{}' does not exist in scene.".format(name))
 
-    def append_collision_mesh(self, collision_mesh):
+    def append_collision_mesh(self, collision_mesh, color=RED):
         """
         """
         mesh = collision_mesh.mesh
         name = collision_mesh.id
         frame = collision_mesh.frame
         if name in self.collision_objects:
-            body = convert_mesh_to_body(mesh, frame, name)
+            body = convert_mesh_to_body(mesh, frame, name, color)
             self.collision_objects[name].append(body)
         else:
-            self.add_collision_mesh(collision_mesh)
+            self.add_collision_mesh(collision_mesh, color)
+        return self.collision_objects[name]
 
     def transform_collision_objects_to_frame(self, names, frame):
         bodies = [body for name in names for body in self.collision_objects[name]]
         for body in bodies:
             set_pose(body, pose_from_frame(frame))
 
-    def add_attached_collision_mesh(self, attached_collision_mesh):
+    def add_attached_collision_mesh(self, attached_collision_mesh, color=GREEN):
         """Adds an attached collision object to the planning scene.
 
         Parameters
@@ -199,6 +201,7 @@ class PyBulletClient(ClientInterface):
         for touched_link_name in attached_collision_mesh.touch_links:
             self.extra_disabled_collisions.add(((robot_uid, link_from_name(robot_uid, touched_link_name)), (body, BASE_LINK)))
         set_pose(body, ee_link_pose)
+        set_color(body, color)
         attachment = create_attachment(robot_uid, tool_attach_link, body)
         attachment.assign()
         self.attachments[name] = attachment

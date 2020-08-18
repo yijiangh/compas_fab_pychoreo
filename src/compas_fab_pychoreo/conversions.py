@@ -7,9 +7,10 @@ from pybullet_planning import create_obj
 from pybullet_planning import set_pose
 from pybullet_planning import add_body_name
 from pybullet_planning import joints_from_names
+from pybullet_planning import RED, set_color
 
 
-def pose_from_frame(frame):
+def pose_from_frame(frame, scale=1.0):
     """Returns a PyBullet pose from a frame.
 
     Parameters
@@ -20,10 +21,10 @@ def pose_from_frame(frame):
     -------
     point, quaternion : tuple
     """
-    return (list(frame.point), frame.quaternion.xyzw)
+    return ([v*scale for v in frame.point], frame.quaternion.xyzw)
 
 
-def frame_from_pose(pose):
+def frame_from_pose(pose, scale=1.0):
     """Returns a frame from a PyBullet pose.
 
     Parameters
@@ -35,10 +36,10 @@ def frame_from_pose(pose):
     :class:`compas.geometry.Frame`
     """
     point, (x, y, z, w) = pose
-    return Frame.from_quaternion([w, x, y, z], point=point)
+    return Frame.from_quaternion([w, x, y, z], point=[v*scale for v in point])
 
 
-def convert_mesh_to_body(mesh, frame, name=None):
+def convert_mesh_to_body(mesh, frame, name=None, color=RED):
     """Convert compas mesh and its frame to a pybullet body
 
     Parameters
@@ -77,6 +78,7 @@ def convert_mesh_to_body(mesh, frame, name=None):
         pyb_body = create_obj(tmp_obj_path)
         body_pose = pose_from_frame(frame)
         set_pose(pyb_body, body_pose)
+        set_color(pyb_body, color)
         # if name:
         #     add_body_name(pyb_body, name)
     return pyb_body
