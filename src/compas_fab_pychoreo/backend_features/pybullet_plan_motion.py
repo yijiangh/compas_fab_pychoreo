@@ -6,10 +6,8 @@ from pybullet_planning import is_connected, get_bodies, WorldSaver, get_collisio
 from compas_fab_pychoreo.conversions import joint_values_from_configuration, joints_from_names
 
 class PybulletPlanMotion(PlanMotion):
-    def __init__(self, pb_client, inverse_kinematics):
-        self.pb_client = pb_client
-        self.robot_uid = robot_uid
-        self.inverse_kinematics = inverse_kinematics
+    def __init__(self, client):
+        self.client = client
 
     def plan_motion(self, frames_WCF, start_configuration=None, group=None, options=None):
         """Calculates a cartesian motion path (linear in tool space).

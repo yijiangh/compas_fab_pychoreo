@@ -153,6 +153,7 @@ class PyBulletClient(ClientInterface):
         if name in self.collision_objects:
             for body in self.collision_objects[name]:
                 remove_body(body)
+            del self.collision_objects[name]
         else:
             LOG.warning("Collison object with name '{}' does not exist in scene.".format(name))
 
@@ -169,10 +170,10 @@ class PyBulletClient(ClientInterface):
             self.add_collision_mesh(collision_mesh, color)
         return self.collision_objects[name]
 
-    def transform_collision_objects_to_frame(self, names, frame):
-        bodies = [body for name in names for body in self.collision_objects[name]]
-        for body in bodies:
-            set_pose(body, pose_from_frame(frame))
+    # def transform_collision_objects_to_frame(self, names, frame):
+    #     bodies = [body for name in names for body in self.collision_objects[name]]
+    #     for body in bodies:
+    #         set_pose(body, pose_from_frame(frame))
 
     def add_attached_collision_mesh(self, attached_collision_mesh, color=GREEN):
         """Adds an attached collision object to the planning scene.
