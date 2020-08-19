@@ -43,12 +43,6 @@ def fixed_waam_setup():
     model = RobotModel.from_urdf_file(urdf_filename)
     semantics = RobotSemantics.from_srdf_file(srdf_filename, model)
 
-    # load_geometry = False
-    # packages = ["abb_irb4600_40_255", "abb_linear_axis", "waam_setup"]
-    # loaders = [LocalPackageMeshLoader(package_path, package) for package in packages]
-    # if load_geometry:
-    #     model.load_geometry(*loaders)
-
     robot = Robot(model, semantics=semantics)
     tool_frame_robotA = Frame.from_euler_angles([0.591366, -0.000922, 1.570177], static=True, axes='xyz', point=[-0.002241, -0.000202, 0.505922])
     tool_mesh_robotA = Mesh.from_obj(os.path.join(package_path, "meshes", "collision", "waam_tool.obj"))
@@ -82,16 +76,7 @@ def itj_TC_PG500_cms():
     HERE = os.path.dirname(__file__)
     tc_dir_path = os.path.abspath(os.path.join(HERE, "..", "data", 'itj_TC'))
     cms = parse_collision_meshes_from_dir(tc_dir_path)
-    pg500_dir_path = os.path.abspath(os.path.join(HERE, "..", "data", 'itj_PG500'))
-    cms.extend(parse_collision_meshes_from_dir(pg500_dir_path))
-    return cms
-
-@pytest.fixture
-def itj_TC_PG1000_cms():
-    HERE = os.path.dirname(__file__)
-    tc_dir_path = os.path.abspath(os.path.join(HERE, "..", "data", 'itj_TC'))
-    cms = parse_collision_meshes_from_dir(tc_dir_path)
-    pg1000_dir_path = os.path.abspath(os.path.join(HERE, "..", "data", 'itj_PG1000'))
+    pg1000_dir_path = os.path.abspath(os.path.join(HERE, "..", "data", 'itj_PG500'))
     cms.extend(parse_collision_meshes_from_dir(pg1000_dir_path))
     return cms
 
@@ -99,7 +84,7 @@ def itj_TC_PG1000_cms():
 def itj_beam_cm():
     HERE = os.path.dirname(__file__)
     data_dir = os.path.abspath(os.path.join(HERE, "..", "data"))
-    return parse_collision_mesh_from_path(data_dir, "itj_beam1.obj")
+    return parse_collision_mesh_from_path(data_dir, "itj_beam_b2.obj")
 
 @pytest.fixture
 def base_plate_cm():
@@ -112,15 +97,3 @@ def column_obstacle_cm():
     HERE = os.path.dirname(__file__)
     data_dir = os.path.abspath(os.path.join(HERE, "..", "data"))
     return parse_collision_mesh_from_path(data_dir, "column_obstacle.obj", scale=1)
-
-@pytest.fixture
-def itj_rfl_obstacle_cms():
-    HERE = os.path.dirname(__file__)
-    dir_path = os.path.abspath(os.path.join(HERE, "..", "data", 'itj_rfl_obstacles'))
-    return parse_collision_meshes_from_dir(dir_path)
-
-@pytest.fixture
-def itj_process_file_path():
-    HERE = os.path.dirname(__file__)
-    file_path = os.path.abspath(os.path.join(HERE, "..", "data", 'rfl_assembly_process.json'))
-    return file_path

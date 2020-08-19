@@ -42,7 +42,7 @@ def ik_wrapper(compas_fab_ik_fn):
 #####################################
 
 @pytest.mark.collision_check_abb
-def test_collision_checker(abb_irb4600_40_255_setup, itj_TC_PG500_cms, itj_beam_cm, column_obstacle_cm, base_plate_cm, viewer):
+def test_collision_checker(abb_irb4600_40_255_setup, itj_TC_PG500_cms, itj_beam_cm, column_obstacle_cm, base_plate_cm, viewer, diagnosis):
     # modified from https://github.com/yijiangh/pybullet_planning/blob/dev/tests/test_collisions.py
     urdf_filename, robot = abb_irb4600_40_255_setup
 
@@ -75,36 +75,36 @@ def test_collision_checker(abb_irb4600_40_255_setup, itj_TC_PG500_cms, itj_beam_
 
         # safe start conf
         conf = Configuration(values=[0.]*6, types=ik_joint_types, joint_names=ik_joint_names)
-        assert not client.configuration_in_collision(conf, group=move_group, options={'diagnosis':True})
+        assert not client.configuration_in_collision(conf, group=move_group, options={'diagnosis':diagnosis})
 
         # joint over limit
         conf = Configuration(values=[0., 0., 1.5, 0, 0, 0], types=ik_joint_types, joint_names=ik_joint_names)
-        assert client.configuration_in_collision(conf, group=move_group, options={'diagnosis':True})
+        assert client.configuration_in_collision(conf, group=move_group, options={'diagnosis':diagnosis})
 
         # attached beam-robot body self collision
         vals = [0.73303828583761843, -0.59341194567807209, 0.54105206811824214, -0.17453292519943295, 1.064650843716541, 1.7278759594743862]
         conf = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
-        assert client.configuration_in_collision(conf, group=move_group, options={'diagnosis':True})
+        assert client.configuration_in_collision(conf, group=move_group, options={'diagnosis':diagnosis})
 
         # attached beam-obstacle collision
         # column
         vals = [0.087266462599716474, -0.19198621771937624, 0.20943951023931956, 0.069813170079773182, 1.2740903539558606, 0.069813170079773182]
         conf = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
-        assert client.configuration_in_collision(conf, group=move_group, options={'diagnosis':True})
+        assert client.configuration_in_collision(conf, group=move_group, options={'diagnosis':diagnosis})
         # ground
         vals = [-0.017453292519943295, 0.6108652381980153, 0.20943951023931956, 1.7627825445142729, 1.2740903539558606, 0.069813170079773182]
         conf = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
-        assert client.configuration_in_collision(conf, group=move_group, options={'diagnosis':True})
+        assert client.configuration_in_collision(conf, group=move_group, options={'diagnosis':diagnosis})
 
         # robot link-obstacle collision
         # column
         vals = [-0.41887902047863912, 0.20943951023931956, 0.20943951023931956, 1.7627825445142729, 1.2740903539558606, 0.069813170079773182]
         conf = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
-        assert client.configuration_in_collision(conf, group=move_group, options={'diagnosis':True})
+        assert client.configuration_in_collision(conf, group=move_group, options={'diagnosis':diagnosis})
         # ground
         vals = [0.33161255787892263, 1.4660765716752369, 0.27925268031909273, 0.17453292519943295, 0.22689280275926285, 0.54105206811824214]
         conf = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
-        assert client.configuration_in_collision(conf, group=move_group, options={'diagnosis':True})
+        assert client.configuration_in_collision(conf, group=move_group, options={'diagnosis':diagnosis})
 
         # wait_if_gui()
 

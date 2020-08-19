@@ -60,12 +60,11 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 JSON_PATH_IN = os.path.join(HERE, 'data', "rfl_assembly_process.json")
 JSON_OUT_DIR = os.path.join(HERE, 'results')
 
-TRANSFER_DATA_PATH = os.path.join(HERE, 'data', "trajectory_b37_transfer.json")
-
 R11_START_CONF_VALS = np.array([22700.0, 0.0, -4900.0, 0.0, -80.0, 65.0, 65.0, 20.0, -20.0])
 R12_START_CONF_VALS = np.array([-4056.0883789999998, -4000.8486330000001, 0.0, -22.834741999999999, -30.711554, 0.0, 57.335655000000003, 0.0])
 
-def compute_movement(json_path_in=JSON_PATH_IN, json_out_dir=JSON_OUT_DIR, viewer=False, debug=False, write=False, seq_i=1):
+def compute_movement(json_path_in=JSON_PATH_IN, json_out_dir=JSON_OUT_DIR, viewer=False, debug=False, write=False, \
+    seq_i=1, parse_transfer_motion=False):
     # * Connect to path planning backend and initialize robot parameters
     urdf_filename, robot = rfl_setup()
 
@@ -88,9 +87,6 @@ def compute_movement(json_path_in=JSON_PATH_IN, json_out_dir=JSON_OUT_DIR, viewe
             gantry_joint_names.append(jt_n)
     flange_link_name = robot.get_end_effector_link_name(group=yzarm_move_group)
 
-    ee_touched_link_names = ['robot12_tool0', 'robot12_link_6']
-    ee_acms = [AttachedCollisionMesh(ee_cm, flange_link_name, ee_touched_link_names) for ee_cm in itj_TC_PG1000_cms()]
-
     # * Load process from file
     with open(json_path_in, 'r') as f:
         json_str = f.read()
@@ -98,11 +94,21 @@ def compute_movement(json_path_in=JSON_PATH_IN, json_out_dir=JSON_OUT_DIR, viewe
         process = jsonpickle.decode(json_str, keys=True) # type: RobotClampAssemblyProcess
     assembly = process.assembly # For convinence
     toolchanger = process.robot_toolchanger
+    beam_ids = [b for b in process.assembly.sequence]
+    beam_id = beam_ids[seq_i-1]
+    cprint('Beam #{} | previous beams: {}'.format(beam_id, assembly.get_already_built_beams(beam_id)), 'cyan')
 
-    # * parse existing transfer motion
-    with open(TRANSFER_DATA_PATH) as json_file:
-        transfer_path_data = json.load(json_file)
-    transfer_traj = JointTrajectory.from_data(transfer_path_data)
+    if parse_transfer_motion:
+        # * parse existing transfer motion
+        with open(os.path.join(HERE, 'data', "trajectory_{}_transfer.json").format(beam_id)) as json_file:
+            transfer_path_data = json.load(json_file)
+        transfer_traj = JointTrajectory.from_data(transfer_path_data)
+
+    gripper_type = assembly.get_beam_attribute(beam_id, 'gripper_type')
+    ee_touched_link_names = ['robot12_tool0', 'robot12_link_6']
+    ee_cms_fn = itj_TC_PG1000_cms if 'PG1000' in gripper_type else itj_TC_PG500_cms
+    ee_acms = [AttachedCollisionMesh(ee_cm, flange_link_name, ee_touched_link_names) for ee_cm in ee_cms_fn()]
+    cprint('Using gripper {}'.format(gripper_type), 'yellow')
 
     with PyBulletClient(viewer=viewer) as client:
         client.load_robot_from_urdf(urdf_filename)
@@ -121,11 +127,9 @@ def compute_movement(json_path_in=JSON_PATH_IN, json_out_dir=JSON_OUT_DIR, viewe
         set_camera_pose(cam['target'], cam['location'])
 
         # * start conf
-        # r11_start_conf_vals = np.array([22700.0, 0.0, -4900.0, 0.0, -80.0, 65.0, 65.0, 20.0, -20.0])
-        # r12_start_conf_vals = np.array([-4056.0883789999998, -4000.8486330000001, 0.0, -22.834741999999999, -30.711554, 0.0, 57.335655000000003, 0.0])
-        # full_start_conf = to_rlf_robot_full_conf(r11_start_conf_vals, r12_start_conf_vals)
-        full_start_conf = transfer_traj.start_configuration.copy()
-        full_start_conf.scale(MIL2M)
+        r11_start_conf_vals = np.array([22700.0, 0.0, -4900.0, 0.0, -80.0, 65.0, 65.0, 20.0, -20.0])
+        r12_start_conf_vals = np.array([-4056.0883789999998, -4000.8486330000001, 0.0, -22.834741999999999, -30.711554, 0.0, 57.335655000000003, 0.0])
+        full_start_conf = to_rlf_robot_full_conf(r11_start_conf_vals, r12_start_conf_vals)
         full_joints = joints_from_names(robot_uid, full_start_conf.joint_names)
         set_joint_positions(robot_uid, full_joints, full_start_conf.values)
 
@@ -143,9 +147,6 @@ def compute_movement(json_path_in=JSON_PATH_IN, json_out_dir=JSON_OUT_DIR, viewe
         # assert not client.configuration_in_collision(conf, group=yzarm_move_group, options={'diagnosis':True})
 
         # * Individual process path planning
-        beam_ids = [b for b in process.assembly.sequence]
-        beam_id = beam_ids[seq_i-1]
-        cprint('Beam #{} | previous beams: {}'.format(beam_id, assembly.get_already_built_beams(beam_id)), 'cyan')
 
         def flange_frame_at(attribute_name):
             gripper_t0cp = process.get_gripper_t0cp_for_beam_at(beam_id, attribute_name)
@@ -196,21 +197,22 @@ def compute_movement(json_path_in=JSON_PATH_IN, json_out_dir=JSON_OUT_DIR, viewe
 
         gantry_yz_sample_fn = get_sample_fn(robot_uid, gantry_joints)
 
-        # * sim transfer motion
-        traj_joints = joints_from_names(robot_uid, transfer_traj.joint_names)
-        for traj_pt in transfer_traj.points:
-            traj_pt.scale(MIL2M)
-            set_joint_positions(robot_uid, traj_joints, traj_pt.values)
-            for _, attach in client.attachments.items():
-                attach.assign()
-            # wait_for_duration(0.1)
-            # wait_if_gui()
-
-            # yzarm_conf = Configuration(traj_pt.values, yzarm_joint_types, yzarm_joint_names)
-            # if client.configuration_in_collision(traj_pt, group=yzarm_move_group, options={'diagnosis':True}):
-            #     wait_if_gui('collision detected!!')
-        # wait_if_gui('wcf_inclamp_approach_pose reached.')
-        cart_start_conf = transfer_traj.points[-1]
+        if parse_transfer_motion:
+            full_start_conf = transfer_traj.start_configuration.copy()
+            full_start_conf.scale(MIL2M)
+            # * sim transfer motion
+            traj_joints = joints_from_names(robot_uid, transfer_traj.joint_names)
+            for traj_pt in transfer_traj.points:
+                traj_pt_scaled = traj_pt.scaled(MIL2M)
+                set_joint_positions(robot_uid, traj_joints, traj_pt_scaled.values)
+                for _, attach in client.attachments.items():
+                    attach.assign()
+                # wait_for_duration(0.1)
+                # wait_if_gui()
+                # yzarm_conf = Configuration(traj_pt.values, yzarm_joint_types, yzarm_joint_names)
+                # if client.configuration_in_collision(traj_pt, group=yzarm_move_group, options={'diagnosis':True}):
+                #     wait_if_gui('collision detected!!')
+            # this will set the x axis based on the parsed transfer motion
 
         import ikfast_abb_irb4600_40_255
         ikfast_fn = ikfast_abb_irb4600_40_255.get_ik
@@ -234,35 +236,34 @@ def compute_movement(json_path_in=JSON_PATH_IN, json_out_dir=JSON_OUT_DIR, viewe
         sample_ik_fn = get_sample_ik_fn(robot_uid, ikfast_fn, ik_base_link, ik_joints)
         collision_fn = PybulletConfigurationCollisionChecker(client)._get_collision_fn(group=arm_move_group)
 
-        # for k, cart_poses in enumerate(cart_pose_groups):
-            # conf_val = sample_tool_ik(ikfast_fn, robot_uid, ik_joints, cart_poses[0], ik_base_link, closest_only=True) #, get_all=True)
-            # set_joint_positions(robot_uid, ik_joints, conf_val)
-            # for _, attach in client.attachments.items():
-            #     attach.assign()
-            # cprint('Cartesian phase#{}'.format(k))
-            # conf_vals = plan_cartesian_motion(robot_uid, ik_base_link, ik_tool_link, cart_poses)
-
         conf_vals, cost = plan_cartesian_motion_lg(robot_uid, ik_joints, cart_pose_groups, sample_ik_fn, collision_fn)
             # custom_vel_limits=vel_limits, ee_vel=ee_vel)
         confval_groups = divide_list_chunks(conf_vals, cart_group_sizes)
 
-        wait_if_gui('start cartesian sim...')
+        # compute transfer motion
+        # path = plan_joint_motion(robot, joints, end_conf, obstacles=obstacles, attachments=attachments,
+        #                          self_collisions=ENABLE_SELF_COLLISIONS, disabled_collisions=disabled_collisions,
+        #                          extra_disabled_collisions=extra_disabled_collisions,
+        #                          weights=weights, resolutions=resolutions, custom_limits=custom_limits,
+        #                          diagnosis=DIAGNOSIS, **kwargs)
 
-        cart_process_start_conf = cart_start_conf
-        cart_gantry_yz_vals = [cart_start_conf.values[i] for i in range(2)]
+        wait_if_gui('start simulation...')
+
+        cart_process_start_conf = transfer_traj.points[-1] if parse_transfer_motion else None
+        cart_gantry_yz_vals = [cart_process_start_conf.values[i] for i in range(2)]
         cart_process_data = {}
         for k, conf_vals in enumerate(confval_groups):
             jt_traj_pts = []
             for i, conf_val in enumerate(conf_vals):
                 yzarm_conf = Configuration(values=cart_gantry_yz_vals+conf_val, types=yzarm_joint_types, joint_names=yzarm_joint_names)
-                yzarm_conf_scaled = yzarm_conf.scaled(1./MIL2M)
-                jt_traj_pt = JointTrajectoryPoint(values=yzarm_conf_scaled.values, types=yzarm_conf_scaled.types, \
+                jt_traj_pt = JointTrajectoryPoint(values=yzarm_conf.values, types=yzarm_conf.types, \
                     time_from_start=Duration(i*1,0))
                 jt_traj_pt.joint_names = yzarm_joint_names
                 jt_traj_pts.append(jt_traj_pt)
 
                 # simulation with unscaled
-                set_joint_positions(robot_uid, yzarm_joints, yzarm_conf.values)
+                yzarm_conf_scaled = yzarm_conf.scaled(MIL2M)
+                set_joint_positions(robot_uid, yzarm_joints, yzarm_conf_scaled.values)
                 for attach_name, attach in client.attachments.items():
                     if attach_name != cur_beam.name:
                         attach.assign()
@@ -393,12 +394,13 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-v', '--viewer', action='store_true', help='Enables the viewer during planning, default False')
     parser.add_argument('-w', '--write', action='store_true', help='Write output json.')
+    parser.add_argument('-ptm', '--parse_transfer_motion', action='store_true', help='Parse saved transfer motion.')
     parser.add_argument('-db', '--debug', action='store_true', help='Debug mode')
     parser.add_argument('-si', '--seq_i', default=1, help='individual step to plan, Victor starts from one.')
     args = parser.parse_args()
     print('Arguments:', args)
 
-    compute_movement(viewer=args.viewer, debug=args.debug, write=args.write, seq_i=int(args.seq_i))
+    compute_movement(viewer=args.viewer, debug=args.debug, write=args.write, seq_i=int(args.seq_i), parse_transfer_motion=args.parse_transfer_motion)
 
 
 if __name__ == '__main__':

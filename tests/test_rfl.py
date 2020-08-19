@@ -86,7 +86,7 @@ def rfl_camera(scale=1e-3):
 #####################################
 
 @pytest.mark.collision_check_rfl
-def test_collision_checker(rfl_setup, itj_TC_PG1000_cms, itj_beam_cm, itj_rfl_obstacle_cms, viewer):
+def test_collision_checker(rfl_setup, itj_TC_PG500_cms, itj_beam_cm, viewer):
     # modified from https://github.com/yijiangh/pybullet_planning/blob/dev/tests/test_collisions.py
     urdf_filename, robot = rfl_setup
 
@@ -96,7 +96,7 @@ def test_collision_checker(rfl_setup, itj_TC_PG1000_cms, itj_beam_cm, itj_rfl_ob
     flange_link_name = robot.get_end_effector_link_name(group=move_group)
 
     ee_touched_link_names = ['robot12_tool0', 'robot12_link_6']
-    ee_acms = [AttachedCollisionMesh(ee_cm, flange_link_name, ee_touched_link_names) for ee_cm in itj_TC_PG1000_cms]
+    ee_acms = [AttachedCollisionMesh(ee_cm, flange_link_name, ee_touched_link_names) for ee_cm in itj_TC_PG500_cms]
     beam_acm = AttachedCollisionMesh(itj_beam_cm, flange_link_name, ee_touched_link_names)
 
     with PyBulletClient(viewer=viewer) as client:
@@ -120,8 +120,8 @@ def test_collision_checker(rfl_setup, itj_TC_PG1000_cms, itj_beam_cm, itj_rfl_ob
         set_joint_positions(robot_uid, full_joints, full_start_conf.values)
 
         # # * add static obstacles
-        for o_cm in itj_rfl_obstacle_cms:
-            client.add_collision_mesh(o_cm)
+        # for o_cm in itj_rfl_obstacle_cms:
+        #     client.add_collision_mesh(o_cm)
 
         # # * add attachment
         for ee_acm in ee_acms:
