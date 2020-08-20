@@ -230,7 +230,7 @@ def test_circle_cartesian(fixed_waam_setup, viewer):
 
 #####################################
 
-@pytest.mark.ik
+@pytest.mark.ik_abb
 @pytest.mark.parametrize("ik_engine", [('default-single'), ('lobster-analytical'), ('ikfast-analytical')])
 def test_ik(fixed_waam_setup, viewer, ik_engine):
     urdf_filename, robot, robotA_tool = fixed_waam_setup

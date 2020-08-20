@@ -1,15 +1,17 @@
 import time
 from compas_fab.backends.interfaces import PlanMotion
 from compas_fab.backends.interfaces import InverseKinematics
+from compas_fab.robots import JointTrajectory, Duration, JointTrajectoryPoint
 
-from pybullet_planning import is_connected, get_bodies, WorldSaver, get_collision_fn
-from compas_fab_pychoreo.conversions import joint_values_from_configuration, joints_from_names
+from pybullet_planning import is_connected, get_bodies, WorldSaver, joints_from_names, set_joint_positions, plan_joint_motion
+# from compas_fab_pychoreo.conversions import
+from compas_fab_pychoreo.utils import is_valid_option, values_as_list
 
 class PybulletPlanMotion(PlanMotion):
     def __init__(self, client):
         self.client = client
 
-    def plan_motion(self, frames_WCF, start_configuration=None, group=None, options=None):
+    def plan_motion(self, end_configuration, start_configuration=None, group=None, options=None):
         """Calculates a cartesian motion path (linear in tool space).
 
         Parameters
@@ -49,48 +51,50 @@ class PybulletPlanMotion(PlanMotion):
         :class:`compas_fab.robots.JointTrajectory`
             The calculated trajectory.
         """
-        assert is_connected()
-        assert 'robot_uid' in options and 'inverse_kinematics' in options
-        robot_uid = options['robot_uid']
-        assert robot_uid in get_bodies()
-        assert issubclass(type(options['inverse_kinematics']), InverseKinematics)
+        robot_uid = self.client.robot_uid
+        robot = self.client.compas_fab_robot
 
-        # ik_joints, conf = joint_values_from_configuration(start_configuration, robot_uid)
-        ik_joints = joints_from_names(robot_uid, options['joint_names'])
+        ik_joint_names = robot.get_configurable_joint_names(group=group)
+        ik_joint_types = robot.get_joint_types_by_names(ik_joint_names)
+        ik_joints = joints_from_names(robot_uid, ik_joint_names)
 
-        # * build collision fn here
-        # assume checking with all the collision objects saved in the pb_client
-        obstacles = []
-        for name in self.pb_client.collision_objects:
-            for obstacle_body in self.pb_client.collision_objects[name]:
-                obstacles.append(obstacle_body)
-        collision_fn = get_collision_fn(robot_uid, ik_joints, obstacles=obstacles,
-                                        # TODO : get these arguments
-                                        attachments=[], self_collisions=False,
-                                        #    disabled_collisions=disabled_collisions,
-                                        #    extra_disabled_collisions=extra_disabled_collisions,
-                                        custom_limits={})
+        self_collisions = is_valid_option(options, 'self_collisions', True)
+        diagnosis = is_valid_option(options, 'diagnosis', False)
+        custom_limits = is_valid_option(options, 'custom_limits', {})
+        resolutions = is_valid_option(options, 'resolutions', 0.1)
 
-        # * convert to a pb ik_fn
+        attachments = values_as_list(self.client.attachments)
+        obstacles = values_as_list(self.client.collision_objects)
 
-        with WorldSaver():
-            # reset to start conf
-            set_joint_positions(robot_uid, ik_joints, conf) # seed
+        disabled_collisions = self.client.self_collision_links
+        # TODO additional disabled collisions in options
+        # option_disabled_linke_names = is_valid_option(options, 'extra_disabled_collisions', [])
+        # option_extra_disabled_collisions = get_body_body_disabled_collisions(robot_uid, workspace, extra_disabled_link_names)
+        option_extra_disabled_collisions = set()
+        extra_disabled_collisions = self.client.extra_disabled_collisions
+        #| option_extra_disabled_collisions, TODO this cause incorrect result
 
-            st_time = time.time()
-            path, cost = plan_cartesian_motion_lg(robot, ik_joints, ee_poses, sample_ik_fn, collision_fn, \
-                custom_vel_limits=vel_limits, ee_vel=ee_vel)
-            print('Solving time: {}'.format(elapsed_time(st_time)))
+        # TODO: worldsaver?
+        # # TODO: compute joint weight as np.reciprocal(joint velocity bound) from URDF
+        # JOINT_WEIGHTS = np.reciprocal([6.28318530718, 5.23598775598, 6.28318530718,
+        #                        6.6497044501, 6.77187749774, 10.7337748998]) # sec / radian
+        if start_configuration is not None:
+            set_joint_positions(robot_uid, ik_joints, start_configuration.values)
 
-            if path is None:
-                cprint('No free motion found!', 'red')
-                return None
-            else:
-                jt_traj_pts = []
-                for i, conf in enumerate(path):
-                    c_conf = Configuration(values=conf, types=self.joint_types, joint_names=self.joint_names)
-                    c_conf.scale(1e3)
-                    jt_traj_pt = JointTrajectoryPoint(values=c_conf.values, types=c_conf.types, time_from_start=Duration(i*1,0))
-                    jt_traj_pts.append(jt_traj_pt)
-                trajectory = JointTrajectory(trajectory_points=jt_traj_pts,
-                    joint_names=self.joint_names, start_configuration=start_configuration, fraction=1.0)
+        # TODO: if isinstance(goal_, JointConstraint):
+
+        conf_vals = plan_joint_motion(robot_uid, ik_joints, end_configuration.values,
+                                 obstacles=obstacles, attachments=attachments,
+                                 self_collisions=self_collisions, disabled_collisions=disabled_collisions,
+                                 extra_disabled_collisions=extra_disabled_collisions,
+                                 resolutions=resolutions, custom_limits=custom_limits,
+                                 diagnosis=diagnosis) #weights=weights,
+
+        if conf_vals is not None and len(conf_vals) > 0:
+            traj_pts = [JointTrajectoryPoint(values=conf_val, types=ik_joint_types, time_from_start=Duration(i*1,0)) \
+                for i, conf_val in enumerate(conf_vals)]
+            trajectory = JointTrajectory(trajectory_points=traj_pts, \
+                joint_names=ik_joint_names, start_configuration=start_configuration, fraction=1.0)
+            return trajectory
+        else:
+            return None

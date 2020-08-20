@@ -49,6 +49,6 @@ class PybulletConfigurationCollisionChecker(ConfigurationCollisionChecker):
         collision_fn = get_collision_fn(robot_uid, ik_joints, obstacles=obstacles,
                                         attachments=attachments, self_collisions=self_collisions,
                                         disabled_collisions=self.client.self_collision_links,
-                                        extra_disabled_collisions=self.client.extra_disabled_collisions | option_extra_disabled_collisions,
+                                        extra_disabled_collisions=self.client.extra_disabled_collisions, # | option_extra_disabled_collisions
                                         custom_limits={})
         return collision_fn

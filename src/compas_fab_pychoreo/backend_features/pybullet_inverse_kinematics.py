@@ -8,6 +8,7 @@ from pybullet_planning import get_movable_joints, set_joint_positions, get_link_
 from pybullet_planning import wait_if_gui
 
 from compas_fab_pychoreo.conversions import pose_from_frame
+from compas_fab_pychoreo.utils import is_valid_option
 
 class PybulletInverseKinematics(InverseKinematics):
     def __init__(self, client):
@@ -15,6 +16,7 @@ class PybulletInverseKinematics(InverseKinematics):
 
     def inverse_kinematics(self, frame_WCF, start_configuration=None, group=None, options=None):
         """Calculate the robot's inverse kinematic for a given frame.
+
         Parameters
         ----------
         frame_WCF: :class:`compas.geometry.Frame`
@@ -37,6 +39,8 @@ class PybulletInverseKinematics(InverseKinematics):
               Defaults to `8`.
             - ``"attached_collision_meshes"``: (:obj:`list` of :class:`compas_fab.robots.AttachedCollisionMesh`, optional)
               Defaults to `None`.
+            - ``"return_all"``: (bool, optional) return a list of all computed ik solutions
+              Defaults to False
         Raises
         ------
         compas_fab.backends.exceptions.BackendError
@@ -46,11 +50,15 @@ class PybulletInverseKinematics(InverseKinematics):
         :class:`compas_fab.robots.Configuration`
             The planning group's configuration.
         """
-        max_iterations = 8 if options is None or 'attempts' not in options else options['attempts']
+        max_iterations = is_valid_option(options, 'attempts', 8)
+        avoid_collisions = is_valid_option(options, 'avoid_collisions', True)
+        return_all = is_valid_option(options, 'return_all', False)
+        # return_closest_to_start = is_valid_option(options, 'return_closest_to_start', False)
+        # cull = is_valid_option(options, 'cull', True)
+
         robot_uid = self.client.robot_uid
         robot = self.client.compas_fab_robot
 
-        # movable_joints = get_movable_joints(robot_uid)
         ik_joint_names = robot.get_configurable_joint_names(group=group)
         ik_joints = joints_from_names(robot_uid, ik_joint_names)
         tool_link_name = robot.get_end_effector_link_name(group=group)
@@ -64,21 +72,39 @@ class PybulletInverseKinematics(InverseKinematics):
             start_conf_vals = sample_fn()
         set_joint_positions(robot_uid, ik_joints, start_conf_vals)
 
+        if group not in self.client.planner.ik_fn_from_group:
+            # use default ik fn
+            conf_vals = self._compute_ik(ik_joints, tool_link, target_pose, max_iterations)
+            joint_types = robot.get_joint_types_by_names(ik_joint_names)
+            configurations = [Configuration(values=conf_val, types=joint_types, joint_names=ik_joint_names) \
+                for conf_val in conf_vals if conf_val is not None]
+        else:
+            # qs = client.inverse_kinematics(frame_WCF, group=move_group)
+            configurations = self.client.planner.ik_fn_from_group[group](frame_WCF, group=group, options=options)
+
+        if avoid_collisions:
+            configurations = [conf for conf in configurations if not self.client.configuration_in_collision(conf, group=group)]
+
+        if return_all:
+            return configurations
+        else:
+            return None if len(configurations) > 0 else configurations[0]
+
+    def _compute_ik(self, ik_joints, tool_link, target_pose, max_iterations=8):
+        robot_uid = self.client.robot_uid
         for _ in range(max_iterations):
             # TODO: stop is no progress
             # TODO: stop if collision or invalid joint limits
             kinematic_conf = inverse_kinematics_helper(robot_uid, tool_link, target_pose)
             if kinematic_conf is None:
-                return None
+                return [None]
             set_joint_positions(robot_uid, ik_joints, kinematic_conf)
             if is_pose_close(get_link_pose(robot_uid, tool_link), target_pose): #, **kwargs):
                 break
         else:
-            return None
+            return [None]
         # TODO custom_limits
         # lower_limits, upper_limits = get_custom_limits(robot_uid, ik_joints, custom_limits)
         # if not all_between(lower_limits, kinematic_conf, upper_limits):
-        #     return None
-
-        joint_types = robot.get_joint_types_by_names(ik_joint_names)
-        return Configuration(values=kinematic_conf, types=joint_types, joint_names=ik_joint_names)
+        #     return [None]
+        return [kinematic_conf]

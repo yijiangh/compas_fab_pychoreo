@@ -120,20 +120,21 @@ class PyBulletClient(ClientInterface):
 
     ###########################################################
 
-    def forward_kinematics(self, robot, configuration, group, ee_link_name, check_collision=True):
-        """we do not need a backend feature for the FK case.
-        """
-        self.ensure_robot()
-        joints = joints_from_names(self.robot_uid, configuration.joint_names)
-        ee_link = link_from_name(self.robot_uid, ee_link_name)
-        set_joint_positions(self.robot_uid, joints, configuration.values)
-        pose = get_link_pose(self.robot_uid, ee_link)
-        if check_collision:
-            # collision, names = self.collision_check()
-            # if collision:
-            #     raise CollisionError(*names)
-            raise NotImplementedError()
-        return frame_from_pose(pose)
+    # TODO conform to the standard foward kinematics call
+    # def forward_kinematics(self, robot, configuration, group, ee_link_name, check_collision=True):
+    #     """we do not need a backend feature for the FK case.
+    #     """
+    #     self.ensure_robot()
+    #     joints = joints_from_names(self.robot_uid, configuration.joint_names)
+    #     ee_link = link_from_name(self.robot_uid, ee_link_name)
+    #     set_joint_positions(self.robot_uid, joints, configuration.values)
+    #     pose = get_link_pose(self.robot_uid, ee_link)
+    #     if check_collision:
+    #         # collision, names = self.collision_check()
+    #         # if collision:
+    #         #     raise CollisionError(*names)
+    #         raise NotImplementedError()
+    #     return frame_from_pose(pose)
 
     ###########################################################
 
@@ -203,8 +204,11 @@ class PyBulletClient(ClientInterface):
         self.attachments[name] = attachment
         return attachment
 
-    def remove_attached_collision_mesh(self, id):
-        raise NotImplementedError
+    def remove_attached_collision_mesh(self, name):
+        if name in self.attachments:
+            del self.attachments[name]
+        else:
+            LOG.warning("Attached collison object with name '{}' does not exist in scene.".format(name))
 
     ########################################
 

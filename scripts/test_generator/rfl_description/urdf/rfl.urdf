@@ -16,13 +16,13 @@
     <visual>
       <origin rpy="0.0 0.0 0.0" xyz="0.0 0.0 0.0"/>
       <geometry>
-        <mesh filename="package://rfl_description/meshes/visual/rfl_floor_and_columns.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/visual/rfl_floor_and_columns.stl"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0.0 0.0 0.0" xyz="0.0 0.0 0.0"/>
       <geometry>
-        <mesh filename="package://rfl_description/meshes/collision/rfl_floor_and_columns.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/collision/rfl_floor_and_columns.stl"/>
       </geometry>
     </collision>
   </link>
@@ -35,7 +35,7 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="package://rfl_description/meshes/visual/x_rail.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/visual/x_rail.stl"/>
       </geometry>
       <material name="">
         <color rgba="0.9254902 0.9254902 0.9058824 1"/>
@@ -44,7 +44,7 @@
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="package://rfl_description/meshes/collision/x_rail.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/collision/x_rail.stl"/>
       </geometry>
     </collision>
   </link>
@@ -65,7 +65,7 @@
     <visual>
       <origin rpy="0 0 0.0" xyz="0.0 0.0 0.0"/>
       <geometry>
-        <mesh filename="package://rfl_description/meshes/visual/y_gantry.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/visual/y_gantry.stl"/>
       </geometry>
       <material name="">
         <color rgba="0.9254902 0.9254902 0.9058824 1"/>
@@ -74,7 +74,7 @@
     <collision>
       <origin rpy="0 0 0.0" xyz="0.0 0.0 0.0"/>
       <geometry>
-        <mesh filename="package://rfl_description/meshes/collision/y_gantry.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/collision/y_gantry.stl"/>
       </geometry>
     </collision>
   </link>
@@ -95,7 +95,7 @@
     <visual>
       <origin rpy="0 0 0.0" xyz="0.0 0.0 0.0"/>
       <geometry>
-        <mesh filename="package://rfl_description/meshes/visual/group1_xy_cart.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/visual/group1_xy_cart.stl"/>
       </geometry>
       <material name="">
         <color rgba="0.9254902 0.9254902 0.9058824 1"/>
@@ -104,7 +104,7 @@
     <collision>
       <origin rpy="0 0 0.0" xyz="0.0 0.0 0.0"/>
       <geometry>
-        <mesh filename="package://rfl_description/meshes/collision/group1_xy_cart.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/collision/group1_xy_cart.stl"/>
       </geometry>
     </collision>
   </link>
@@ -125,7 +125,7 @@
     <visual>
       <origin rpy="0 0 0.0" xyz="0.0 0.0 0.0"/>
       <geometry>
-        <mesh filename="package://rfl_description/meshes/visual/group1_z_axis.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/visual/group1_z_axis.stl"/>
       </geometry>
       <material name="">
         <color rgba="0.9254902 0.9254902 0.9058824 1"/>
@@ -134,7 +134,7 @@
     <collision>
       <origin rpy="0 0 0.0" xyz="0.0 0.0 0.0"/>
       <geometry>
-        <mesh filename="package://rfl_description/meshes/collision/group1_z_axis.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/collision/group1_z_axis.stl"/>
       </geometry>
     </collision>
   </link>
@@ -153,7 +153,7 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/visual/base_link.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/visual/base_link.stl"/>
       </geometry>
       <material name="">
         <color rgba="0.7725490 0.7803922 0.7686275 1"/>
@@ -161,7 +161,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/collision/base_link.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/collision/base_link.stl"/>
       </geometry>
     </collision>
   </link>
@@ -173,7 +173,7 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/visual/link_1.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/visual/link_1.stl"/>
       </geometry>
       <material name="">
         <color rgba="0.7725490 0.7803922 0.7686275 1"/>
@@ -181,7 +181,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/collision/link_1.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/collision/link_1.stl"/>
       </geometry>
     </collision>
   </link>
@@ -193,7 +193,7 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/visual/link_2.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/visual/link_2.stl"/>
       </geometry>
       <material name="">
         <color rgba="0.7725490 0.7803922 0.7686275 1"/>
@@ -201,7 +201,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/collision/link_2.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/collision/link_2.stl"/>
       </geometry>
     </collision>
   </link>
@@ -213,7 +213,7 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/visual/link_3.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/visual/link_3.stl"/>
       </geometry>
       <material name="">
         <color rgba="0.7725490 0.7803922 0.7686275 1"/>
@@ -221,7 +221,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/collision/link_3.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/collision/link_3.stl"/>
       </geometry>
     </collision>
   </link>
@@ -233,7 +233,7 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/visual/link_4.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/visual/link_4.stl"/>
       </geometry>
       <material name="">
         <color rgba="0.7725490 0.7803922 0.7686275 1"/>
@@ -241,7 +241,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/collision/link_4.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/collision/link_4.stl"/>
       </geometry>
     </collision>
   </link>
@@ -253,7 +253,7 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/visual/link_5.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/visual/link_5.stl"/>
       </geometry>
       <material name="">
         <color rgba="0.7725490 0.7803922 0.7686275 1"/>
@@ -261,7 +261,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/collision/link_5.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/collision/link_5.stl"/>
       </geometry>
     </collision>
   </link>
@@ -273,7 +273,7 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/visual/link_6.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/visual/link_6.stl"/>
       </geometry>
       <material name="">
         <color rgba="0.1882353 0.1960784 0.2039216 1"/>
@@ -281,7 +281,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/collision/link_6.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/collision/link_6.stl"/>
       </geometry>
     </collision>
   </link>
@@ -372,7 +372,7 @@
     <visual>
       <origin rpy="0 0 0.0" xyz="0.0 0.0 0.0"/>
       <geometry>
-        <mesh filename="package://rfl_description/meshes/visual/group2_xy_cart.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/visual/group2_xy_cart.stl"/>
       </geometry>
       <material name="">
         <color rgba="0.9254902 0.9254902 0.9058824 1"/>
@@ -381,7 +381,7 @@
     <collision>
       <origin rpy="0 0 0.0" xyz="0.0 0.0 0.0"/>
       <geometry>
-        <mesh filename="package://rfl_description/meshes/collision/group2_xy_cart.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/collision/group2_xy_cart.stl"/>
       </geometry>
     </collision>
   </link>
@@ -402,7 +402,7 @@
     <visual>
       <origin rpy="0 0 0.0" xyz="0.0 0.0 0.0"/>
       <geometry>
-        <mesh filename="package://rfl_description/meshes/visual/group2_z_axis.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/visual/group2_z_axis.stl"/>
       </geometry>
       <material name="">
         <color rgba="0.9254902 0.9254902 0.9058824 1"/>
@@ -411,7 +411,7 @@
     <collision>
       <origin rpy="0 0 0.0" xyz="0.0 0.0 0.0"/>
       <geometry>
-        <mesh filename="package://rfl_description/meshes/collision/group2_z_axis.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/collision/group2_z_axis.stl"/>
       </geometry>
     </collision>
   </link>
@@ -430,7 +430,7 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/visual/base_link.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/visual/base_link.stl"/>
       </geometry>
       <material name="">
         <color rgba="0.7725490 0.7803922 0.7686275 1"/>
@@ -438,7 +438,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/collision/base_link.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/collision/base_link.stl"/>
       </geometry>
     </collision>
   </link>
@@ -450,7 +450,7 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/visual/link_1.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/visual/link_1.stl"/>
       </geometry>
       <material name="">
         <color rgba="0.7725490 0.7803922 0.7686275 1"/>
@@ -458,7 +458,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/collision/link_1.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/collision/link_1.stl"/>
       </geometry>
     </collision>
   </link>
@@ -470,7 +470,7 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/visual/link_2.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/visual/link_2.stl"/>
       </geometry>
       <material name="">
         <color rgba="0.7725490 0.7803922 0.7686275 1"/>
@@ -478,7 +478,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/collision/link_2.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/collision/link_2.stl"/>
       </geometry>
     </collision>
   </link>
@@ -490,7 +490,7 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/visual/link_3.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/visual/link_3.stl"/>
       </geometry>
       <material name="">
         <color rgba="0.7725490 0.7803922 0.7686275 1"/>
@@ -498,7 +498,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/collision/link_3.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/collision/link_3.stl"/>
       </geometry>
     </collision>
   </link>
@@ -510,7 +510,7 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/visual/link_4.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/visual/link_4.stl"/>
       </geometry>
       <material name="">
         <color rgba="0.7725490 0.7803922 0.7686275 1"/>
@@ -518,7 +518,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/collision/link_4.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/collision/link_4.stl"/>
       </geometry>
     </collision>
   </link>
@@ -530,7 +530,7 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/visual/link_5.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/visual/link_5.stl"/>
       </geometry>
       <material name="">
         <color rgba="0.7725490 0.7803922 0.7686275 1"/>
@@ -538,7 +538,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/collision/link_5.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/collision/link_5.stl"/>
       </geometry>
     </collision>
   </link>
@@ -550,7 +550,7 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/visual/link_6.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/visual/link_6.stl"/>
       </geometry>
       <material name="">
         <color rgba="0.1882353 0.1960784 0.2039216 1"/>
@@ -558,7 +558,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/collision/link_6.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/collision/link_6.stl"/>
       </geometry>
     </collision>
   </link>
@@ -649,7 +649,7 @@
     <visual>
       <origin rpy="0 0 3.14159265359" xyz="0.0 12.2364997 0.0"/>
       <geometry>
-        <mesh filename="package://rfl_description/meshes/visual/y_gantry.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/visual/y_gantry.stl"/>
       </geometry>
       <material name="">
         <color rgba="0.9254902 0.9254902 0.9058824 1"/>
@@ -658,7 +658,7 @@
     <collision>
       <origin rpy="0 0 3.14159265359" xyz="0.0 12.2364997 0.0"/>
       <geometry>
-        <mesh filename="package://rfl_description/meshes/collision/y_gantry.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/collision/y_gantry.stl"/>
       </geometry>
     </collision>
   </link>
@@ -679,7 +679,7 @@
     <visual>
       <origin rpy="0 0 3.14159265359" xyz="0.0 0.0 0.0"/>
       <geometry>
-        <mesh filename="package://rfl_description/meshes/visual/group2_xy_cart.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/visual/group2_xy_cart.stl"/>
       </geometry>
       <material name="">
         <color rgba="0.9254902 0.9254902 0.9058824 1"/>
@@ -688,7 +688,7 @@
     <collision>
       <origin rpy="0 0 3.14159265359" xyz="0.0 0.0 0.0"/>
       <geometry>
-        <mesh filename="package://rfl_description/meshes/collision/group2_xy_cart.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/collision/group2_xy_cart.stl"/>
       </geometry>
     </collision>
   </link>
@@ -709,7 +709,7 @@
     <visual>
       <origin rpy="0 0 3.14159265359" xyz="0.0 0.0 0.0"/>
       <geometry>
-        <mesh filename="package://rfl_description/meshes/visual/group2_z_axis.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/visual/group2_z_axis.stl"/>
       </geometry>
       <material name="">
         <color rgba="0.9254902 0.9254902 0.9058824 1"/>
@@ -718,7 +718,7 @@
     <collision>
       <origin rpy="0 0 3.14159265359" xyz="0.0 0.0 0.0"/>
       <geometry>
-        <mesh filename="package://rfl_description/meshes/collision/group2_z_axis.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/collision/group2_z_axis.stl"/>
       </geometry>
     </collision>
   </link>
@@ -737,7 +737,7 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/visual/base_link.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/visual/base_link.stl"/>
       </geometry>
       <material name="">
         <color rgba="0.7725490 0.7803922 0.7686275 1"/>
@@ -745,7 +745,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/collision/base_link.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/collision/base_link.stl"/>
       </geometry>
     </collision>
   </link>
@@ -757,7 +757,7 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/visual/link_1.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/visual/link_1.stl"/>
       </geometry>
       <material name="">
         <color rgba="0.7725490 0.7803922 0.7686275 1"/>
@@ -765,7 +765,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/collision/link_1.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/collision/link_1.stl"/>
       </geometry>
     </collision>
   </link>
@@ -777,7 +777,7 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/visual/link_2.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/visual/link_2.stl"/>
       </geometry>
       <material name="">
         <color rgba="0.7725490 0.7803922 0.7686275 1"/>
@@ -785,7 +785,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/collision/link_2.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/collision/link_2.stl"/>
       </geometry>
     </collision>
   </link>
@@ -797,7 +797,7 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/visual/link_3.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/visual/link_3.stl"/>
       </geometry>
       <material name="">
         <color rgba="0.7725490 0.7803922 0.7686275 1"/>
@@ -805,7 +805,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/collision/link_3.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/collision/link_3.stl"/>
       </geometry>
     </collision>
   </link>
@@ -817,7 +817,7 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/visual/link_4.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/visual/link_4.stl"/>
       </geometry>
       <material name="">
         <color rgba="0.7725490 0.7803922 0.7686275 1"/>
@@ -825,7 +825,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/collision/link_4.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/collision/link_4.stl"/>
       </geometry>
     </collision>
   </link>
@@ -837,7 +837,7 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/visual/link_5.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/visual/link_5.stl"/>
       </geometry>
       <material name="">
         <color rgba="0.7725490 0.7803922 0.7686275 1"/>
@@ -845,7 +845,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/collision/link_5.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/collision/link_5.stl"/>
       </geometry>
     </collision>
   </link>
@@ -857,7 +857,7 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/visual/link_6.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/visual/link_6.stl"/>
       </geometry>
       <material name="">
         <color rgba="0.1882353 0.1960784 0.2039216 1"/>
@@ -865,7 +865,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/collision/link_6.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/collision/link_6.stl"/>
       </geometry>
     </collision>
   </link>
@@ -956,7 +956,7 @@
     <visual>
       <origin rpy="0 0 3.14159265359" xyz="0.0 0.0 0.0"/>
       <geometry>
-        <mesh filename="package://rfl_description/meshes/visual/group1_xy_cart.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/visual/group1_xy_cart.stl"/>
       </geometry>
       <material name="">
         <color rgba="0.9254902 0.9254902 0.9058824 1"/>
@@ -965,7 +965,7 @@
     <collision>
       <origin rpy="0 0 3.14159265359" xyz="0.0 0.0 0.0"/>
       <geometry>
-        <mesh filename="package://rfl_description/meshes/collision/group1_xy_cart.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/collision/group1_xy_cart.stl"/>
       </geometry>
     </collision>
   </link>
@@ -986,7 +986,7 @@
     <visual>
       <origin rpy="0 0 3.14159265359" xyz="0.0 0.0 0.0"/>
       <geometry>
-        <mesh filename="package://rfl_description/meshes/visual/group1_z_axis.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/visual/group1_z_axis.stl"/>
       </geometry>
       <material name="">
         <color rgba="0.9254902 0.9254902 0.9058824 1"/>
@@ -995,7 +995,7 @@
     <collision>
       <origin rpy="0 0 3.14159265359" xyz="0.0 0.0 0.0"/>
       <geometry>
-        <mesh filename="package://rfl_description/meshes/collision/group1_z_axis.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/collision/group1_z_axis.stl"/>
       </geometry>
     </collision>
   </link>
@@ -1014,7 +1014,7 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/visual/base_link.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/visual/base_link.stl"/>
       </geometry>
       <material name="">
         <color rgba="0.7725490 0.7803922 0.7686275 1"/>
@@ -1022,7 +1022,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/collision/base_link.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/collision/base_link.stl"/>
       </geometry>
     </collision>
   </link>
@@ -1034,7 +1034,7 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/visual/link_1.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/visual/link_1.stl"/>
       </geometry>
       <material name="">
         <color rgba="0.7725490 0.7803922 0.7686275 1"/>
@@ -1042,7 +1042,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/collision/link_1.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/collision/link_1.stl"/>
       </geometry>
     </collision>
   </link>
@@ -1054,7 +1054,7 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/visual/link_2.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/visual/link_2.stl"/>
       </geometry>
       <material name="">
         <color rgba="0.7725490 0.7803922 0.7686275 1"/>
@@ -1062,7 +1062,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/collision/link_2.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/collision/link_2.stl"/>
       </geometry>
     </collision>
   </link>
@@ -1074,7 +1074,7 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/visual/link_3.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/visual/link_3.stl"/>
       </geometry>
       <material name="">
         <color rgba="0.7725490 0.7803922 0.7686275 1"/>
@@ -1082,7 +1082,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/collision/link_3.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/collision/link_3.stl"/>
       </geometry>
     </collision>
   </link>
@@ -1094,7 +1094,7 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/visual/link_4.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/visual/link_4.stl"/>
       </geometry>
       <material name="">
         <color rgba="0.7725490 0.7803922 0.7686275 1"/>
@@ -1102,7 +1102,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/collision/link_4.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/collision/link_4.stl"/>
       </geometry>
     </collision>
   </link>
@@ -1114,7 +1114,7 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/visual/link_5.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/visual/link_5.stl"/>
       </geometry>
       <material name="">
         <color rgba="0.7725490 0.7803922 0.7686275 1"/>
@@ -1122,7 +1122,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/collision/link_5.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/collision/link_5.stl"/>
       </geometry>
     </collision>
   </link>
@@ -1134,7 +1134,7 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/visual/link_6.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/visual/link_6.stl"/>
       </geometry>
       <material name="">
         <color rgba="0.1882353 0.1960784 0.2039216 1"/>
@@ -1142,7 +1142,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="package://abb_irb4600_40_255/meshes/collision/link_6.stl"/>
+        <mesh filename="D:/code_ws/pb_ws/compas_fab_pychoreo/scripts/test_generator/rfl_description/meshes/collision/link_6.stl"/>
       </geometry>
     </collision>
   </link>

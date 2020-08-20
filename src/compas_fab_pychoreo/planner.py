@@ -4,9 +4,9 @@ Internal implementation of the planner backend interface for pybullet_planning
 from compas_fab.backends.interfaces.client import PlannerInterface
 
 from compas_fab_pychoreo.backend_features.pybullet_inverse_kinematics import PybulletInverseKinematics
-from compas_fab_pychoreo.backend_features.pybullet_plan_cartesian_motion import PybulletPlanCartesianMotion
 from compas_fab_pychoreo.backend_features.pybullet_configuration_collision_checker import PybulletConfigurationCollisionChecker
-# from compas_fab_pychoreo.backend_features.pybullet_plan_motion import PybulletPlanMotion
+# from compas_fab_pychoreo.backend_features.pybullet_plan_cartesian_motion import PybulletPlanCartesianMotion
+from compas_fab_pychoreo.backend_features.pybullet_plan_motion import PybulletPlanMotion
 
 class PybulletPlanner(PlannerInterface):
     """Implement the planner backend interface based on pybullet_planning
@@ -14,6 +14,8 @@ class PybulletPlanner(PlannerInterface):
 
     def __init__(self, client):
         super(PybulletPlanner, self).__init__(client)
+        # move_group_name : inverse_kinenamtics function
+        self.ik_fn_from_group = {}
 
     def forward_kinematics(self, *args, **kwargs):
         raise NotImplementedError()
@@ -27,8 +29,7 @@ class PybulletPlanner(PlannerInterface):
     #     return PybulletPlanCartesianMotion(self.client)(*args, **kwargs)
 
     def plan_motion(self, *args, **kwargs):
-        raise NotImplementedError()
-    #     return PybulletPlanMotion(self.client)(*args, **kwargs)
+        return PybulletPlanMotion(self.client)(*args, **kwargs)
 
     ###################################################
 
