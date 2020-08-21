@@ -2,6 +2,7 @@ import os
 import time
 import numpy as np
 import argparse
+import datetime
 import json
 import jsonpickle
 from math import radians as rad
@@ -23,17 +24,18 @@ from compas_fab.robots import Configuration, AttachedCollisionMesh, CollisionMes
 
 from pybullet_planning import link_from_name, get_link_pose, draw_pose, get_bodies, multiply, Pose, Euler, set_joint_positions, \
     joints_from_names, quat_angle_between, get_collision_fn, create_obj, unit_pose, set_camera_pose, pose_from_tform, set_pose, \
-    joint_from_name, LockRenderer, unit_quat, WorldSaver
-from pybullet_planning import wait_if_gui, wait_for_duration
+    joint_from_name, LockRenderer, unit_quat, WorldSaver, body_from_end_effector
+from pybullet_planning import wait_if_gui, wait_for_duration, wait_for_user
 from pybullet_planning import plan_cartesian_motion, plan_cartesian_motion_lg
 from pybullet_planning import randomize, elapsed_time, apply_alpha, RED, BLUE, YELLOW, GREEN, GREY
-from pybullet_planning import get_sample_fn, link_from_name, sample_tool_ik, interpolate_poses, get_joint_positions
+from pybullet_planning import get_sample_fn, link_from_name, sample_tool_ik, interpolate_poses, get_joint_positions, pairwise_collision, \
+    get_floating_body_collision_fn
 
 from compas_fab_pychoreo.backend_features.pybullet_configuration_collision_checker import PybulletConfigurationCollisionChecker
 from compas_fab_pychoreo.client import PyBulletClient
 from compas_fab_pychoreo.conversions import pose_from_frame, frame_from_pose
 from compas_fab_pychoreo_examples.ik_solver import ik_abb_irb4600_40_255, InverseKinematicsSolver, get_ik_fn_from_ikfast
-from compas_fab_pychoreo.utils import divide_list_chunks
+from compas_fab_pychoreo.utils import divide_list_chunks, values_as_list
 
 from parsing import rfl_setup, itj_TC_PG500_cms, itj_TC_PG1000_cms, itj_rfl_obstacle_cms, itj_rfl_pipe_cms
 from utils import to_rlf_robot_full_conf, rfl_camera, notify
@@ -41,7 +43,7 @@ from utils import to_rlf_robot_full_conf, rfl_camera, notify
 MIL2M = 1e-3
 
 # RETREAT_DISTANCE = 0.05
-RETREAT_DISTANCE = 0.005
+RETREAT_DISTANCE = 0.00
 
 WORLD_FROM_DESIGN_POSE = pose_from_tform(np.array([
     [-6.79973677324631E-05,0.99999999327,9.40019036398793E-05,24141.9306103356*MIL2M],
@@ -258,8 +260,10 @@ def compute_movement(json_path_in=JSON_PATH_IN, json_out_dir=JSON_OUT_DIR, viewe
         custom_yz_limits = {gantry_x_joint : (20.5, 25.0)}
         # custom_yz_limits = {gantry_x_joint : (20., 25.0)}
         gantry_x_sample_fn = get_sample_fn(robot_uid, [gantry_x_joint], custom_limits=custom_yz_limits)
-        custom_yz_limits = {gantry_joints[0] : (-12.237, -9.5),
+        # custom_yz_limits = {gantry_joints[0] : (-12.237, -9.5),
+        custom_yz_limits = {gantry_joints[0] : (-12.237, -5),
                             gantry_joints[1] : (-4.915, -3.5)}
+
         gantry_yz_sample_fn = get_sample_fn(robot_uid, gantry_joints, custom_limits=custom_yz_limits)
 
         # end_conf = transfer_traj.points[-1]
@@ -267,7 +271,7 @@ def compute_movement(json_path_in=JSON_PATH_IN, json_out_dir=JSON_OUT_DIR, viewe
         transfer_plan_options = {
             'diagnosis' : False,
             # 'resolution' : 0.01,
-            'resolution' : 0.01,
+            'resolution' : 0.001,
         }
 
         x_attempts = 100
@@ -281,7 +285,21 @@ def compute_movement(json_path_in=JSON_PATH_IN, json_out_dir=JSON_OUT_DIR, viewe
         samples_cnt = 0
         # wait_if_gui('Transfer planning starts')
 
-        # TODO sanity check, is beam colliding with the obstacles?
+        # sanity check, is beam colliding with the obstacles?
+        with WorldSaver():
+            env_obstacles = values_as_list(client.collision_objects)
+            for attachment in client.attachments.values():
+                body_collision_fn = get_floating_body_collision_fn(attachment.child, obstacles=env_obstacles)
+
+                inclamp_approach_pose = body_from_end_effector(cart_key_poses[0], attachment.grasp_pose)
+                if body_collision_fn(inclamp_approach_pose, diagnosis=True):
+                    cprint('wcf_inclamp_approach_pose in collision!', 'red')
+                    wait_for_user()
+                # final_retract_pose = body_from_end_effector(cart_key_poses[3], attachment.grasp_pose)
+                # if body_collision_fn(final_retract_pose, diagnosis=True):
+                #     cprint('final_retract_pose in collision!', 'red')
+                #     wait_for_user()
+            wait_if_gui('Check the inclamp approach pose.')
 
         # 50 mm/s cartesian
         # 2 mm/s sync
@@ -384,8 +402,6 @@ def compute_movement(json_path_in=JSON_PATH_IN, json_out_dir=JSON_OUT_DIR, viewe
                 # wait_for_duration(0.1)
                 wait_if_gui('sim transfer.')
 
-        print('last transfer conf: ', transfer_traj.points[-1])
-
         assert cart_conf_vals is not None, 'Cartesian planning failure'
         confval_groups = divide_list_chunks(cart_conf_vals, cart_group_sizes)
 
@@ -444,31 +460,25 @@ def compute_movement(json_path_in=JSON_PATH_IN, json_out_dir=JSON_OUT_DIR, viewe
         print('rest_conf: ', reset_conf)
 
         transit_plan_options = {
-            'diagnosis' : False,
+            'diagnosis' : True,
             # 'resolution' : 0.01,
             'resolution' : 0.1,
         }
 
-        set_joint_positions(robot_uid, yzarm_joints, last_cart_conf_scaled.values)
         transit_attempts = 10
         transit_traj = None
         for _ in range(transit_attempts):
-            with LockRenderer(True):
-                transit_traj = client.plan_motion(reset_conf, group=yzarm_move_group, options=transit_plan_options)
+            with LockRenderer(False):
+                set_joint_positions(robot_uid, yzarm_joints, last_cart_conf_scaled.values)
+                with WorldSaver():
+                    transit_traj = client.plan_motion(reset_conf, group=yzarm_move_group, options=transit_plan_options)
                 if transit_traj is not None:
                     break
         else:
             cprint('transit plan failed after {} attempts!'.format(transit_attempts), 'red')
-        # transit_traj = deepcopy(transfer_traj)
 
         # assert transit_traj is not None, 'transfer plan failed!'
         if transit_traj is not None:
-            # for i in range(9, 9+8):
-            #     transit_traj.start_configuration.values[i] = last_cart_conf.values[i-9]
-            # transit_traj.points = transit_traj.points[::-1]
-            # for i, p in enumerate(transit_traj.points):
-            #     p.time_from_start  = Duration(i*1,0)
-
             if debug:
                 wait_if_gui('Transit Planning done. Start simulation...')
 
@@ -480,10 +490,10 @@ def compute_movement(json_path_in=JSON_PATH_IN, json_out_dir=JSON_OUT_DIR, viewe
                 traj_pt.scale(1/MIL2M)
                 for _, attach in client.attachments.items():
                     attach.assign()
-                # if debug:
+                if debug:
+                    wait_if_gui('sim transit.')
                 # print(traj_pt)
                     # wait_for_duration(0.1)
-                wait_if_gui('sim transit.')
                     # yzarm_conf = Configuration(traj_pt_scaled.values, yzarm_joint_types, yzarm_joint_names)
                     # if client.configuration_in_collision(yzarm_conf, group=yzarm_move_group, options={'diagnosis':True}):
                     #     wait_if_gui('collision detected!!')
@@ -492,6 +502,7 @@ def compute_movement(json_path_in=JSON_PATH_IN, json_out_dir=JSON_OUT_DIR, viewe
         assembly_plan_data.update({'transfer' : transfer_traj.data})
         if transit_traj is not None:
             assembly_plan_data.update({'transit' : transit_traj.data})
+        assembly_plan_data['generated_time'] = str(datetime.datetime.now())
 
         # * Save Results
         if write:

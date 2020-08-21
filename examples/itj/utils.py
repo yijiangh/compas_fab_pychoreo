@@ -69,5 +69,5 @@ def notify(msg=''):
         title='pybullet planning',
         message=msg,
         app_icon=None,  # e.g. 'C:\\icon_32x32.ico'
-        timeout=1e3,  # seconds
+        timeout=10,  # seconds
     )
