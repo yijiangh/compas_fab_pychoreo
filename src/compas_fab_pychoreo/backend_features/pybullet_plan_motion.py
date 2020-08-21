@@ -3,7 +3,12 @@ from compas_fab.backends.interfaces import PlanMotion
 from compas_fab.backends.interfaces import InverseKinematics
 from compas_fab.robots import JointTrajectory, Duration, JointTrajectoryPoint
 
-from pybullet_planning import is_connected, get_bodies, WorldSaver, joints_from_names, set_joint_positions, plan_joint_motion
+from pybullet_planning import is_connected, get_bodies, WorldSaver, joints_from_names, set_joint_positions, plan_joint_motion, check_initial_end
+from pybullet_planning import get_custom_limits, get_joint_positions, get_sample_fn, get_extend_fn, get_distance_fn, MAX_DISTANCE
+from pybullet_planning.motion_planners import birrt, lazy_prm
+from pybullet_planning import wait_if_gui
+from compas_fab_pychoreo.backend_features.pybullet_configuration_collision_checker import PybulletConfigurationCollisionChecker
+
 # from compas_fab_pychoreo.conversions import
 from compas_fab_pychoreo.utils import is_valid_option, values_as_list
 
@@ -62,6 +67,8 @@ class PybulletPlanMotion(PlanMotion):
         diagnosis = is_valid_option(options, 'diagnosis', False)
         custom_limits = is_valid_option(options, 'custom_limits', {})
         resolutions = is_valid_option(options, 'resolutions', 0.1)
+        weights = is_valid_option(options, 'weights', None)
+        max_distance = is_valid_option(options, 'max_distance', MAX_DISTANCE)
 
         attachments = values_as_list(self.client.attachments)
         obstacles = values_as_list(self.client.collision_objects)
@@ -83,12 +90,34 @@ class PybulletPlanMotion(PlanMotion):
 
         # TODO: if isinstance(goal_, JointConstraint):
 
-        conf_vals = plan_joint_motion(robot_uid, ik_joints, end_configuration.values,
-                                 obstacles=obstacles, attachments=attachments,
-                                 self_collisions=self_collisions, disabled_collisions=disabled_collisions,
-                                 extra_disabled_collisions=extra_disabled_collisions,
-                                 resolutions=resolutions, custom_limits=custom_limits,
-                                 diagnosis=diagnosis) #weights=weights,
+        # conf_vals = plan_joint_motion(robot_uid, ik_joints, end_configuration.values,
+        #                          obstacles=obstacles, attachments=attachments,
+        #                          self_collisions=self_collisions, disabled_collisions=disabled_collisions,
+        #                          extra_disabled_collisions=extra_disabled_collisions,
+        #                          resolutions=resolutions, custom_limits=custom_limits,
+        #                          diagnosis=diagnosis) #weights=weights,
+
+        end_conf = end_configuration.values
+
+        assert len(ik_joints) == len(end_conf)
+        sample_fn = get_sample_fn(robot_uid, ik_joints, custom_limits=custom_limits)
+        distance_fn = get_distance_fn(robot_uid, ik_joints, weights=weights)
+        extend_fn = get_extend_fn(robot_uid, ik_joints, resolutions=resolutions)
+        # collision_fn = get_collision_fn(robot_uid, ik_joints, obstacles=obstacles, attachments=attachments, self_collisions=self_collisions,
+        #                                 disabled_collisions=disabled_collisions, extra_disabled_collisions=extra_disabled_collisions,
+        #                                 custom_limits=custom_limits, max_distance=max_distance)
+        collision_fn = PybulletConfigurationCollisionChecker(self.client)._get_collision_fn(group=group, options=options)
+
+        start_conf = get_joint_positions(robot_uid, ik_joints)
+
+        # if collision_fn(start_conf, diagnosis=True):
+        #     print('initial pose colliding')
+        #     wait_if_gui()
+
+        if not check_initial_end(start_conf, end_conf, collision_fn, diagnosis=diagnosis):
+            return None
+        conf_vals = birrt(start_conf, end_conf, distance_fn, sample_fn, extend_fn, collision_fn)
+        #return plan_lazy_prm(start_conf, end_conf, sample_fn, extend_fn, collision_fn)
 
         if conf_vals is not None and len(conf_vals) > 0:
             traj_pts = [JointTrajectoryPoint(values=conf_val, types=ik_joint_types, time_from_start=Duration(i*1,0)) \

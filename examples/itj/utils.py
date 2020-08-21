@@ -2,6 +2,8 @@ import numpy as np
 from math import radians as rad
 from compas_fab.robots import Configuration, AttachedCollisionMesh, CollisionMesh
 
+from plyer import notification
+
 def to_rlf_robot_full_conf(robot11_confval, robot12_confval, scale=1e-3):
     robot21_confval = [38000,
                        0, -4915,
@@ -59,3 +61,13 @@ def rfl_camera(scale=1e-3):
         'up_direction':np.array([0.314401,-0.314409,0.895712])*scale,
     }
     return camera
+
+##########################################
+
+def notify(msg=''):
+    notification.notify(
+        title='pybullet planning',
+        message=msg,
+        app_icon=None,  # e.g. 'C:\\icon_32x32.ico'
+        timeout=1e3,  # seconds
+    )

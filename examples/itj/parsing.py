@@ -57,6 +57,10 @@ def itj_TC_PG1000_cms():
     cms.extend(parse_collision_meshes_from_dir(pg1000_dir_path))
     return cms
 
+def itj_rfl_pipe_cms():
+    tc_dir_path = os.path.abspath(os.path.join(HERE, "data", 'itj_rfl_pipe_acm'))
+    return parse_collision_meshes_from_dir(tc_dir_path)
+
 def itj_rfl_obstacle_cms():
     dir_path = os.path.abspath(os.path.join(HERE, "data", 'itj_rfl_obstacles'))
     return parse_collision_meshes_from_dir(dir_path)
