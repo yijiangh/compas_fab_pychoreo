@@ -207,6 +207,7 @@ class PyBulletClient(ClientInterface):
     def remove_attached_collision_mesh(self, name):
         if name in self.attachments:
             del self.attachments[name]
+            # TODO convert to collision mesh?
         else:
             LOG.warning("Attached collison object with name '{}' does not exist in scene.".format(name))
 

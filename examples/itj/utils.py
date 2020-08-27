@@ -4,6 +4,9 @@ from compas_fab.robots import Configuration, AttachedCollisionMesh, CollisionMes
 
 from plyer import notification
 
+R11_START_CONF_VALS = np.array([22700.0, 0.0, -4900.0, 0.0, -80.0, 65.0, 65.0, 20.0, -20.0])
+R12_START_CONF_VALS = np.array([-4056.0883789999998, -4000.8486330000001, 0.0, -22.834741999999999, -30.711554, 0.0, 57.335655000000003, 0.0])
+
 def to_rlf_robot_full_conf(robot11_confval, robot12_confval, scale=1e-3):
     robot21_confval = [38000,
                        0, -4915,

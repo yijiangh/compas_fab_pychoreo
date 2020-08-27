@@ -38,7 +38,7 @@ from compas_fab_pychoreo_examples.ik_solver import ik_abb_irb4600_40_255, Invers
 from compas_fab_pychoreo.utils import divide_list_chunks, values_as_list
 
 from parsing import rfl_setup, itj_TC_PG500_cms, itj_TC_PG1000_cms, itj_rfl_obstacle_cms, itj_rfl_pipe_cms
-from utils import to_rlf_robot_full_conf, rfl_camera, notify
+from utils import to_rlf_robot_full_conf, rfl_camera, notify, R11_START_CONF_VALS, R12_START_CONF_VALS
 
 MIL2M = 1e-3
 
@@ -67,9 +67,6 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 #TODO make argparse options
 JSON_PATH_IN = os.path.join(HERE, 'data', "rfl_assembly_process.json")
 JSON_OUT_DIR = os.path.join(HERE, 'results')
-
-R11_START_CONF_VALS = np.array([22700.0, 0.0, -4900.0, 0.0, -80.0, 65.0, 65.0, 20.0, -20.0])
-R12_START_CONF_VALS = np.array([-4056.0883789999998, -4000.8486330000001, 0.0, -22.834741999999999, -30.711554, 0.0, 57.335655000000003, 0.0])
 
 R11_INTER_CONF_VALS = [21000.0, 0.0, -4900.0, 0.0, -80.0, 65.0, 65.0, 20.0, -20.0]
 # R12_INTER_CONF_VALS = [-11753.0, -4915.0, 0.0, -45.0, 16.0, 10.0, 19.0, 0.0]
