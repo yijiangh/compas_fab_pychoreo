@@ -6,9 +6,10 @@ from compas_fab_pychoreo.conversions import pose_from_frame, frame_from_pose
 from compas_fab_pychoreo.utils import is_valid_option
 from compas_fab_pychoreo.backend_features.frame_variant_generator import FrameVariantGenerator
 
+# See also: # practical example: https://github.com/gramaziokohler/algorithmic_details/blob/e1d5e24a34738822638a157ca29a98afe05beefd/src/algorithmic_details/accessibility/reachability_map.py#L30
 class PybulletFiniteEulerAngleVariantGenerator(FrameVariantGenerator):
-    def __init__(self):
-        pass
+    def __init__(self, options=None):
+        self._options = options
 
     def generate_frame_variant(self, frame, options=None):
         """....
@@ -23,6 +24,9 @@ class PybulletFiniteEulerAngleVariantGenerator(FrameVariantGenerator):
         frame
             frame variantion
         """
+        # overwrite if options is provided in the function call
+        options = options or self._options
+
         # * half range
         delta_roll = is_valid_option(options, 'delta_roll', 0.)
         delta_pitch = is_valid_option(options, 'delta_pitch', 0.)

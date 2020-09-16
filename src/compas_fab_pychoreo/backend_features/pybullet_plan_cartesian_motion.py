@@ -1,13 +1,15 @@
 import time
+import math
 from compas_fab.robots import Configuration, JointTrajectory, JointTrajectoryPoint, Duration
 from compas_fab.backends.interfaces import PlanCartesianMotion
 from compas_fab.backends.interfaces import InverseKinematics
 
-from compas_fab_pychoreo.conversions import pose_from_frame
+from compas_fab_pychoreo.conversions import pose_from_frame, frame_from_pose
 from compas_fab_pychoreo.utils import is_valid_option, values_as_list
 from compas_fab_pychoreo.backend_features.pybullet_configuration_collision_checker import PybulletConfigurationCollisionChecker
 from pybullet_planning import is_connected, get_bodies, WorldSaver, get_collision_fn, joints_from_names, plan_cartesian_motion, \
-    link_from_name, interpolate_poses, get_link_pose, get_sample_fn, set_joint_positions, elapsed_time
+    link_from_name, interpolate_poses, get_link_pose, get_sample_fn, set_joint_positions, elapsed_time, plan_cartesian_motion_lg
+
 
 class PybulletPlanCartesianMotion(PlanCartesianMotion):
     def __init__(self, client):
@@ -35,6 +37,11 @@ class PybulletPlanCartesianMotion(PlanCartesianMotion):
             - ``"avoid_collisions"``: (:obj:`bool`, optional)
               Whether or not to avoid collisions. Defaults to ``True``.
 
+            - ``"planner_id"``: (:obj:`str`)
+              The name of the algorithm used for path planning.
+              Defaults to ``'IterativeIK'``.
+              Available planners: ``'IterativeIK', 'LadderGraph'``
+
             - ``"max_step"``: (:obj:`float`, optional) The approximate distance between the
               calculated points. (Defined in the robot's units.) Defaults to ``0.01``.
             - ``"jump_threshold"``: (:obj:`float`, optional)
@@ -59,6 +66,9 @@ class PybulletPlanCartesianMotion(PlanCartesianMotion):
         diagnosis = is_valid_option(options, 'diagnosis', False)
         avoid_collisions = is_valid_option(options, 'avoid_collisions', True)
         pos_step_size = is_valid_option(options, 'max_step', 0.01)
+        jump_threshold = is_valid_option(options, 'jump_threshold', math.pi/2)
+        planner_id = is_valid_option(options, 'planner_id', 'IterativeIK')
+        frame_variant_gen = is_valid_option(options, 'frame_variant_generator', None)
 
         # * convert link/joint names to pybullet indices
         base_link_name = robot.get_base_link_name(group=group)
@@ -70,7 +80,7 @@ class PybulletPlanCartesianMotion(PlanCartesianMotion):
         ik_joints = joints_from_names(robot_uid, joint_names)
         joint_types = robot.get_joint_types_by_names(joint_names)
 
-        # * workspace linear interpolation
+        # * convert to poses and do workspace linear interpolation
         given_poses = [pose_from_frame(frame_WCF) for frame_WCF in frames_WCF]
         ee_poses = []
         for p1, p2 in zip(given_poses[:-1], given_poses[1:]):
@@ -87,20 +97,46 @@ class PybulletPlanCartesianMotion(PlanCartesianMotion):
                 start_conf_vals = start_configuration.values
                 set_joint_positions(robot_uid, ik_joints, start_conf_vals)
 
-            path = plan_cartesian_motion(self.client.robot_uid, base_link, tool_link, ee_poses)
-            # path, cost = plan_cartesian_motion_lg(robot, ik_joints, ee_poses, sample_ik_fn, collision_fn, \
-            #     custom_vel_limits=vel_limits, ee_vel=ee_vel)
+            if planner_id == 'IterativeIK':
+                path = plan_cartesian_motion(self.client.robot_uid, base_link, tool_link, ee_poses)
+                # collision checking is not included in the default Cartesian planning
+                if path is not None and avoid_collisions:
+                    for conf_val in path:
+                        for attachment in attachments:
+                            attachment.assign()
+                        if collision_fn(conf_val, diagnosis=diagnosis):
+                            path = None
+                            break
+            elif planner_id == 'LadderGraph':
+                # ladder graph related options
+                # TODO: convert joint name to joint index
+                custom_joint_velocity_limits = is_valid_option(options, 'custom_joint_velocity_limits', {})
+                ee_vel = is_valid_option(options, 'ee_workspace_speed', None)
 
-            if path is not None and avoid_collisions:
-                for conf_val in path:
-                    for attachment in attachments:
-                        attachment.assign()
-                    if collision_fn(conf_val, diagnosis=diagnosis):
-                        path = None
-                        break
+                # get ik fn from client
+                # collision checking is turned off because collision checking is handled inside LadderGraph planner
+                ik_options = {'avoid_collisions' : False, 'return_all' : True}
+                def sample_ik_fn(pose):
+                    configurations = self.client.inverse_kinematics(frame_from_pose(pose), options=ik_options)
+                    return [configuration.values for configuration in configurations if configuration is not None]
+
+                # convert ee_variant_fn
+                if frame_variant_gen is not None:
+                    def sample_ee_fn(pose):
+                        for v_frame in frame_variant_gen.generate_frame_variant(frame_from_pose(pose)):
+                            yield pose_from_frame(v_frame)
+                else:
+                    sample_ee_fn = None
+
+                path, cost = plan_cartesian_motion_lg(self.client.robot_uid, ik_joints, ee_poses, sample_ik_fn, collision_fn, \
+                    custom_vel_limits=custom_joint_velocity_limits, ee_vel=ee_vel, sample_ee_fn=sample_ee_fn)
+
+                print('Ladder graph cost: {}'.format(cost))
+            else:
+                raise ValueError('Cartesian planner {} not implemented!', planner_id)
 
         if path is None:
-            print('No Cartesian motion found!', 'red')
+            print('No Cartesian motion found!')
             return None
         else:
             jt_traj_pts = []
@@ -111,4 +147,3 @@ class PybulletPlanCartesianMotion(PlanCartesianMotion):
             trajectory = JointTrajectory(trajectory_points=jt_traj_pts,
                 joint_names=joint_names, start_configuration=start_configuration, fraction=1.0)
             return trajectory
-

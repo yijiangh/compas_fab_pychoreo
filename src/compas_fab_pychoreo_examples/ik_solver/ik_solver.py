@@ -1,7 +1,8 @@
 from compas.geometry import Frame
 from compas.geometry import Transformation
-from compas_fab_pychoreo_examples.ik_solver.utils import fit_within_bounds
 
+from compas_fab_pychoreo.utils import is_valid_option
+from compas_fab_pychoreo_examples.ik_solver.utils import fit_within_bounds
 
 class InverseKinematicsSolver(object):
     """Create a custom InverseKinematicsSolver for a robot.
@@ -62,13 +63,21 @@ class InverseKinematicsSolver(object):
         """
         """
 
-        def inverse_kinematics(frame_WCF, start_configuration=None, group=None,
-                               avoid_collisions=True, constraints=None,
-                               attempts=8, attached_collision_meshes=None,
-                               return_full_configuration=False,
-                               cull=False,
-                               return_closest_to_start=False,
-                               return_idxs=None):
+        def inverse_kinematics(frame_WCF, start_configuration=None, group=None, options=None):
+                            #    avoid_collisions=True, constraints=None,
+                            #    attempts=8, attached_collision_meshes=None,
+                            #    return_full_configuration=False,
+                            #    cull=False,
+                            #    return_closest_to_start=False,
+                            #    return_idxs=None):
+            avoid_collisions = is_valid_option(options, 'avoid_collisions', True)
+            constraints = is_valid_option(options, 'constraints', None)
+            attempts = is_valid_option(options, 'attempts', 8)
+            attached_collision_meshes = is_valid_option(options, 'attached_collision_meshes', None)
+            return_full_configuration = is_valid_option(options, 'return_full_configuration', False)
+            cull = is_valid_option(options, 'cull', False)
+            return_closest_to_start = is_valid_option(options, 'return_closest_to_start', False)
+            return_idxs = is_valid_option(options, 'return_idxs', None)
 
             if start_configuration:
                 base_frame = self.robot.get_base_frame(self.group, full_configuration=start_configuration)
