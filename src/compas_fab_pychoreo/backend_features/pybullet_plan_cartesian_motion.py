@@ -1,5 +1,4 @@
 import time
-from termcolor import cprint
 from compas_fab.robots import Configuration, JointTrajectory, JointTrajectoryPoint, Duration
 from compas_fab.backends.interfaces import PlanCartesianMotion
 from compas_fab.backends.interfaces import InverseKinematics
@@ -101,7 +100,7 @@ class PybulletPlanCartesianMotion(PlanCartesianMotion):
                         break
 
         if path is None:
-            cprint('No Cartesian motion found!', 'red')
+            print('No Cartesian motion found!', 'red')
             return None
         else:
             jt_traj_pts = []

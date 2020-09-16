@@ -30,6 +30,8 @@ class PybulletConfigurationCollisionChecker(ConfigurationCollisionChecker):
         return collision_fn(configuration.values, diagnosis=diagnosis)
 
     def _get_collision_fn(self, group=None, options=None):
+        """Returns a `pybullet_planning` collision_fn
+        """
         robot_uid = self.client.robot_uid
         robot = self.client.compas_fab_robot
 

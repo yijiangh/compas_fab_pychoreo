@@ -23,10 +23,12 @@ import ikfast_abb_irb4600_40_255
 
 from compas_fab_pychoreo.client import PyBulletClient
 from compas_fab_pychoreo.conversions import pose_from_frame, frame_from_pose
+from compas_fab_pychoreo.backend_features.pybullet_frame_variant_generator import PybulletFiniteEulerAngleVariantGenerator
+
 from compas_fab_pychoreo_examples.ik_solver import ik_abb_irb4600_40_255, InverseKinematicsSolver, get_ik_fn_from_ikfast
 
 def compute_circle_path(circle_center=np.array([2, 0, 0.2]), circle_r=0.2, angle_range=(-0.5*np.pi, 0.5*np.pi)):
-    # generate a circle path to test Cartesian planning
+    # generate a circle path to test IK and Cartesian planning
     ee_poses = []
     n_pt = int(abs(angle_range[1]-angle_range[0]) / (np.pi/180 * 5))
     for a in np.linspace(*angle_range, num=n_pt):
@@ -63,10 +65,6 @@ def test_collision_checker(abb_irb4600_40_255_setup, itj_TC_PG500_cms, itj_beam_
     with PyBulletClient(viewer=viewer) as client:
         client.load_robot_from_urdf(urdf_filename)
         client.compas_fab_robot = robot
-
-        # ik_joints = joints_from_names(client.robot_uid, ik_joint_names)
-        # tool_link = link_from_name(client.robot_uid, tool_link_name)
-        # robot_base_link = link_from_name(client.robot_uid, base_link_name)
 
         # * add static obstacles
         client.add_collision_mesh(base_plate_cm)
@@ -113,8 +111,24 @@ def test_collision_checker(abb_irb4600_40_255_setup, itj_TC_PG500_cms, itj_beam_
         # wait_if_gui()
 
 #####################################
+@pytest.mark.frame_gen
+def test_frame_variant_generator(viewer):
+    with PyBulletClient(viewer=viewer) as client:
+        pose = unit_pose()
+        draw_pose(pose)
 
-# @pytest.mark.skip(reason='not done yet')
+        options = {'delta_yaw' : np.pi/6, 'yaw_sample_size' : 30}
+
+        frame = frame_from_pose(pose)
+        frame_gen = PybulletFiniteEulerAngleVariantGenerator().generate_frame_variant
+        cnt = 0
+        for frame in frame_gen(frame, options):
+            draw_pose(pose_from_frame(frame))
+            cnt += 1
+        assert cnt == options['yaw_sample_size']
+        wait_if_gui()
+
+#####################################
 @pytest.mark.circle_cartesian
 def test_circle_cartesian(fixed_waam_setup, viewer):
     urdf_filename, robot, robotA_tool = fixed_waam_setup
@@ -137,7 +151,6 @@ def test_circle_cartesian(fixed_waam_setup, viewer):
                   5 : 10.7337748998}
 
     base_frame = robot.get_base_frame(group=move_group)
-    # base_frame = robot.get_base_frame(group="robotA", full_configuration=init_configuration)
     ik_solver = InverseKinematicsSolver(robot, move_group, ik_abb_irb4600_40_255, base_frame, robotA_tool.frame)
 
     with PyBulletClient(viewer=viewer) as client:
@@ -170,9 +183,9 @@ def test_circle_cartesian(fixed_waam_setup, viewer):
         trajectory = client.plan_cartesian_motion(ee_frames_WCF, group=move_group)
         print('Solving time: {}'.format(elapsed_time(st_time)))
         if trajectory is None:
-            cprint('Client cartesian planning cannot find a plan!', 'red')
+            cprint('Client default cartesian planning cannot find a plan!', 'red')
         else:
-            cprint('Client cartesian planning find a plan!', 'green')
+            cprint('Client default cartesian planning find a plan!', 'green')
             wait_if_gui('Start sim.')
             time_step = 0.03
             for traj_pt in trajectory.points:
@@ -264,11 +277,10 @@ def test_ik(fixed_waam_setup, viewer, ik_engine):
 
         ik_joints = joints_from_names(client.robot_uid, ik_joint_names)
         tool_link = link_from_name(client.robot_uid, tool_link_name)
-        # robot_base_link = link_from_name(client.robot_uid, base_link_name)
-
         ee_poses = compute_circle_path()
 
         if ik_solver is not None:
+            # replace default ik function with a customized one
             client.inverse_kinematics = ik_solver.inverse_kinematics_function()
 
         ik_time = 0
@@ -298,7 +310,7 @@ def test_ik(fixed_waam_setup, viewer, ik_engine):
                             assert_almost_equal(tcp_pose[0], p[0], decimal=3)
                             assert_almost_equal(quat_angle_between(tcp_pose[1], p[1]), 0, decimal=3)
             elif isinstance(qs, Configuration):
-                cprint('Single solutions found!', 'green')
+                # cprint('Single solutions found!', 'green')
                 q = qs
                 set_joint_positions(client.robot_uid, ik_joints, q.values)
                 tcp_pose = get_link_pose(client.robot_uid, tool_link)
@@ -317,7 +329,6 @@ def test_ik(fixed_waam_setup, viewer, ik_engine):
 def test_client(fixed_waam_setup, viewer):
     # https://github.com/gramaziokohler/algorithmic_details/blob/e1d5e24a34738822638a157ca29a98afe05beefd/src/algorithmic_details/accessibility/reachability_map.py#L208-L231
     urdf_filename, robot, _ = fixed_waam_setup
-    # print('disabled collision: ', get_disabled_collisions(robot.semantics))
     move_group = 'robotA'
     tool_link_name = robot.get_end_effector_link_name(group=move_group)
 
