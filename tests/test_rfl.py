@@ -26,6 +26,7 @@ from compas_fab_pychoreo_examples.ik_solver import ik_abb_irb4600_40_255, Invers
 
 
 def to_rlf_robot_full_conf(robot11_confval, robot12_confval, scale=1e-3):
+    # convert to full configuration of the RFL robot
     robot21_confval = [38000,
                        0, -4915,
                        0, 0, 0, 0, 0, 0]

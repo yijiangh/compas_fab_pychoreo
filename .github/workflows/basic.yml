@@ -39,8 +39,10 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install cython --install-option="--no-cython-compile"
+          python -m pip install ikfast_pybind
       - name: Install
         run: |
+          git submodule update --init --recursive
           python -m pip install --no-cache-dir -r requirements-dev.txt
       - name: Run tests
         run: |

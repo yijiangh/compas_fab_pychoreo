@@ -19,11 +19,14 @@ from pybullet_planning import wait_if_gui, wait_for_duration
 from pybullet_planning import plan_cartesian_motion, plan_cartesian_motion_lg
 from pybullet_planning import randomize, elapsed_time
 
+import ikfast_abb_irb4600_40_255
+
 from compas_fab_pychoreo.client import PyBulletClient
 from compas_fab_pychoreo.conversions import pose_from_frame, frame_from_pose
 from compas_fab_pychoreo_examples.ik_solver import ik_abb_irb4600_40_255, InverseKinematicsSolver, get_ik_fn_from_ikfast
 
 def compute_circle_path(circle_center=np.array([2, 0, 0.2]), circle_r=0.2, angle_range=(-0.5*np.pi, 0.5*np.pi)):
+    # generate a circle path to test Cartesian planning
     ee_poses = []
     n_pt = int(abs(angle_range[1]-angle_range[0]) / (np.pi/180 * 5))
     for a in np.linspace(*angle_range, num=n_pt):
@@ -34,6 +37,7 @@ def compute_circle_path(circle_center=np.array([2, 0, 0.2]), circle_r=0.2, angle
     return ee_poses
 
 def ik_wrapper(compas_fab_ik_fn):
+    # convert a compas_fab ik solver to a function that conforms with pybullet_planning convention
     def fn(pose):
         configurations = compas_fab_ik_fn(frame_from_pose(pose))
         return [np.array(configuration.values) for configuration in configurations if configuration is not None]
@@ -110,8 +114,8 @@ def test_collision_checker(abb_irb4600_40_255_setup, itj_TC_PG500_cms, itj_beam_
 
 #####################################
 
-@pytest.mark.skip(reason='not done yet')
-@pytest.mark.circle_path
+# @pytest.mark.skip(reason='not done yet')
+@pytest.mark.circle_cartesian
 def test_circle_cartesian(fixed_waam_setup, viewer):
     urdf_filename, robot, robotA_tool = fixed_waam_setup
 
@@ -138,6 +142,7 @@ def test_circle_cartesian(fixed_waam_setup, viewer):
 
     with PyBulletClient(viewer=viewer) as client:
         client.load_robot_from_urdf(urdf_filename)
+        client.compas_fab_robot = robot
 
         # robot_start_conf = [0,-np.pi/2,np.pi/2,0,0,0]
         # set_joint_positions(robot, ik_joints, robot_start_conf)
@@ -158,73 +163,75 @@ def test_circle_cartesian(fixed_waam_setup, viewer):
         angle_range = (-0.5*np.pi, 0.5*np.pi)
         # total num of path pts, one path point per 5 degree
         ee_poses = compute_circle_path(circle_center, circle_r, angle_range)
+        ee_frames_WCF = [frame_from_pose(ee_pose) for ee_pose in ee_poses]
 
         # # * baseline, keeping the EE z axis rotational dof fixed
+        st_time = time.time()
+        trajectory = client.plan_cartesian_motion(ee_frames_WCF, group=move_group)
+        print('Solving time: {}'.format(elapsed_time(st_time)))
+        if trajectory is None:
+            cprint('Client cartesian planning cannot find a plan!', 'red')
+        else:
+            cprint('Client cartesian planning find a plan!', 'green')
+            wait_if_gui('Start sim.')
+            time_step = 0.03
+            for traj_pt in trajectory.points:
+                set_joint_positions(client.robot_uid, ik_joints, traj_pt.values)
+                wait_for_duration(time_step)
+        print('='*20)
+
+        # sample_ik_fn = ik_wrapper(ik_solver.inverse_kinematics_function())
+
+        # collision_fn = get_collision_fn(client.robot_uid, ik_joints, obstacles=[],
+        #                                        attachments=[], self_collisions=False,
+        #                                     #    disabled_collisions=disabled_collisions,
+        #                                     #    extra_disabled_collisions=extra_disabled_collisions,
+        #                                        custom_limits={})
+
+        # ee_vel = 0.005 # m/s
+
+        # def get_ee_sample_fn(roll_gen, pitch_gen, yaw_gen):
+        #     def ee_sample_fn(ee_pose):
+        #         # a finite generator
+        #         for roll, pitch, yaw in product(roll_gen, pitch_gen, yaw_gen):
+        #             yield multiply(ee_pose, Pose(euler=Euler(roll=roll, pitch=pitch, yaw=yaw)))
+        #     return ee_sample_fn
+
+        # by increasing this number we can see the cost go down
+        # roll_sample_size = 3
+        # pitch_sample_size = 3
+        # yaw_sample_size = 3
+        # delta_roll = np.pi/6
+        # delta_pitch = np.pi/6
+        # delta_yaw = np.pi/6
+        # roll_gen = np.linspace(-delta_roll, delta_roll, num=roll_sample_size)
+        # pitch_gen = np.linspace(-delta_pitch, delta_pitch, num=pitch_sample_size)
+        # yaw_gen = np.linspace(-delta_yaw, delta_yaw, num=yaw_sample_size)
+        # ee_sample_fn = get_ee_sample_fn(roll_gen, pitch_gen, yaw_gen)
+
+        # pr = cProfile.Profile()
+        # pr.enable()
+
         # st_time = time.time()
-        # path = plan_cartesian_motion(client.robot_uid, robot_base_link, tool_link, ee_poses)
-        # print('Solving time: {}'.format(elapsed_time(st_time)))
+        # path, cost = plan_cartesian_motion_lg(client.robot_uid, ik_joints, ee_poses, sample_ik_fn, collision_fn, sample_ee_fn=ee_sample_fn, \
+        #     custom_vel_limits=vel_limits, ee_vel=ee_vel)
+        # cprint('Solving time: {}'.format(elapsed_time(st_time)), 'yellow')
+
+        # pr.disable()
+        # pstats.Stats(pr).sort_stats('tottime').print_stats(10)
+
         # if path is None:
-        #     cprint('Gradient-based ik cartesian planning cannot find a plan!', 'red')
+        #     cprint('ladder graph (releasing EE z dof) cartesian planning cannot find a plan!', 'red')
         # else:
-        #     cprint('Gradient-based ik cartesian planning find a plan!', 'green')
+        #     cprint('ladder graph (releasing EE z dof) cartesian planning find a plan!', 'cyan')
+        #     cprint('Cost: {}'.format(cost), 'yellow')
         #     time_step = 0.03
+        #     wait_if_gui('start sim.')
         #     for conf in path:
+        #         # cprint('conf: {}'.format(conf))
         #         set_joint_positions(client.robot_uid, ik_joints, conf)
         #         wait_for_duration(time_step)
         # print('='*20)
-
-        sample_ik_fn = ik_wrapper(ik_solver.inverse_kinematics_function())
-
-        collision_fn = get_collision_fn(client.robot_uid, ik_joints, obstacles=[],
-                                               attachments=[], self_collisions=False,
-                                            #    disabled_collisions=disabled_collisions,
-                                            #    extra_disabled_collisions=extra_disabled_collisions,
-                                               custom_limits={})
-
-        ee_vel = 0.005 # m/s
-
-        def get_ee_sample_fn(roll_gen, pitch_gen, yaw_gen):
-            def ee_sample_fn(ee_pose):
-                # a finite generator
-                for roll, pitch, yaw in product(roll_gen, pitch_gen, yaw_gen):
-                    yield multiply(ee_pose, Pose(euler=Euler(roll=roll, pitch=pitch, yaw=yaw)))
-            return ee_sample_fn
-
-        # by increasing this number we can see the cost go down
-        roll_sample_size = 3
-        pitch_sample_size = 3
-        yaw_sample_size = 3
-        delta_roll = np.pi/6
-        delta_pitch = np.pi/6
-        delta_yaw = np.pi/6
-        roll_gen = np.linspace(-delta_roll, delta_roll, num=roll_sample_size)
-        pitch_gen = np.linspace(-delta_pitch, delta_pitch, num=pitch_sample_size)
-        yaw_gen = np.linspace(-delta_yaw, delta_yaw, num=yaw_sample_size)
-        ee_sample_fn = get_ee_sample_fn(roll_gen, pitch_gen, yaw_gen)
-
-        pr = cProfile.Profile()
-        pr.enable()
-
-        st_time = time.time()
-        path, cost = plan_cartesian_motion_lg(client.robot_uid, ik_joints, ee_poses, sample_ik_fn, collision_fn, sample_ee_fn=ee_sample_fn, \
-            custom_vel_limits=vel_limits, ee_vel=ee_vel)
-        cprint('Solving time: {}'.format(elapsed_time(st_time)), 'yellow')
-
-        pr.disable()
-        pstats.Stats(pr).sort_stats('tottime').print_stats(10)
-
-        if path is None:
-            cprint('ladder graph (releasing EE z dof) cartesian planning cannot find a plan!', 'red')
-        else:
-            cprint('ladder graph (releasing EE z dof) cartesian planning find a plan!', 'cyan')
-            cprint('Cost: {}'.format(cost), 'yellow')
-            time_step = 0.03
-            wait_if_gui('start sim.')
-            for conf in path:
-                # cprint('conf: {}'.format(conf))
-                set_joint_positions(client.robot_uid, ik_joints, conf)
-                wait_for_duration(time_step)
-        print('='*20)
 
         wait_if_gui()
 
@@ -246,7 +253,6 @@ def test_ik(fixed_waam_setup, viewer, ik_engine):
     elif ik_engine == 'lobster-analytical':
         ik_solver = InverseKinematicsSolver(robot, move_group, ik_abb_irb4600_40_255, base_frame, robotA_tool.frame)
     elif ik_engine == 'ikfast-analytical':
-        import ikfast_abb_irb4600_40_255
         ikfast_fn = get_ik_fn_from_ikfast(ikfast_abb_irb4600_40_255.get_ik)
         ik_solver = InverseKinematicsSolver(robot, move_group, ikfast_fn, base_frame, robotA_tool.frame)
     else:
@@ -266,6 +272,7 @@ def test_ik(fixed_waam_setup, viewer, ik_engine):
             client.inverse_kinematics = ik_solver.inverse_kinematics_function()
 
         ik_time = 0
+        failure_cnt = 0
         # ik function sanity check
         for p in ee_poses:
             frame_WCF = frame_from_pose(p)
@@ -274,10 +281,13 @@ def test_ik(fixed_waam_setup, viewer, ik_engine):
             ik_time += elapsed_time(st_time)
 
             if qs is None:
-                # cprint('no ik solution found!', 'red')
-                assert False, 'no ik solution found!'
+                cprint('no ik solution found!', 'red')
+                # assert False, 'no ik solution found!'
+                failure_cnt += 1
             elif isinstance(qs, list):
-                assert len(qs) > 0 and any([qv is not None for qv in qs]), 'no ik solution found'
+                if not(len(qs) > 0 and any([qv is not None for qv in qs])):
+                    cprint('no ik solution found', 'red')
+                    failure_cnt += 1
                 if len(qs) > 0:
                     # cprint('{} solutions found!'.format(len(qs)), 'green')
                     for q in randomize(qs):
@@ -288,7 +298,7 @@ def test_ik(fixed_waam_setup, viewer, ik_engine):
                             assert_almost_equal(tcp_pose[0], p[0], decimal=3)
                             assert_almost_equal(quat_angle_between(tcp_pose[1], p[1]), 0, decimal=3)
             elif isinstance(qs, Configuration):
-                # cprint('Single solutions found!', 'green')
+                cprint('Single solutions found!', 'green')
                 q = qs
                 set_joint_positions(client.robot_uid, ik_joints, q.values)
                 tcp_pose = get_link_pose(client.robot_uid, tool_link)
@@ -298,7 +308,8 @@ def test_ik(fixed_waam_setup, viewer, ik_engine):
                 raise ValueError('invalid ik return.')
             # cprint('FK - IK agrees.')
             # wait_if_gui()
-        cprint('{} | Average ik time: {} | avg over {} calls.'.format(ik_engine, ik_time/len(ee_poses), len(ee_poses)), 'cyan')
+        cprint('{} | Success {}/{} | Average ik time: {} | avg over {} calls.'.format(ik_engine, len(ee_poses)-failure_cnt, len(ee_poses),
+            ik_time/len(ee_poses), len(ee_poses)), 'cyan')
 
 ###################################################
 

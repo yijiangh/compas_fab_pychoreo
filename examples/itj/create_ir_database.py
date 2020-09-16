@@ -26,13 +26,15 @@ from compas_fab_pychoreo.utils import divide_list_chunks, values_as_list
 from parsing import rfl_setup, itj_TC_PG500_cms, itj_TC_PG1000_cms, itj_rfl_obstacle_cms, itj_rfl_pipe_cms
 from utils import to_rlf_robot_full_conf, rfl_camera, notify, R11_START_CONF_VALS, R12_START_CONF_VALS
 
-IR_FILENAME = '{}_{}_ir.pickle'
 
-def get_database_file(filename):
-    directory = os.path.dirname(os.path.abspath(__file__), 'database')
-    return os.path.join(directory, filename)
+HERE = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(HERE, 'data')
+DATABASE_DIR = os.path.join(HERE, 'results')
+IR_FILENAME = '{}_{}_ir.json'
 
-def write_file(data, file_path, indent=None):
+############################################
+
+def write_jsonpickle_file(data, file_path, indent=None):
     jsonpickle.set_encoder_options('json', sort_keys=True, indent=indent)
     with open(file_path, 'wb') as f:
         f.write(jsonpickle.encode(data))
@@ -56,7 +58,7 @@ def save_inverse_reachability(robot, arm, grasp_type, tool_link, gripper_from_ba
         # 'ikfast': is_ik_compiled(),
         'gripper_from_base': gripper_from_base_list,
     }
-    write_pickle(path, data)
+    write_jsonpickle_file(data, path)
 
     # visualize base positions
     if has_gui():
@@ -147,9 +149,21 @@ def create_inverse_reachability2(robot, body, table, arm, grasp_type, max_attemp
 
 #######################################################
 
+def retrieve_tcp_poses(file_path):
+    with open(file_path , 'r') as f:
+        json_str = f.read()
+        process = jsonpickle.decode(json_str, keys=True) # type: RobotClampAssemblyProcess
+        cprint ("{} loaded: json_str len: {}".format(file_path, len(json_str)), 'green')
+
+    beam_ids = [b for b in process.assembly.sequence]
+
+#######################################################
+
 def main():
     parser = argparse.ArgumentParser()  # Automatically includes help
     # parser.add_argument('-arm', required=True)
+    parser.add_argument('-mg', '--move_group', default='robot12_eaXYZ', help='manipulation group name in the SRDF.')
+    parser.add_argument('-p', '--problem', default='rfl_assembly_process.json', help='name of the itj process file.')
     # parser.add_argument('-grasp', required=True)
     parser.add_argument('-viewer', action='store_true', help='enable viewer.')
     args = parser.parse_args()

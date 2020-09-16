@@ -4,7 +4,7 @@ from compas_fab.robots import Configuration
 from pybullet_planning import all_between, is_pose_close
 from pybullet_planning import inverse_kinematics_helper
 from pybullet_planning import get_movable_joints, set_joint_positions, get_link_pose, get_custom_limits, joints_from_names, link_from_name, \
-    get_sample_fn
+    get_sample_fn, WorldSaver
 from pybullet_planning import wait_if_gui
 
 from compas_fab_pychoreo.conversions import pose_from_frame
@@ -65,30 +65,31 @@ class PybulletInverseKinematics(InverseKinematics):
         tool_link = link_from_name(robot_uid, tool_link_name)
 
         target_pose = pose_from_frame(frame_WCF)
-        if start_configuration is not None:
-            start_conf_vals = start_configuration.values
-        else:
-            sample_fn = get_sample_fn(robot_uid, ik_joints)
-            start_conf_vals = sample_fn()
-        set_joint_positions(robot_uid, ik_joints, start_conf_vals)
+        with WorldSaver():
+            if start_configuration is not None:
+                start_conf_vals = start_configuration.values
+                set_joint_positions(robot_uid, ik_joints, start_conf_vals)
+            # else:
+            #     sample_fn = get_sample_fn(robot_uid, ik_joints)
+            #     start_conf_vals = sample_fn()
 
-        if group not in self.client.planner.ik_fn_from_group:
-            # use default ik fn
-            conf_vals = self._compute_ik(ik_joints, tool_link, target_pose, max_iterations)
-            joint_types = robot.get_joint_types_by_names(ik_joint_names)
-            configurations = [Configuration(values=conf_val, types=joint_types, joint_names=ik_joint_names) \
-                for conf_val in conf_vals if conf_val is not None]
-        else:
-            # qs = client.inverse_kinematics(frame_WCF, group=move_group)
-            configurations = self.client.planner.ik_fn_from_group[group](frame_WCF, group=group, options=options)
+            if group not in self.client.planner.ik_fn_from_group:
+                # use default ik fn
+                conf_vals = self._compute_ik(ik_joints, tool_link, target_pose, max_iterations)
+                joint_types = robot.get_joint_types_by_names(ik_joint_names)
+                configurations = [Configuration(values=conf_val, types=joint_types, joint_names=ik_joint_names) \
+                    for conf_val in conf_vals if conf_val is not None]
+            else:
+                # qs = client.inverse_kinematics(frame_WCF, group=move_group)
+                configurations = self.client.planner.ik_fn_from_group[group](frame_WCF, group=group, options=options)
 
-        if avoid_collisions:
-            configurations = [conf for conf in configurations if not self.client.configuration_in_collision(conf, group=group)]
+            if avoid_collisions:
+                configurations = [conf for conf in configurations if not self.client.configuration_in_collision(conf, group=group)]
 
         if return_all:
             return configurations
         else:
-            return None if len(configurations) > 0 else configurations[0]
+            return configurations[0] if len(configurations) > 0 else None
 
     def _compute_ik(self, ik_joints, tool_link, target_pose, max_iterations=8):
         robot_uid = self.client.robot_uid
@@ -97,12 +98,12 @@ class PybulletInverseKinematics(InverseKinematics):
             # TODO: stop if collision or invalid joint limits
             kinematic_conf = inverse_kinematics_helper(robot_uid, tool_link, target_pose)
             if kinematic_conf is None:
-                return [None]
+                return []
             set_joint_positions(robot_uid, ik_joints, kinematic_conf)
             if is_pose_close(get_link_pose(robot_uid, tool_link), target_pose): #, **kwargs):
                 break
         else:
-            return [None]
+            return []
         # TODO custom_limits
         # lower_limits, upper_limits = get_custom_limits(robot_uid, ik_joints, custom_limits)
         # if not all_between(lower_limits, kinematic_conf, upper_limits):
