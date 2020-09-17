@@ -46,8 +46,8 @@ def ik_wrapper(compas_fab_ik_fn):
         return [np.array(configuration.values) for configuration in configurations if configuration is not None]
     return fn
 
-def compute_trajectory_cost(trajectory):
-    cost = 0.0
+def compute_trajectory_cost(trajectory, init_conf_val=np.zeros(6)):
+    cost = np.linalg.norm(init_conf_val - np.array(trajectory.points[0].values))
     for traj_pt1, traj_pt2 in zip(trajectory.points[:-1], trajectory.points[1:]):
         cost += np.linalg.norm(np.array(traj_pt1.values) - np.array(traj_pt2.values))
     return cost
@@ -147,7 +147,6 @@ def test_frame_variant_generator(viewer):
 @pytest.mark.circle_cartesian
 @pytest.mark.parametrize("planner_ik_conf", [('IterativeIK', 'default-single'),
     ('LadderGraph', 'default-single'), ('LadderGraph', 'lobster-analytical'), ('LadderGraph', 'ikfast-analytical')])
-# @pytest.mark.parametrize("planner_id", [('LadderGraph')])
 def test_circle_cartesian(fixed_waam_setup, viewer, planner_ik_conf):
     urdf_filename, robot, robotA_tool = fixed_waam_setup
     planner_id, ik_engine = planner_ik_conf
@@ -168,15 +167,15 @@ def test_circle_cartesian(fixed_waam_setup, viewer, planner_ik_conf):
     else:
         raise ValueError('invalid ik engine name.')
 
-    # ik_solver = InverseKinematicsSolver(robot, move_group, ik_abb_irb4600_40_255, base_frame, robotA_tool.frame)
-    # ikfast_fn = get_ik_fn_from_ikfast(ikfast_abb_irb4600_40_255.get_ik)
-    # ik_solver = InverseKinematicsSolver(robot, move_group, ikfast_fn, base_frame, robotA_tool.frame)
+    print('\n')
     print('='*10)
     cprint('Cartesian planner {} with IK engine {}'.format(planner_id, ik_engine), 'yellow')
 
     with PyBulletClient(viewer=viewer) as client:
         client.load_robot_from_urdf(urdf_filename)
         client.compas_fab_robot = robot
+
+        init_conf_val = np.zeros(6)
 
         # replace default ik function with a customized one
         if ik_solver is not None:
@@ -200,22 +199,26 @@ def test_circle_cartesian(fixed_waam_setup, viewer, planner_ik_conf):
         ee_poses = compute_circle_path(circle_center, circle_r, angle_range)
         ee_frames_WCF = [frame_from_pose(ee_pose) for ee_pose in ee_poses]
 
-        options = {'planner_id' : planner_id}
+        options = {
+            'planner_id' : planner_id
+            }
         if planner_id == 'LadderGraph':
+            set_joint_positions(client.robot_uid, ik_joints, init_conf_val)
             st_time = time.time()
             trajectory = client.plan_cartesian_motion(ee_frames_WCF, group=move_group, options=options)
             cprint('W/o frame variant solving time: {}'.format(elapsed_time(st_time)), 'blue')
-            cprint('Cost: {}'.format(compute_trajectory_cost(trajectory)), 'blue')
+            cprint('Cost: {}'.format(compute_trajectory_cost(trajectory, init_conf_val=init_conf_val)), 'blue')
             print('-'*5)
 
-            f_variant_options = {'delta_yaw' : np.pi/3, 'yaw_sample_size' : 4}
+            f_variant_options = {'delta_yaw' : np.pi/3, 'yaw_sample_size' : 5}
             options.update({'frame_variant_generator' : PybulletFiniteEulerAngleVariantGenerator(options=f_variant_options)})
             print('With frame variant config: {}'.format(f_variant_options))
 
+        set_joint_positions(client.robot_uid, ik_joints, init_conf_val)
         st_time = time.time()
         trajectory = client.plan_cartesian_motion(ee_frames_WCF, group=move_group, options=options)
         cprint('{} solving time: {}'.format('With frame variant ' if planner_id == 'LadderGraph' else 'Direct', elapsed_time(st_time)), 'cyan')
-        cprint('Cost: {}'.format(compute_trajectory_cost(trajectory)), 'cyan')
+        cprint('Cost: {}'.format(compute_trajectory_cost(trajectory, init_conf_val=init_conf_val)), 'cyan')
 
         if trajectory is None:
             cprint('Client Cartesian planner {} CANNOT find a plan!'.format(planner_id), 'red')
@@ -266,7 +269,7 @@ def test_plan_motion(abb_irb4600_40_255_setup, itj_TC_PG500_cms, itj_beam_cm, co
 
         plan_options = {
             'diagnosis' : True,
-            'resolutions' : 0.01
+            'resolutions' : 0.05
             }
 
         st_time = time.time()
@@ -358,8 +361,7 @@ def test_ik(fixed_waam_setup, viewer, ik_engine):
                 assert_almost_equal(quat_angle_between(tcp_pose[1], p[1]), 0, decimal=3)
             else:
                 raise ValueError('invalid ik return.')
-            # cprint('FK - IK agrees.')
-            # wait_if_gui()
+            wait_if_gui('FK - IK agrees.')
         cprint('{} | Success {}/{} | Average ik time: {} | avg over {} calls.'.format(ik_engine, len(ee_poses)-failure_cnt, len(ee_poses),
             ik_time/len(ee_poses), len(ee_poses)), 'cyan')
 

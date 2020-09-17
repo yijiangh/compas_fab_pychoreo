@@ -2,7 +2,7 @@ from compas_fab_pychoreo.backend_features.configuration_collision_checker import
 from compas_fab_pychoreo.utils import is_valid_option, values_as_list
 
 from pybullet_planning import set_joint_positions, get_link_pose, get_custom_limits, joints_from_names, link_from_name, \
-    get_collision_fn, get_disabled_collisions
+    get_collision_fn, get_disabled_collisions, WorldSaver
 from pybullet_planning import wait_if_gui, get_body_name, RED, BLUE, set_color
 
 class PybulletConfigurationCollisionChecker(ConfigurationCollisionChecker):

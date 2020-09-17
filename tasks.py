@@ -172,8 +172,9 @@ def prepare_changelog(ctx):
 
 
 @task(help={
-      'release_type': 'Type of release follows semver rules. Must be one of: major, minor, patch.'})
-def release(ctx, release_type):
+      'release_type': 'Type of release follows semver rules. Must be one of: major, minor, patch.',
+      'bump_version': 'Bumpversion, true or false, default to false'})
+def release(ctx, release_type, bump_version=False):
     """Releases the project in one swift command!"""
     if release_type not in ('patch', 'minor', 'major'):
         raise Exit('The release type parameter is invalid.\nMust be one of: major, minor, patch')
@@ -182,24 +183,25 @@ def release(ctx, release_type):
     ctx.run('invoke check test')
 
     # Bump version and git tag it
-    ctx.run('bumpversion %s --verbose' % release_type)
+    if bump_version:
+        ctx.run('bumpversion %s --verbose' % release_type)
 
     # Build project
     ctx.run('python setup.py clean --all sdist bdist_wheel')
 
     # Upload to pypi
-    if confirm('You are about to upload the release to pypi.org. Are you sure? [y/N]'):
-        files = ['dist/*.whl', 'dist/*.gz', 'dist/*.zip']
-        dist_files = ' '.join([pattern for f in files for pattern in glob.glob(f)])
+    # if confirm('You are about to upload the release to pypi.org. Are you sure? [y/N]'):
+    #     files = ['dist/*.whl', 'dist/*.gz', 'dist/*.zip']
+    #     dist_files = ' '.join([pattern for f in files for pattern in glob.glob(f)])
 
-        if len(dist_files):
-            ctx.run('twine upload --skip-existing %s' % dist_files)
+    #     if len(dist_files):
+    #         ctx.run('twine upload --skip-existing %s' % dist_files)
 
-            prepare_changelog(ctx)
-        else:
-            raise Exit('No files found to release')
-    else:
-        raise Exit('Aborted release')
+    #         prepare_changelog(ctx)
+    #     else:
+    #         raise Exit('No files found to release')
+    # else:
+    #     raise Exit('Aborted release')
 
 
 @contextlib.contextmanager

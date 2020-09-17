@@ -62,14 +62,6 @@ class PybulletPlanCartesianMotion(PlanCartesianMotion):
         robot_uid = self.client.robot_uid
         robot = self.client.compas_fab_robot
 
-        # * parse options
-        diagnosis = is_valid_option(options, 'diagnosis', False)
-        avoid_collisions = is_valid_option(options, 'avoid_collisions', True)
-        pos_step_size = is_valid_option(options, 'max_step', 0.01)
-        jump_threshold = is_valid_option(options, 'jump_threshold', math.pi/2)
-        planner_id = is_valid_option(options, 'planner_id', 'IterativeIK')
-        frame_variant_gen = is_valid_option(options, 'frame_variant_generator', None)
-
         # * convert link/joint names to pybullet indices
         base_link_name = robot.get_base_link_name(group=group)
         tool_link_name = robot.get_end_effector_link_name(group=group)
@@ -79,6 +71,14 @@ class PybulletPlanCartesianMotion(PlanCartesianMotion):
         joint_names = robot.get_configurable_joint_names(group=group)
         ik_joints = joints_from_names(robot_uid, joint_names)
         joint_types = robot.get_joint_types_by_names(joint_names)
+
+        # * parse options
+        diagnosis = is_valid_option(options, 'diagnosis', False)
+        avoid_collisions = is_valid_option(options, 'avoid_collisions', True)
+        pos_step_size = is_valid_option(options, 'max_step', 0.01)
+        jump_threshold = is_valid_option(options, 'jump_threshold', {jt : math.pi/2 for jt in ik_joints})
+        planner_id = is_valid_option(options, 'planner_id', 'IterativeIK')
+        frame_variant_gen = is_valid_option(options, 'frame_variant_generator', None)
 
         # * convert to poses and do workspace linear interpolation
         given_poses = [pose_from_frame(frame_WCF) for frame_WCF in frames_WCF]
@@ -108,11 +108,6 @@ class PybulletPlanCartesianMotion(PlanCartesianMotion):
                             path = None
                             break
             elif planner_id == 'LadderGraph':
-                # ladder graph related options
-                # TODO: convert joint name to joint index
-                custom_joint_velocity_limits = is_valid_option(options, 'custom_joint_velocity_limits', {})
-                ee_vel = is_valid_option(options, 'ee_workspace_speed', None)
-
                 # get ik fn from client
                 # collision checking is turned off because collision checking is handled inside LadderGraph planner
                 ik_options = {'avoid_collisions' : False, 'return_all' : True}
@@ -129,7 +124,7 @@ class PybulletPlanCartesianMotion(PlanCartesianMotion):
                     sample_ee_fn = None
 
                 path, cost = plan_cartesian_motion_lg(self.client.robot_uid, ik_joints, ee_poses, sample_ik_fn, collision_fn, \
-                    custom_vel_limits=custom_joint_velocity_limits, ee_vel=ee_vel, sample_ee_fn=sample_ee_fn)
+                    jump_threshold=jump_threshold, sample_ee_fn=sample_ee_fn)
 
                 print('Ladder graph cost: {}'.format(cost))
             else:
