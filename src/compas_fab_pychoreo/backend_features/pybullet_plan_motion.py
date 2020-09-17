@@ -1,7 +1,7 @@
 import time
 from compas_fab.backends.interfaces import PlanMotion
 from compas_fab.backends.interfaces import InverseKinematics
-from compas_fab.robots import JointTrajectory, Duration, JointTrajectoryPoint
+from compas_fab.robots import JointTrajectory, Duration, JointTrajectoryPoint, Configuration
 
 from pybullet_planning import is_connected, get_bodies, WorldSaver, joints_from_names, set_joint_positions, plan_joint_motion, check_initial_end
 from pybullet_planning import get_custom_limits, get_joint_positions, get_sample_fn, get_extend_fn, get_distance_fn, MAX_DISTANCE
@@ -32,11 +32,6 @@ class PybulletPlanMotion(PlanMotion):
             Dictionary containing kwargs for arguments specific to
             the client being queried.
 
-            - ``"base_link"``: (:obj:`str`) Name of the base link.
-            - ``"ee_link"``: (:obj:`str`) Name of the end effector link.
-            - ``"joint_names"``: (:obj:`list` of :obj:`str`) List containing joint names.
-            - ``"joint_types"``: (:obj:`list` of :obj:`str`) List containing joint types.
-
             - ``"avoid_collisions"``: (:obj:`bool`, optional)
               Whether or not to avoid collisions. Defaults to ``True``.
 
@@ -59,71 +54,49 @@ class PybulletPlanMotion(PlanMotion):
         robot_uid = self.client.robot_uid
         robot = self.client.compas_fab_robot
 
-        ik_joint_names = robot.get_configurable_joint_names(group=group)
-        ik_joint_types = robot.get_joint_types_by_names(ik_joint_names)
-        ik_joints = joints_from_names(robot_uid, ik_joint_names)
-
-        self_collisions = is_valid_option(options, 'self_collisions', True)
+        # * parse options
         diagnosis = is_valid_option(options, 'diagnosis', False)
         custom_limits = is_valid_option(options, 'custom_limits', {})
         resolutions = is_valid_option(options, 'resolutions', 0.1)
         weights = is_valid_option(options, 'weights', None)
-        max_distance = is_valid_option(options, 'max_distance', MAX_DISTANCE)
-
-        attachments = values_as_list(self.client.attachments)
-        obstacles = values_as_list(self.client.collision_objects)
-
-        disabled_collisions = self.client.self_collision_links
-        # TODO additional disabled collisions in options
-        # option_disabled_linke_names = is_valid_option(options, 'extra_disabled_collisions', [])
-        # option_extra_disabled_collisions = get_body_body_disabled_collisions(robot_uid, workspace, extra_disabled_link_names)
-        option_extra_disabled_collisions = set()
-        extra_disabled_collisions = self.client.extra_disabled_collisions
-        #| option_extra_disabled_collisions, TODO this cause incorrect result
-
-        # TODO: worldsaver?
-        # # TODO: compute joint weight as np.reciprocal(joint velocity bound) from URDF
+        # # TODO: compute default joint weight as np.reciprocal(joint velocity bound) from URDF
         # JOINT_WEIGHTS = np.reciprocal([6.28318530718, 5.23598775598, 6.28318530718,
         #                        6.6497044501, 6.77187749774, 10.7337748998]) # sec / radian
-        if start_configuration is not None:
-            set_joint_positions(robot_uid, ik_joints, start_configuration.values)
 
-        # TODO: if isinstance(goal_, JointConstraint):
+        # * convert link/joint names to pybullet indices
+        joint_names = robot.get_configurable_joint_names(group=group)
+        ik_joints = joints_from_names(robot_uid, joint_names)
+        joint_types = robot.get_joint_types_by_names(joint_names)
 
-        # conf_vals = plan_joint_motion(robot_uid, ik_joints, end_configuration.values,
-        #                          obstacles=obstacles, attachments=attachments,
-        #                          self_collisions=self_collisions, disabled_collisions=disabled_collisions,
-        #                          extra_disabled_collisions=extra_disabled_collisions,
-        #                          resolutions=resolutions, custom_limits=custom_limits,
-        #                          diagnosis=diagnosis) #weights=weights,
+        with WorldSaver():
+            # set to start conf
+            if start_configuration is not None:
+                start_conf_vals = start_configuration.values
+                set_joint_positions(robot_uid, ik_joints, start_conf_vals)
 
-        end_conf = end_configuration.values
+            sample_fn = get_sample_fn(robot_uid, ik_joints, custom_limits=custom_limits)
+            distance_fn = get_distance_fn(robot_uid, ik_joints, weights=weights)
+            extend_fn = get_extend_fn(robot_uid, ik_joints, resolutions=resolutions)
+            collision_fn = PybulletConfigurationCollisionChecker(self.client)._get_collision_fn(group=group, options=options)
 
-        assert len(ik_joints) == len(end_conf)
-        sample_fn = get_sample_fn(robot_uid, ik_joints, custom_limits=custom_limits)
-        distance_fn = get_distance_fn(robot_uid, ik_joints, weights=weights)
-        extend_fn = get_extend_fn(robot_uid, ik_joints, resolutions=resolutions)
-        # collision_fn = get_collision_fn(robot_uid, ik_joints, obstacles=obstacles, attachments=attachments, self_collisions=self_collisions,
-        #                                 disabled_collisions=disabled_collisions, extra_disabled_collisions=extra_disabled_collisions,
-        #                                 custom_limits=custom_limits, max_distance=max_distance)
-        collision_fn = PybulletConfigurationCollisionChecker(self.client)._get_collision_fn(group=group, options=options)
+            start_conf = get_joint_positions(robot_uid, ik_joints)
+            end_conf = end_configuration.values
+            assert len(ik_joints) == len(end_conf)
 
-        start_conf = get_joint_positions(robot_uid, ik_joints)
+            if not check_initial_end(start_conf, end_conf, collision_fn, diagnosis=diagnosis):
+                return None
+            path = birrt(start_conf, end_conf, distance_fn, sample_fn, extend_fn, collision_fn)
+            #return plan_lazy_prm(start_conf, end_conf, sample_fn, extend_fn, collision_fn)
 
-        # if collision_fn(start_conf, diagnosis=True):
-        #     print('initial pose colliding')
-        #     wait_if_gui()
-
-        if not check_initial_end(start_conf, end_conf, collision_fn, diagnosis=diagnosis):
+        if path is None:
+            print('No free motion found!')
             return None
-        conf_vals = birrt(start_conf, end_conf, distance_fn, sample_fn, extend_fn, collision_fn)
-        #return plan_lazy_prm(start_conf, end_conf, sample_fn, extend_fn, collision_fn)
-
-        if conf_vals is not None and len(conf_vals) > 0:
-            traj_pts = [JointTrajectoryPoint(values=conf_val, types=ik_joint_types, time_from_start=Duration(i*1,0)) \
-                for i, conf_val in enumerate(conf_vals)]
-            trajectory = JointTrajectory(trajectory_points=traj_pts, \
-                joint_names=ik_joint_names, start_configuration=start_configuration, fraction=1.0)
-            return trajectory
         else:
-            return None
+            jt_traj_pts = []
+            for i, conf in enumerate(path):
+                c_conf = Configuration(values=conf, types=joint_types, joint_names=joint_names)
+                jt_traj_pt = JointTrajectoryPoint(values=c_conf.values, types=c_conf.types, time_from_start=Duration(i*1,0))
+                jt_traj_pts.append(jt_traj_pt)
+            trajectory = JointTrajectory(trajectory_points=jt_traj_pts,
+                joint_names=joint_names, start_configuration=start_configuration, fraction=1.0)
+            return trajectory

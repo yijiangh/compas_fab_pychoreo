@@ -14,8 +14,6 @@ class PybulletPlanner(PlannerInterface):
 
     def __init__(self, client):
         super(PybulletPlanner, self).__init__(client)
-        # move_group_name : inverse_kinenamtics function
-        self.ik_fn_from_group = {}
 
     def forward_kinematics(self, *args, **kwargs):
         raise NotImplementedError()

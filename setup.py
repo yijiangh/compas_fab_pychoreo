@@ -33,9 +33,7 @@ def read(*names, **kwargs):
 
 long_description = read("README.md")
 # requirements = read("requirements.txt").split("\n")
-optional_requirements = [
-    'ikfast_pybind'
-    ]
+optional_requirements = {}
 
 setup(
     name="compas_fab_pychoreo",

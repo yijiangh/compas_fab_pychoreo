@@ -22,6 +22,7 @@ from pybullet_planning import randomize, elapsed_time
 import ikfast_abb_irb4600_40_255
 
 from compas_fab_pychoreo.client import PyBulletClient
+from compas_fab_pychoreo.utils import values_as_list
 from compas_fab_pychoreo.conversions import pose_from_frame, frame_from_pose
 from compas_fab_pychoreo.backend_features.pybullet_frame_variant_generator import PybulletFiniteEulerAngleVariantGenerator
 
@@ -139,8 +140,8 @@ def test_frame_variant_generator(viewer):
 
 #####################################
 @pytest.mark.circle_cartesian
-# @pytest.mark.parametrize("planner_id", [('IterativeIK'), ('LadderGraph')])
-@pytest.mark.parametrize("planner_id", [('LadderGraph')])
+@pytest.mark.parametrize("planner_id", [('IterativeIK'), ('LadderGraph')])
+# @pytest.mark.parametrize("planner_id", [('LadderGraph')])
 def test_circle_cartesian(fixed_waam_setup, viewer, planner_id):
     urdf_filename, robot, robotA_tool = fixed_waam_setup
 
@@ -205,6 +206,65 @@ def test_circle_cartesian(fixed_waam_setup, viewer, planner_id):
                 set_joint_positions(client.robot_uid, ik_joints, traj_pt.values)
                 wait_for_duration(time_step)
 
+        wait_if_gui()
+
+#####################################
+@pytest.mark.plan_motion
+def test_plan_motion(abb_irb4600_40_255_setup, itj_TC_PG500_cms, itj_beam_cm, column_obstacle_cm, base_plate_cm, viewer, diagnosis):
+    # modified from https://github.com/yijiangh/pybullet_planning/blob/dev/tests/test_collisions.py
+    urdf_filename, robot = abb_irb4600_40_255_setup
+
+    move_group = 'bare_arm'
+    ik_joint_names = robot.get_configurable_joint_names(group=move_group)
+    ik_joint_types = robot.get_joint_types_by_names(ik_joint_names)
+    flange_link_name = robot.get_end_effector_link_name(group=move_group)
+
+    ee_touched_link_names = ['link_5', 'link_6']
+
+    ee_acms = [AttachedCollisionMesh(ee_cm, flange_link_name, ee_touched_link_names) for ee_cm in itj_TC_PG500_cms]
+    beam_acm = AttachedCollisionMesh(itj_beam_cm, flange_link_name, ee_touched_link_names)
+
+    with PyBulletClient(viewer=viewer) as client:
+        client.load_robot_from_urdf(urdf_filename)
+        client.compas_fab_robot = robot
+
+        # * add static obstacles
+        client.add_collision_mesh(base_plate_cm)
+        client.add_collision_mesh(column_obstacle_cm)
+
+        # * add attachment
+        for ee_acm in ee_acms:
+            client.add_attached_collision_mesh(ee_acm)
+        client.add_attached_collision_mesh(beam_acm)
+
+        vals = [-1.4660765716752369, -0.22689280275926285, 0.27925268031909273, 0.17453292519943295, 0.22689280275926285, -0.22689280275926285]
+        start_conf = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
+
+        vals = [0.05235987755982989, -0.087266462599716474, -0.05235987755982989, 1.7104226669544429, 0.13962634015954636, -0.43633231299858238]
+        end_conf = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
+
+        plan_options = {
+            'diagnosis' : True,
+            'resolutions' : 0.01
+            }
+
+        st_time = time.time()
+        trajectory = client.plan_motion(end_conf, start_configuration=start_conf, group=move_group, options=plan_options)
+        print('Solving time: {}'.format(elapsed_time(st_time)))
+
+        if trajectory is None:
+            cprint('Client motion planner CANNOT find a plan!', 'red')
+        else:
+            cprint('Client motion planning find a plan!', 'green')
+            ik_joints = joints_from_names(client.robot_uid, ik_joint_names)
+            attachments = values_as_list(client.attachments)
+            wait_if_gui('Start sim.')
+            time_step = 0.03
+            for traj_pt in trajectory.points:
+                set_joint_positions(client.robot_uid, ik_joints, traj_pt.values)
+                for attachment in attachments:
+                    attachment.assign()
+                wait_for_duration(time_step)
         wait_if_gui()
 
 #####################################

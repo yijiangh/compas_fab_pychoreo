@@ -87,7 +87,7 @@ class PybulletPlanCartesianMotion(PlanCartesianMotion):
             c_interp_poses = list(interpolate_poses(p1, p2, pos_step_size=pos_step_size))
             ee_poses.extend(c_interp_poses)
 
-        # * build collision fn here
+        # * build collision fn
         attachments = values_as_list(self.client.attachments)
         collision_fn = PybulletConfigurationCollisionChecker(self.client)._get_collision_fn(group=group, options=options)
 
