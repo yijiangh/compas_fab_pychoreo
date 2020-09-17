@@ -46,6 +46,12 @@ def ik_wrapper(compas_fab_ik_fn):
         return [np.array(configuration.values) for configuration in configurations if configuration is not None]
     return fn
 
+def compute_trajectory_cost(trajectory):
+    cost = 0.0
+    for traj_pt1, traj_pt2 in zip(trajectory.points[:-1], trajectory.points[1:]):
+        cost += np.linalg.norm(np.array(traj_pt1.values) - np.array(traj_pt2.values))
+    return cost
+
 #####################################
 
 @pytest.mark.collision_check_abb
@@ -76,35 +82,34 @@ def test_collision_checker(abb_irb4600_40_255_setup, itj_TC_PG500_cms, itj_beam_
             client.add_attached_collision_mesh(ee_acm)
         client.add_attached_collision_mesh(beam_acm)
 
-        # safe start conf
+        cprint('safe start conf', 'green')
         conf = Configuration(values=[0.]*6, types=ik_joint_types, joint_names=ik_joint_names)
         assert not client.configuration_in_collision(conf, group=move_group, options={'diagnosis':diagnosis})
 
-        # joint over limit
+        cprint('joint over limit', 'red')
         conf = Configuration(values=[0., 0., 1.5, 0, 0, 0], types=ik_joint_types, joint_names=ik_joint_names)
         assert client.configuration_in_collision(conf, group=move_group, options={'diagnosis':diagnosis})
 
-        # attached beam-robot body self collision
+        cprint('attached beam-robot body self collision', 'red')
         vals = [0.73303828583761843, -0.59341194567807209, 0.54105206811824214, -0.17453292519943295, 1.064650843716541, 1.7278759594743862]
         conf = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
         assert client.configuration_in_collision(conf, group=move_group, options={'diagnosis':diagnosis})
 
-        # attached beam-obstacle collision
-        # column
+        cprint('attached beam-obstacle collision - column', 'red')
         vals = [0.087266462599716474, -0.19198621771937624, 0.20943951023931956, 0.069813170079773182, 1.2740903539558606, 0.069813170079773182]
         conf = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
         assert client.configuration_in_collision(conf, group=move_group, options={'diagnosis':diagnosis})
-        # ground
+
+        cprint('attached beam-obstacle collision - ground', 'red')
         vals = [-0.017453292519943295, 0.6108652381980153, 0.20943951023931956, 1.7627825445142729, 1.2740903539558606, 0.069813170079773182]
         conf = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
         assert client.configuration_in_collision(conf, group=move_group, options={'diagnosis':diagnosis})
 
-        # robot link-obstacle collision
-        # column
+        cprint('robot link-obstacle collision - column', 'red')
         vals = [-0.41887902047863912, 0.20943951023931956, 0.20943951023931956, 1.7627825445142729, 1.2740903539558606, 0.069813170079773182]
         conf = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
         assert client.configuration_in_collision(conf, group=move_group, options={'diagnosis':diagnosis})
-        # ground
+        cprint('robot link-obstacle collision - ground', 'red')
         vals = [0.33161255787892263, 1.4660765716752369, 0.27925268031909273, 0.17453292519943295, 0.22689280275926285, 0.54105206811824214]
         conf = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
         assert client.configuration_in_collision(conf, group=move_group, options={'diagnosis':diagnosis})
@@ -140,20 +145,34 @@ def test_frame_variant_generator(viewer):
 
 #####################################
 @pytest.mark.circle_cartesian
-@pytest.mark.parametrize("planner_id", [('IterativeIK'), ('LadderGraph')])
+@pytest.mark.parametrize("planner_ik_conf", [('IterativeIK', 'default-single'),
+    ('LadderGraph', 'default-single'), ('LadderGraph', 'lobster-analytical'), ('LadderGraph', 'ikfast-analytical')])
 # @pytest.mark.parametrize("planner_id", [('LadderGraph')])
-def test_circle_cartesian(fixed_waam_setup, viewer, planner_id):
+def test_circle_cartesian(fixed_waam_setup, viewer, planner_ik_conf):
     urdf_filename, robot, robotA_tool = fixed_waam_setup
+    planner_id, ik_engine = planner_ik_conf
 
     move_group = 'robotA'
     base_link_name = robot.get_base_link_name(group=move_group)
     ik_joint_names = robot.get_configurable_joint_names(group=move_group)
     tool_link_name = robot.get_end_effector_link_name(group=move_group)
-
     base_frame = robot.get_base_frame(group=move_group)
+
+    if ik_engine == 'default-single':
+        ik_solver = None
+    elif ik_engine == 'lobster-analytical':
+        ik_solver = InverseKinematicsSolver(robot, move_group, ik_abb_irb4600_40_255, base_frame, robotA_tool.frame)
+    elif ik_engine == 'ikfast-analytical':
+        ikfast_fn = get_ik_fn_from_ikfast(ikfast_abb_irb4600_40_255.get_ik)
+        ik_solver = InverseKinematicsSolver(robot, move_group, ikfast_fn, base_frame, robotA_tool.frame)
+    else:
+        raise ValueError('invalid ik engine name.')
+
     # ik_solver = InverseKinematicsSolver(robot, move_group, ik_abb_irb4600_40_255, base_frame, robotA_tool.frame)
-    ikfast_fn = get_ik_fn_from_ikfast(ikfast_abb_irb4600_40_255.get_ik)
-    ik_solver = InverseKinematicsSolver(robot, move_group, ikfast_fn, base_frame, robotA_tool.frame)
+    # ikfast_fn = get_ik_fn_from_ikfast(ikfast_abb_irb4600_40_255.get_ik)
+    # ik_solver = InverseKinematicsSolver(robot, move_group, ikfast_fn, base_frame, robotA_tool.frame)
+    print('='*10)
+    cprint('Cartesian planner {} with IK engine {}'.format(planner_id, ik_engine), 'yellow')
 
     with PyBulletClient(viewer=viewer) as client:
         client.load_robot_from_urdf(urdf_filename)
@@ -185,8 +204,9 @@ def test_circle_cartesian(fixed_waam_setup, viewer, planner_id):
         if planner_id == 'LadderGraph':
             st_time = time.time()
             trajectory = client.plan_cartesian_motion(ee_frames_WCF, group=move_group, options=options)
-            print('W/o frame variant solving time: {}'.format(elapsed_time(st_time)))
-            print('='*10)
+            cprint('W/o frame variant solving time: {}'.format(elapsed_time(st_time)), 'blue')
+            cprint('Cost: {}'.format(compute_trajectory_cost(trajectory)), 'blue')
+            print('-'*5)
 
             f_variant_options = {'delta_yaw' : np.pi/3, 'yaw_sample_size' : 4}
             options.update({'frame_variant_generator' : PybulletFiniteEulerAngleVariantGenerator(options=f_variant_options)})
@@ -194,7 +214,8 @@ def test_circle_cartesian(fixed_waam_setup, viewer, planner_id):
 
         st_time = time.time()
         trajectory = client.plan_cartesian_motion(ee_frames_WCF, group=move_group, options=options)
-        print('Solving time: {}'.format(elapsed_time(st_time)))
+        cprint('{} solving time: {}'.format('With frame variant ' if planner_id == 'LadderGraph' else 'Direct', elapsed_time(st_time)), 'cyan')
+        cprint('Cost: {}'.format(compute_trajectory_cost(trajectory)), 'cyan')
 
         if trajectory is None:
             cprint('Client Cartesian planner {} CANNOT find a plan!'.format(planner_id), 'red')
