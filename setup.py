@@ -41,7 +41,7 @@ setup(
     description="an experimental package containing research prototpyes to integrate more planning functionalities to compas_fab",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="",
+    url="https://github.com/yijiangh/compas_fab_pychoreo",
     author="Yijiang Huang",
     author_email="yijiangh@mit.edu",
     license="MIT license",
