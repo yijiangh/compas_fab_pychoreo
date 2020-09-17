@@ -37,7 +37,7 @@ optional_requirements = {}
 
 setup(
     name="compas_fab_pychoreo",
-    version="0.1.0",
+    version="0.2.0",
     description="an experimental package containing research prototpyes to integrate more planning functionalities to compas_fab",
     long_description=long_description,
     long_description_content_type="text/markdown",
