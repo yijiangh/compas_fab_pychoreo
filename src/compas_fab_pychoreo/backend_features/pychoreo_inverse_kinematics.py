@@ -10,7 +10,7 @@ from pybullet_planning import wait_if_gui
 from compas_fab_pychoreo.conversions import pose_from_frame
 from compas_fab_pychoreo.utils import is_valid_option
 
-class PybulletInverseKinematics(InverseKinematics):
+class PychoreoInverseKinematics(InverseKinematics):
     def __init__(self, client):
         self.client = client
 

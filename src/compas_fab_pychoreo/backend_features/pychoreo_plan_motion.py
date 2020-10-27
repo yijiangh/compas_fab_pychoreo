@@ -7,12 +7,12 @@ from pybullet_planning import is_connected, get_bodies, WorldSaver, joints_from_
 from pybullet_planning import get_custom_limits, get_joint_positions, get_sample_fn, get_extend_fn, get_distance_fn, MAX_DISTANCE
 from pybullet_planning.motion_planners import birrt, lazy_prm
 from pybullet_planning import wait_if_gui
-from compas_fab_pychoreo.backend_features.pybullet_configuration_collision_checker import PybulletConfigurationCollisionChecker
+from compas_fab_pychoreo.backend_features.pychoreo_configuration_collision_checker import PychoreoConfigurationCollisionChecker
 
 # from compas_fab_pychoreo.conversions import
 from compas_fab_pychoreo.utils import is_valid_option, values_as_list
 
-class PybulletPlanMotion(PlanMotion):
+class PychoreoPlanMotion(PlanMotion):
     def __init__(self, client):
         self.client = client
 

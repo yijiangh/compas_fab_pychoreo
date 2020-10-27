@@ -6,12 +6,12 @@ from compas_fab.backends.interfaces import InverseKinematics
 
 from compas_fab_pychoreo.conversions import pose_from_frame, frame_from_pose
 from compas_fab_pychoreo.utils import is_valid_option, values_as_list
-from compas_fab_pychoreo.backend_features.pybullet_configuration_collision_checker import PybulletConfigurationCollisionChecker
+from compas_fab_pychoreo.backend_features.pychoreo_configuration_collision_checker import PychoreoConfigurationCollisionChecker
 from pybullet_planning import is_connected, get_bodies, WorldSaver, get_collision_fn, joints_from_names, plan_cartesian_motion, \
     link_from_name, interpolate_poses, get_link_pose, get_sample_fn, set_joint_positions, elapsed_time, plan_cartesian_motion_lg
 
 
-class PybulletPlanCartesianMotion(PlanCartesianMotion):
+class PychoreoPlanCartesianMotion(PlanCartesianMotion):
     def __init__(self, client):
         self.client = client
 

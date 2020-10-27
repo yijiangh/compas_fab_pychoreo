@@ -5,7 +5,7 @@ from pybullet_planning import set_joint_positions, get_link_pose, get_custom_lim
     get_collision_fn, get_disabled_collisions, WorldSaver
 from pybullet_planning import wait_if_gui, get_body_name, RED, BLUE, set_color
 
-class PybulletConfigurationCollisionChecker(ConfigurationCollisionChecker):
+class PychoreoConfigurationCollisionChecker(ConfigurationCollisionChecker):
     def __init__(self, client):
         self.client = client
 

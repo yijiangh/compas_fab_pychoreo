@@ -20,10 +20,9 @@ from pybullet_planning import wait_if_gui, wait_for_duration
 from pybullet_planning import plan_cartesian_motion, plan_cartesian_motion_lg
 from pybullet_planning import randomize, elapsed_time
 
-from compas_fab_pychoreo.client import PyBulletClient
+from compas_fab.backends import PyBulletClient
 from compas_fab_pychoreo.conversions import pose_from_frame, frame_from_pose
 from compas_fab_pychoreo_examples.ik_solver import ik_abb_irb4600_40_255, InverseKinematicsSolver, get_ik_fn_from_ikfast
-
 
 def to_rlf_robot_full_conf(robot11_confval, robot12_confval, scale=1e-3):
     # convert to full configuration of the RFL robot

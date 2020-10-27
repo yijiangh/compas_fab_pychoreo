@@ -3,49 +3,59 @@ Internal implementation of the planner backend interface for pybullet_planning
 """
 from compas_fab.backends.interfaces.client import PlannerInterface
 
-from compas_fab_pychoreo.backend_features.pybullet_inverse_kinematics import PybulletInverseKinematics
-from compas_fab_pychoreo.backend_features.pybullet_configuration_collision_checker import PybulletConfigurationCollisionChecker
-from compas_fab_pychoreo.backend_features.pybullet_plan_cartesian_motion import PybulletPlanCartesianMotion
-from compas_fab_pychoreo.backend_features.pybullet_plan_motion import PybulletPlanMotion
+from compas_fab_pychoreo.backend_features.pychoreo_inverse_kinematics import PychoreoInverseKinematics
+from compas_fab_pychoreo.backend_features.pychoreo_configuration_collision_checker import PychoreoConfigurationCollisionChecker
+from compas_fab_pychoreo.backend_features.pychoreo_plan_cartesian_motion import PychoreoPlanCartesianMotion
+from compas_fab_pychoreo.backend_features.pychoreo_plan_motion import PychoreoPlanMotion
 
-class PybulletPlanner(PlannerInterface):
+from compas_fab.backends.pybullet.backend_features.pybullet_forward_kinematics import PyBulletForwardKinematics
+from compas_fab.backends.pybullet.backend_features.pybullet_add_attached_collision_mesh import PyBulletAddAttachedCollisionMesh
+from compas_fab.backends.pybullet.backend_features.pybullet_add_collision_mesh import PyBulletAddCollisionMesh
+from compas_fab.backends.pybullet.backend_features.pybullet_append_collision_mesh import PyBulletAppendCollisionMesh
+from compas_fab.backends.pybullet.backend_features.pybullet_remove_attached_collision_mesh import PyBulletRemoveAttachedCollisionMesh
+from compas_fab.backends.pybullet.backend_features.pybullet_remove_collision_mesh import PyBulletRemoveCollisionMesh
+
+class PychoreoPlanner(PlannerInterface):
     """Implement the planner backend interface based on pybullet_planning
     """
 
     def __init__(self, client):
-        super(PybulletPlanner, self).__init__(client)
+        super(PychoreoPlanner, self).__init__(client)
 
     def forward_kinematics(self, *args, **kwargs):
-        raise NotImplementedError()
-    #     return MoveItForwardKinematics(self.client)(*args, **kwargs)
+        return PyBulletForwardKinematics(self.client)(*args, **kwargs)
 
     def inverse_kinematics(self, *args, **kwargs):
-        return PybulletInverseKinematics(self.client)(*args, **kwargs)
+        return PychoreoInverseKinematics(self.client)(*args, **kwargs)
 
     def plan_cartesian_motion(self, *args, **kwargs):
-        return PybulletPlanCartesianMotion(self.client)(*args, **kwargs)
+        return PychoreoPlanCartesianMotion(self.client)(*args, **kwargs)
 
     def plan_motion(self, *args, **kwargs):
-        return PybulletPlanMotion(self.client)(*args, **kwargs)
+        return PychoreoPlanMotion(self.client)(*args, **kwargs)
 
     ###################################################
 
     def configuration_in_collision(self, *args, **kwargs):
-        return PybulletConfigurationCollisionChecker(self.client)(*args, **kwargs)
+        return PychoreoConfigurationCollisionChecker(self.client)(*args, **kwargs)
 
     ###################################################
 
     def add_collision_mesh(self, *args, **kwargs):
-        return self.client.add_collision_mesh(*args, **kwargs)
-
-    def remove_collision_mesh(self, *args, **kwargs):
-        return self.client.remove_collision_mesh(*args, **kwargs)
+        return PyBulletAddCollisionMesh(self.client)(*args, **kwargs)
 
     def append_collision_mesh(self, *args, **kwargs):
-        return self.client.append_collision_mesh(*args, **kwargs)
+        return PyBulletAppendCollisionMesh(self.client)(*args, **kwargs)
+
+    def remove_collision_mesh(self, *args, **kwargs):
+        return PyBulletRemoveCollisionMesh(self.client)(*args, **kwargs)
+
+    #####
 
     def add_attached_collision_mesh(self, *args, **kwargs):
-        return self.client.add_attached_collision_mesh(*args, **kwargs)
+        return PyBulletAddAttachedCollisionMesh(self.client)(*args, **kwargs)
 
     def remove_attached_collision_mesh(self, *args, **kwargs):
-        return self.client.remove_attached_collision_mesh(*args, **kwargs)
+        return PyBulletRemoveAttachedCollisionMesh(self.client)(*args, **kwargs)
+
+

@@ -11,7 +11,7 @@ from pybullet_planning import set_pose, get_bodies, remove_body, create_attachme
 from pybullet_planning import draw_pose, get_body_body_disabled_collisions
 
 from compas_fab.backends.interfaces.client import ClientInterface
-from compas_fab_pychoreo.planner import PybulletPlanner
+from compas_fab_pychoreo.planner import PychoreoPlanner
 
 from .utils import LOG
 from .exceptions import CollisionError
@@ -20,7 +20,7 @@ from .conversions import frame_from_pose
 from .conversions import pose_from_frame
 from .conversions import convert_mesh_to_body
 
-class PyBulletClient(ClientInterface):
+class PychoreoClient(ClientInterface):
     """Interface to use pybullet as backend via the **pybullet_plannning**.
 
     :class:`.PybulletClient` is a context manager type, so it's best
@@ -47,7 +47,7 @@ class PyBulletClient(ClientInterface):
     """
 
     def __init__(self, viewer=True, verbose=False):
-        super(PyBulletClient, self).__init__()
+        super(PychoreoClient, self).__init__()
         self.viewer = viewer
         self.verbose = verbose
         # TODO: only one robot for now
@@ -57,7 +57,7 @@ class PyBulletClient(ClientInterface):
         #
         self.collision_objects = {}
         self.attachments = {}
-        self.planner = PybulletPlanner(self)
+        self.planner = PychoreoPlanner(self)
         #
         self.extra_disabled_collisions = set()
 
