@@ -107,6 +107,7 @@ class PybulletPlanCartesianMotion(PlanCartesianMotion):
                         if collision_fn(conf_val, diagnosis=diagnosis):
                             path = None
                             break
+                # TODO check joint threshold
             elif planner_id == 'LadderGraph':
                 # get ik fn from client
                 # collision checking is turned off because collision checking is handled inside LadderGraph planner

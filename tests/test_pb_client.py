@@ -278,6 +278,7 @@ def test_plan_motion(abb_irb4600_40_255_setup, itj_TC_PG500_cms, itj_beam_cm, co
 
         if trajectory is None:
             cprint('Client motion planner CANNOT find a plan!', 'red')
+            assert False, 'Client motion planner CANNOT find a plan!'
         else:
             cprint('Client motion planning find a plan!', 'green')
             ik_joints = joints_from_names(client.robot_uid, ik_joint_names)
