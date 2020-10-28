@@ -43,11 +43,10 @@ def fixed_waam_setup():
     model = RobotModel.from_urdf_file(urdf_filename)
     semantics = RobotSemantics.from_srdf_file(srdf_filename, model)
 
-    robot = Robot(model, semantics=semantics)
     tool_frame_robotA = Frame.from_euler_angles([0.591366, -0.000922, 1.570177], static=True, axes='xyz', point=[-0.002241, -0.000202, 0.505922])
     tool_mesh_robotA = Mesh.from_obj(os.path.join(package_path, "meshes", "collision", "waam_tool.obj"))
     robotA_tool = Tool(tool_mesh_robotA, tool_frame_robotA, collision=tool_mesh_robotA)
-    return urdf_filename, robot, robotA_tool
+    return urdf_filename, semantics, robotA_tool
 
 @pytest.fixture
 def abb_irb4600_40_255_setup():
@@ -57,7 +56,6 @@ def abb_irb4600_40_255_setup():
     srdf_filename = os.path.join(data_dir, 'abb_fixed_waam', "srdf", "abb_irb4600_40_255.srdf")
     model = RobotModel.from_urdf_file(urdf_filename)
     semantics = RobotSemantics.from_srdf_file(srdf_filename, model)
-    # robot = Robot(model, semantics=semantics)
     return urdf_filename, semantics
 
 @pytest.fixture
@@ -68,8 +66,7 @@ def rfl_setup():
     srdf_filename = os.path.join(data_dir, 'rfl_description', 'rfl_description', "urdf", "rfl.srdf")
     model = RobotModel.from_urdf_file(urdf_filename)
     semantics = RobotSemantics.from_srdf_file(srdf_filename, model)
-    robot = Robot(model, semantics=semantics)
-    return urdf_filename, robot
+    return urdf_filename, semantics
 
 @pytest.fixture
 def itj_TC_PG500_cms():

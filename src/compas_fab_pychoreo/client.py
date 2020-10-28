@@ -31,12 +31,23 @@ class PyChoreoClient(PyBulletClient):
     """
 
     def __init__(self, viewer=True, verbose=False):
+        # with HideOutput(not verbose):
+        # this does not seem to work
         super(PyChoreoClient, self).__init__(connection_type='gui' if viewer else 'direct', verbose=verbose)
         self.planner = PyChoreoPlanner(self)
         # attached object name => pybullet_planning `Attachment` object
         # notice that parent body (robot) info is stored inside Attachment
         self.pychoreo_attachments = {}
         self.extra_disabled_collision_link_ids = set()
+
+    def get_robot_pybullet_uid(self, robot):
+        return robot.attributes['pybullet_uid']
+
+    def load_robot(self, urdf_file):
+        # PyBulletClient's redirect_stdout does not seem to work...
+        with HideOutput(not self.verbose):
+            robot = super(PyChoreoClient, self).load_robot(urdf_file)
+        return robot
 
     ###########################################################
 

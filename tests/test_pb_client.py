@@ -21,7 +21,7 @@ from pybullet_planning import randomize, elapsed_time
 
 import ikfast_abb_irb4600_40_255
 
-from compas_fab.backends import PyBulletClient
+# from compas_fab.backends import PyBulletClient
 from compas_fab_pychoreo.client import PyChoreoClient
 from compas_fab_pychoreo.utils import values_as_list
 from compas_fab_pychoreo.conversions import pose_from_frame, frame_from_pose
@@ -149,46 +149,48 @@ def test_frame_variant_generator(viewer):
 @pytest.mark.circle_cartesian
 @pytest.mark.parametrize("planner_ik_conf", [('IterativeIK', 'default-single'),
     ('LadderGraph', 'default-single'), ('LadderGraph', 'lobster-analytical'), ('LadderGraph', 'ikfast-analytical')])
+# @pytest.mark.parametrize("planner_ik_conf", [('IterativeIK', 'default-single'),])
 def test_circle_cartesian(fixed_waam_setup, viewer, planner_ik_conf):
-    urdf_filename, robot, robotA_tool = fixed_waam_setup
+    urdf_filename, semantics, robotA_tool = fixed_waam_setup
     planner_id, ik_engine = planner_ik_conf
 
     move_group = 'robotA'
-    base_link_name = robot.get_base_link_name(group=move_group)
-    ik_joint_names = robot.get_configurable_joint_names(group=move_group)
-    tool_link_name = robot.get_end_effector_link_name(group=move_group)
-    base_frame = robot.get_base_frame(group=move_group)
-
-    if ik_engine == 'default-single':
-        ik_solver = None
-    elif ik_engine == 'lobster-analytical':
-        ik_solver = InverseKinematicsSolver(robot, move_group, ik_abb_irb4600_40_255, base_frame, robotA_tool.frame)
-    elif ik_engine == 'ikfast-analytical':
-        ikfast_fn = get_ik_fn_from_ikfast(ikfast_abb_irb4600_40_255.get_ik)
-        ik_solver = InverseKinematicsSolver(robot, move_group, ikfast_fn, base_frame, robotA_tool.frame)
-    else:
-        raise ValueError('invalid ik engine name.')
-
     print('\n')
     print('='*10)
     cprint('Cartesian planner {} with IK engine {}'.format(planner_id, ik_engine), 'yellow')
 
-    with PyBulletClient(viewer=viewer) as client:
-        client.load_robot_from_urdf(urdf_filename)
-        client.compas_fab_robot = robot
+    with PyChoreoClient(viewer=viewer) as client:
+        robot = client.load_robot(urdf_filename)
+        robot.semantics = semantics
+        robot_uid = client.get_robot_pybullet_uid(robot)
 
-        init_conf_val = np.zeros(6)
+        base_link_name = robot.get_base_link_name(group=move_group)
+        ik_joint_names = robot.get_configurable_joint_names(group=move_group)
+        tool_link_name = robot.get_end_effector_link_name(group=move_group)
+        base_frame = robot.get_base_frame(group=move_group)
+
+        if ik_engine == 'default-single':
+            ik_solver = None
+        elif ik_engine == 'lobster-analytical':
+            ik_solver = InverseKinematicsSolver(robot, move_group, ik_abb_irb4600_40_255, base_frame, robotA_tool.frame)
+        elif ik_engine == 'ikfast-analytical':
+            ikfast_fn = get_ik_fn_from_ikfast(ikfast_abb_irb4600_40_255.get_ik)
+            ik_solver = InverseKinematicsSolver(robot, move_group, ikfast_fn, base_frame, robotA_tool.frame)
+        else:
+            raise ValueError('invalid ik engine name.')
+
+        init_conf = Configuration.from_revolute_values(np.zeros(6), ik_joint_names)
 
         # replace default ik function with a customized one
         if ik_solver is not None:
             client.planner.inverse_kinematics = ik_solver.inverse_kinematics_function()
 
-        tool_link = link_from_name(client.robot_uid, tool_link_name)
-        robot_base_link = link_from_name(client.robot_uid, base_link_name)
-        ik_joints = joints_from_names(client.robot_uid, ik_joint_names)
+        tool_link = link_from_name(robot_uid, tool_link_name)
+        robot_base_link = link_from_name(robot_uid, base_link_name)
+        ik_joints = joints_from_names(robot_uid, ik_joint_names)
 
         # * draw EE pose
-        tcp_pose = get_link_pose(client.robot_uid, tool_link)
+        tcp_pose = get_link_pose(robot_uid, tool_link)
         draw_pose(tcp_pose)
 
         # * generate multiple circles
@@ -205,22 +207,22 @@ def test_circle_cartesian(fixed_waam_setup, viewer, planner_ik_conf):
             'planner_id' : planner_id
             }
         if planner_id == 'LadderGraph':
-            set_joint_positions(client.robot_uid, ik_joints, init_conf_val)
+            client.set_robot_configuration(robot, init_conf)
             st_time = time.time()
-            trajectory = client.plan_cartesian_motion(ee_frames_WCF, group=move_group, options=options)
+            trajectory = client.plan_cartesian_motion(robot, ee_frames_WCF, group=move_group, options=options)
             cprint('W/o frame variant solving time: {}'.format(elapsed_time(st_time)), 'blue')
-            cprint('Cost: {}'.format(compute_trajectory_cost(trajectory, init_conf_val=init_conf_val)), 'blue')
+            cprint('Cost: {}'.format(compute_trajectory_cost(trajectory, init_conf_val=init_conf.values)), 'blue')
             print('-'*5)
 
             f_variant_options = {'delta_yaw' : np.pi/3, 'yaw_sample_size' : 5}
-            options.update({'frame_variant_generator' : PybulletFiniteEulerAngleVariantGenerator(options=f_variant_options)})
+            options.update({'frame_variant_generator' : PyChoreoFiniteEulerAngleVariantGenerator(options=f_variant_options)})
             print('With frame variant config: {}'.format(f_variant_options))
 
-        set_joint_positions(client.robot_uid, ik_joints, init_conf_val)
+        client.set_robot_configuration(robot, init_conf)
         st_time = time.time()
-        trajectory = client.plan_cartesian_motion(ee_frames_WCF, group=move_group, options=options)
+        trajectory = client.plan_cartesian_motion(robot, ee_frames_WCF, group=move_group, options=options)
         cprint('{} solving time: {}'.format('With frame variant ' if planner_id == 'LadderGraph' else 'Direct', elapsed_time(st_time)), 'cyan')
-        cprint('Cost: {}'.format(compute_trajectory_cost(trajectory, init_conf_val=init_conf_val)), 'cyan')
+        cprint('Cost: {}'.format(compute_trajectory_cost(trajectory, init_conf_val=init_conf.values)), 'cyan')
 
         if trajectory is None:
             cprint('Client Cartesian planner {} CANNOT find a plan!'.format(planner_id), 'red')
@@ -229,7 +231,7 @@ def test_circle_cartesian(fixed_waam_setup, viewer, planner_ik_conf):
             wait_if_gui('Start sim.')
             time_step = 0.03
             for traj_pt in trajectory.points:
-                set_joint_positions(client.robot_uid, ik_joints, traj_pt.values)
+                client.set_robot_configuration(robot, traj_pt)
                 wait_for_duration(time_step)
 
         wait_if_gui()
@@ -304,30 +306,31 @@ def test_plan_motion(abb_irb4600_40_255_setup, itj_TC_PG500_cms, itj_beam_cm, co
 @pytest.mark.ik_abb
 @pytest.mark.parametrize("ik_engine", [('default-single'), ('lobster-analytical'), ('ikfast-analytical')])
 def test_ik(fixed_waam_setup, viewer, ik_engine):
-    urdf_filename, robot, robotA_tool = fixed_waam_setup
-
+    urdf_filename, semantics, robotA_tool = fixed_waam_setup
     move_group = 'robotA'
-    base_link_name = robot.get_base_link_name(group=move_group)
-    ik_joint_names = robot.get_configurable_joint_names(group=move_group)
-    tool_link_name = robot.get_end_effector_link_name(group=move_group)
-    base_frame = robot.get_base_frame(group=move_group)
 
-    if ik_engine == 'default-single':
-        ik_solver = None
-    elif ik_engine == 'lobster-analytical':
-        ik_solver = InverseKinematicsSolver(robot, move_group, ik_abb_irb4600_40_255, base_frame, robotA_tool.frame)
-    elif ik_engine == 'ikfast-analytical':
-        ikfast_fn = get_ik_fn_from_ikfast(ikfast_abb_irb4600_40_255.get_ik)
-        ik_solver = InverseKinematicsSolver(robot, move_group, ikfast_fn, base_frame, robotA_tool.frame)
-    else:
-        raise ValueError('invalid ik engine name.')
+    with PyChoreoClient(viewer=viewer) as client:
+        robot = client.load_robot(urdf_filename)
+        robot.semantics = semantics
+        robot_uid = client.get_robot_pybullet_uid(robot)
 
-    with PyBulletClient(viewer=viewer) as client:
-        client.load_robot_from_urdf(urdf_filename)
-        client.compas_fab_robot = robot
+        base_link_name = robot.get_base_link_name(group=move_group)
+        ik_joint_names = robot.get_configurable_joint_names(group=move_group)
+        tool_link_name = robot.get_end_effector_link_name(group=move_group)
+        base_frame = robot.get_base_frame(group=move_group)
 
-        ik_joints = joints_from_names(client.robot_uid, ik_joint_names)
-        tool_link = link_from_name(client.robot_uid, tool_link_name)
+        if ik_engine == 'default-single':
+            ik_solver = None
+        elif ik_engine == 'lobster-analytical':
+            ik_solver = InverseKinematicsSolver(robot, move_group, ik_abb_irb4600_40_255, base_frame, robotA_tool.frame)
+        elif ik_engine == 'ikfast-analytical':
+            ikfast_fn = get_ik_fn_from_ikfast(ikfast_abb_irb4600_40_255.get_ik)
+            ik_solver = InverseKinematicsSolver(robot, move_group, ikfast_fn, base_frame, robotA_tool.frame)
+        else:
+            raise ValueError('invalid ik engine name.')
+
+        ik_joints = joints_from_names(robot_uid, ik_joint_names)
+        tool_link = link_from_name(robot_uid, tool_link_name)
         ee_poses = compute_circle_path()
 
         if ik_solver is not None:
@@ -340,7 +343,7 @@ def test_ik(fixed_waam_setup, viewer, ik_engine):
         for p in ee_poses:
             frame_WCF = frame_from_pose(p)
             st_time = time.time()
-            qs = client.inverse_kinematics(frame_WCF, group=move_group)
+            qs = client.inverse_kinematics(robot, frame_WCF, group=move_group)
             ik_time += elapsed_time(st_time)
 
             if qs is None:
@@ -356,15 +359,17 @@ def test_ik(fixed_waam_setup, viewer, ik_engine):
                     for q in randomize(qs):
                         if q is not None:
                             assert isinstance(q, Configuration)
-                            set_joint_positions(client.robot_uid, ik_joints, q.values)
-                            tcp_pose = get_link_pose(client.robot_uid, tool_link)
+                            client.set_robot_configuration(robot, q)
+                            # set_joint_positions(robot_uid, ik_joints, q.values)
+                            tcp_pose = get_link_pose(robot_uid, tool_link)
                             assert_almost_equal(tcp_pose[0], p[0], decimal=3)
                             assert_almost_equal(quat_angle_between(tcp_pose[1], p[1]), 0, decimal=3)
             elif isinstance(qs, Configuration):
                 # cprint('Single solutions found!', 'green')
                 q = qs
-                set_joint_positions(client.robot_uid, ik_joints, q.values)
-                tcp_pose = get_link_pose(client.robot_uid, tool_link)
+                # set_joint_positions(robot_uid, ik_joints, q.values)
+                client.set_robot_configuration(robot, q)
+                tcp_pose = get_link_pose(robot_uid, tool_link)
                 assert_almost_equal(tcp_pose[0], p[0], decimal=3)
                 assert_almost_equal(quat_angle_between(tcp_pose[1], p[1]), 0, decimal=3)
             else:
@@ -378,18 +383,20 @@ def test_ik(fixed_waam_setup, viewer, ik_engine):
 @pytest.mark.client
 def test_client(fixed_waam_setup, viewer):
     # https://github.com/gramaziokohler/algorithmic_details/blob/e1d5e24a34738822638a157ca29a98afe05beefd/src/algorithmic_details/accessibility/reachability_map.py#L208-L231
-    urdf_filename, robot, _ = fixed_waam_setup
+    urdf_filename, semantics, _ = fixed_waam_setup
     move_group = 'robotA'
-    tool_link_name = robot.get_end_effector_link_name(group=move_group)
 
-    with PyBulletClient(viewer=viewer) as client:
-        client.load_robot_from_urdf(urdf_filename)
+    with PyChoreoClient(viewer=viewer) as client:
+        robot = client.load_robot(urdf_filename)
+        robot.semantics = semantics
+        robot_uid = client.get_robot_pybullet_uid(robot)
+        tool_link_name = robot.get_end_effector_link_name(group=move_group)
 
         # * draw EE pose
-        tool_link = link_from_name(client.robot_uid, tool_link_name)
-        tcp_pose = get_link_pose(client.robot_uid, tool_link)
+        tool_link = link_from_name(robot_uid, tool_link_name)
+        tcp_pose = get_link_pose(robot_uid, tool_link)
         draw_pose(tcp_pose)
 
-        assert client.robot_uid in get_bodies()
+        assert robot_uid in get_bodies()
 
         wait_if_gui()

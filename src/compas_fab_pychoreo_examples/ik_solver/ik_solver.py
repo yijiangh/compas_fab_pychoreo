@@ -11,7 +11,6 @@ class InverseKinematicsSolver(object):
     def __init__(self, robot, group, function, base_frame=None, tool_frame=None):
         # TODO create with class `Tool`, not tool_frame!!
 
-        self.robot = robot
         self.group = group
         self.joints = robot.get_configurable_joints(group=group)
         self.joint_names = robot.get_configurable_joint_names(group=group)
@@ -63,7 +62,8 @@ class InverseKinematicsSolver(object):
         """
         """
 
-        def inverse_kinematics(frame_WCF, start_configuration=None, group=None, options=None):
+        def inverse_kinematics(robot, frame_WCF, start_configuration=None, group=None, options=None):
+            # TODO use input here instead of class attributes
                             #    avoid_collisions=True, constraints=None,
                             #    attempts=8, attached_collision_meshes=None,
                             #    return_full_configuration=False,
@@ -80,9 +80,9 @@ class InverseKinematicsSolver(object):
             return_idxs = is_valid_option(options, 'return_idxs', None)
 
             if start_configuration:
-                base_frame = self.robot.get_base_frame(self.group, full_configuration=start_configuration)
+                base_frame = robot.get_base_frame(self.group, full_configuration=start_configuration)
                 self.update_base_transformation(base_frame)
-                # in_collision = self.robot.client.configuration_in_collision(start_configuration)
+                # in_collision = robot.client.configuration_in_collision(start_configuration)
                 # if in_collision:
                 #    raise ValueError("Start configuration already in collision")
 
@@ -111,8 +111,8 @@ class InverseKinematicsSolver(object):
             self.try_to_fit_configurations_between_bounds(configurations)
             # check collisions for all configurations (sets those to `None` that are not working)
             # TODO defer collision checking
-            # if self.robot.client:
-            #     self.robot.client.check_configurations_for_collision(configurations)
+            # if robot.client:
+            #     robot.client.check_configurations_for_collision(configurations)
 
             if return_closest_to_start:
                 diffs = [c.max_difference(start_configuration) for c in configurations if c is not None]

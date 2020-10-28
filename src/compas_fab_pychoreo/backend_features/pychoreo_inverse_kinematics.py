@@ -14,11 +14,13 @@ class PyChoreoInverseKinematics(InverseKinematics):
     def __init__(self, client):
         self.client = client
 
-    def inverse_kinematics(self, frame_WCF, start_configuration=None, group=None, options=None):
+    def inverse_kinematics(self, robot, frame_WCF, start_configuration=None, group=None, options=None):
         """Calculate the robot's inverse kinematic for a given frame.
 
         Parameters
         ----------
+        robot : :class:`compas_fab.robots.Robot`
+            The robot instance for which inverse kinematics is being calculated.
         frame_WCF: :class:`compas.geometry.Frame`
             The frame to calculate the inverse for.
         start_configuration: :class:`compas_fab.robots.Configuration`, optional
@@ -56,9 +58,7 @@ class PyChoreoInverseKinematics(InverseKinematics):
         # return_closest_to_start = is_valid_option(options, 'return_closest_to_start', False)
         # cull = is_valid_option(options, 'cull', True)
 
-        robot_uid = self.client.robot_uid
-        robot = self.client.compas_fab_robot
-
+        robot_uid = robot.attributes['pybullet_uid']
         ik_joint_names = robot.get_configurable_joint_names(group=group)
         ik_joints = joints_from_names(robot_uid, ik_joint_names)
         tool_link_name = robot.get_end_effector_link_name(group=group)
@@ -75,7 +75,7 @@ class PyChoreoInverseKinematics(InverseKinematics):
 
             # if group not in self.client.planner.ik_fn_from_group:
             # use default ik fn
-            conf_vals = self._compute_ik(ik_joints, tool_link, target_pose, max_iterations)
+            conf_vals = self._compute_ik(robot_uid, ik_joints, tool_link, target_pose, max_iterations)
             joint_types = robot.get_joint_types_by_names(ik_joint_names)
             configurations = [Configuration(values=conf_val, types=joint_types, joint_names=ik_joint_names) \
                 for conf_val in conf_vals if conf_val is not None]
@@ -84,15 +84,14 @@ class PyChoreoInverseKinematics(InverseKinematics):
             #     configurations = self.client.planner.ik_fn_from_group[group](frame_WCF, group=group, options=options)
 
             if avoid_collisions:
-                configurations = [conf for conf in configurations if not self.client.configuration_in_collision(conf, group=group)]
+                configurations = [conf for conf in configurations if not self.client.check_collisions(robot, conf)]
 
         if return_all:
             return configurations
         else:
             return configurations[0] if len(configurations) > 0 else None
 
-    def _compute_ik(self, ik_joints, tool_link, target_pose, max_iterations=8):
-        robot_uid = self.client.robot_uid
+    def _compute_ik(self, robot_uid, ik_joints, tool_link, target_pose, max_iterations=8):
         for _ in range(max_iterations):
             # TODO: stop is no progress
             # TODO: stop if collision or invalid joint limits

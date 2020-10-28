@@ -15,11 +15,13 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
     def __init__(self, client):
         self.client = client
 
-    def plan_cartesian_motion(self, frames_WCF, start_configuration=None, group=None, options=None):
+    def plan_cartesian_motion(self, robot, frames_WCF, start_configuration=None, group=None, options=None):
         """Calculates a cartesian motion path (linear in tool space).
 
         Parameters
         ----------
+        robot : :class:`compas_fab.robots.Robot`
+            The robot instance for which the motion path is being calculated.
         frames_WCF: list of :class:`compas.geometry.Frame`
             The frames through which the path is defined.
         start_configuration: :class:`Configuration`, optional
@@ -59,8 +61,7 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
         :class:`compas_fab.robots.JointTrajectory`
             The calculated trajectory.
         """
-        robot_uid = self.client.robot_uid
-        robot = self.client.compas_fab_robot
+        robot_uid = robot.attributes['pybullet_uid']
 
         # * convert link/joint names to pybullet indices
         base_link_name = robot.get_base_link_name(group=group)
@@ -88,7 +89,7 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
             ee_poses.extend(c_interp_poses)
 
         # * build collision fn
-        attachments = values_as_list(self.client.attachments)
+        attachments = values_as_list(self.client.pychoreo_attachments)
         collision_fn = PyChoreoConfigurationCollisionChecker(self.client)._get_collision_fn(robot, joint_names, options=options)
 
         with WorldSaver():
@@ -98,7 +99,7 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
                 set_joint_positions(robot_uid, ik_joints, start_conf_vals)
 
             if planner_id == 'IterativeIK':
-                path = plan_cartesian_motion(self.client.robot_uid, base_link, tool_link, ee_poses)
+                path = plan_cartesian_motion(robot_uid, base_link, tool_link, ee_poses)
                 # collision checking is not included in the default Cartesian planning
                 if path is not None and avoid_collisions:
                     for conf_val in path:
@@ -113,7 +114,7 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
                 # collision checking is turned off because collision checking is handled inside LadderGraph planner
                 ik_options = {'avoid_collisions' : False, 'return_all' : True}
                 def sample_ik_fn(pose):
-                    configurations = self.client.inverse_kinematics(frame_from_pose(pose), options=ik_options)
+                    configurations = self.client.inverse_kinematics(robot, frame_from_pose(pose), options=ik_options)
                     return [configuration.values for configuration in configurations if configuration is not None]
 
                 # convert ee_variant_fn
@@ -124,7 +125,7 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
                 else:
                     sample_ee_fn = None
 
-                path, cost = plan_cartesian_motion_lg(self.client.robot_uid, ik_joints, ee_poses, sample_ik_fn, collision_fn, \
+                path, cost = plan_cartesian_motion_lg(robot_uid, ik_joints, ee_poses, sample_ik_fn, collision_fn, \
                     jump_threshold=jump_threshold, sample_ee_fn=sample_ee_fn)
 
                 print('Ladder graph cost: {}'.format(cost))
