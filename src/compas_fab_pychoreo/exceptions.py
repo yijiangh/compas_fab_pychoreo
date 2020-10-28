@@ -1,5 +1,6 @@
-from compas_fab.backends.exceptions import BackendError
+# TODO remove this file
 
+from compas_fab.backends.exceptions import BackendError
 
 class PyBulletError(BackendError):
     def __init__(self, message):

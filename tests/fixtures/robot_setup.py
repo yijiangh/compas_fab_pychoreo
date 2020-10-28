@@ -57,8 +57,8 @@ def abb_irb4600_40_255_setup():
     srdf_filename = os.path.join(data_dir, 'abb_fixed_waam', "srdf", "abb_irb4600_40_255.srdf")
     model = RobotModel.from_urdf_file(urdf_filename)
     semantics = RobotSemantics.from_srdf_file(srdf_filename, model)
-    robot = Robot(model, semantics=semantics)
-    return urdf_filename, robot
+    # robot = Robot(model, semantics=semantics)
+    return urdf_filename, semantics
 
 @pytest.fixture
 def rfl_setup():

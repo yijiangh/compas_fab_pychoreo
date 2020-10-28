@@ -16,22 +16,27 @@ class PychoreoPlanMotion(PlanMotion):
     def __init__(self, client):
         self.client = client
 
-    def plan_motion(self, end_configuration, start_configuration=None, group=None, options=None):
-        """Calculates a cartesian motion path (linear in tool space).
+    def plan_motion(self, robot, goal_constraints, start_configuration=None, group=None, options=None):
+        """Calculates a motion path.
 
         Parameters
         ----------
-        frames_WCF: list of :class:`compas.geometry.Frame`
-            The frames through which the path is defined.
-        start_configuration: :class:`Configuration`, optional
+        robot : :class:`compas_fab.robots.Robot`
+            The robot instance for which the motion path is being calculated.
+        goal_constraints: list of :class:`compas_fab.robots.Constraint`
+            The goal to be achieved, defined in a set of constraints.
+            Constraints can be very specific, for example defining value domains
+            for each joint, such that the goal configuration is included,
+            or defining a volume in space, to which a specific robot link (e.g.
+            the end-effector) is required to move to.
+        start_configuration: :class:`compas_fab.robots.Configuration`, optional
             The robot's full configuration, i.e. values for all configurable
             joints of the entire robot, at the starting position.
         group: str, optional
-            The planning group used for calculation.
-        options: dict, optional
+            The name of the group to plan for.
+        options : dict, optional
             Dictionary containing kwargs for arguments specific to
             the client being queried.
-
             - ``"avoid_collisions"``: (:obj:`bool`, optional)
               Whether or not to avoid collisions. Defaults to ``True``.
 
@@ -44,15 +49,12 @@ class PychoreoPlanMotion(PlanMotion):
               If this threshold is ``0``, 'jumps' might occur, resulting in an invalid
               cartesian path. Defaults to :math:`\\pi / 2`.
 
-              # TODO: JointConstraint
-
         Returns
         -------
         :class:`compas_fab.robots.JointTrajectory`
             The calculated trajectory.
         """
-        robot_uid = self.client.robot_uid
-        robot = self.client.compas_fab_robot
+        robot_uid = robot.attributes['pybullet_uid']
 
         # * parse options
         diagnosis = is_valid_option(options, 'diagnosis', False)
@@ -77,10 +79,11 @@ class PychoreoPlanMotion(PlanMotion):
             sample_fn = get_sample_fn(robot_uid, ik_joints, custom_limits=custom_limits)
             distance_fn = get_distance_fn(robot_uid, ik_joints, weights=weights)
             extend_fn = get_extend_fn(robot_uid, ik_joints, resolutions=resolutions)
-            collision_fn = PybulletConfigurationCollisionChecker(self.client)._get_collision_fn(group=group, options=options)
+            options['robot'] = robot
+            collision_fn = PychoreoConfigurationCollisionChecker(self.client)._get_collision_fn(group=group, options=options)
 
             start_conf = get_joint_positions(robot_uid, ik_joints)
-            end_conf = end_configuration.values
+            end_conf = self._joint_values_from_joint_constraints(joint_names, goal_constraints)
             assert len(ik_joints) == len(end_conf)
 
             if not check_initial_end(start_conf, end_conf, collision_fn, diagnosis=diagnosis):
@@ -100,3 +103,15 @@ class PychoreoPlanMotion(PlanMotion):
             trajectory = JointTrajectory(trajectory_points=jt_traj_pts,
                 joint_names=joint_names, start_configuration=start_configuration, fraction=1.0)
             return trajectory
+
+    def _joint_values_from_joint_constraints(self, joint_names, constraints):
+        # extract joint values from constraints using joint_names
+        joint_vals = []
+        for name in joint_names:
+            for constr in constraints:
+                if constr.joint_name == name and constr.type == constr.JOINT:
+                    joint_vals.append(constr.value)
+                    break
+            else:
+                assert False, 'Joint name {} not found in constraints {}'.format(name, constraints)
+        return joint_vals

@@ -11,7 +11,7 @@ import cProfile
 import pstats
 
 from compas.datastructures import Mesh
-from compas_fab.robots import Configuration, AttachedCollisionMesh, CollisionMesh
+from compas_fab.robots import Configuration, AttachedCollisionMesh, CollisionMesh, JointConstraint
 
 from pybullet_planning import link_from_name, get_link_pose, draw_pose, get_bodies, multiply, Pose, Euler, set_joint_positions, \
     joints_from_names, quat_angle_between, get_collision_fn, create_obj, unit_pose
@@ -22,7 +22,7 @@ from pybullet_planning import randomize, elapsed_time
 import ikfast_abb_irb4600_40_255
 
 from compas_fab.backends import PyBulletClient
-# // from compas_fab_pychoreo.client import PyBulletClient
+from compas_fab_pychoreo.client import PychoreoClient
 from compas_fab_pychoreo.planner import PychoreoPlanner
 from compas_fab_pychoreo.utils import values_as_list
 from compas_fab_pychoreo.conversions import pose_from_frame, frame_from_pose
@@ -59,23 +59,24 @@ def compute_trajectory_cost(trajectory, init_conf_val=np.zeros(6)):
 @pytest.mark.collision_check_abb
 def test_collision_checker(abb_irb4600_40_255_setup, itj_TC_PG500_cms, itj_beam_cm, column_obstacle_cm, base_plate_cm, viewer, diagnosis):
     # modified from https://github.com/yijiangh/pybullet_planning/blob/dev/tests/test_collisions.py
-    urdf_filename, robot = abb_irb4600_40_255_setup
+    urdf_filename, semantics = abb_irb4600_40_255_setup
 
     move_group = 'bare_arm'
-    ik_joint_names = robot.get_configurable_joint_names(group=move_group)
-    ik_joint_types = robot.get_joint_types_by_names(ik_joint_names)
-    flange_link_name = robot.get_end_effector_link_name(group=move_group)
-
     ee_touched_link_names = ['link_5', 'link_6']
 
-    ee_acms = [AttachedCollisionMesh(ee_cm, flange_link_name, ee_touched_link_names) for ee_cm in itj_TC_PG500_cms]
-    beam_acm = AttachedCollisionMesh(itj_beam_cm, flange_link_name, ee_touched_link_names)
-
-    with PyBulletClient(connection_type='gui' if viewer else 'direct') as client:
+    with PychoreoClient() as client:
         client.planner = PychoreoPlanner(client)
 
-        client.load_robot(urdf_filename)
-        client.compas_fab_robot = robot
+        robot = client.load_robot(urdf_filename)
+        robot.semantics = semantics
+        client.disabled_collisions = robot.semantics.disabled_collisions
+
+        ik_joint_names = robot.get_configurable_joint_names(group=move_group)
+        ik_joint_types = robot.get_joint_types_by_names(ik_joint_names)
+        flange_link_name = robot.get_end_effector_link_name(group=move_group)
+
+        ee_acms = [AttachedCollisionMesh(ee_cm, flange_link_name, ee_touched_link_names) for ee_cm in itj_TC_PG500_cms]
+        beam_acm = AttachedCollisionMesh(itj_beam_cm, flange_link_name, ee_touched_link_names)
 
         # * add static obstacles
         client.add_collision_mesh(base_plate_cm)
@@ -83,40 +84,40 @@ def test_collision_checker(abb_irb4600_40_255_setup, itj_TC_PG500_cms, itj_beam_
 
         # * add attachment
         for ee_acm in ee_acms:
-            client.add_attached_collision_mesh(ee_acm)
-        client.add_attached_collision_mesh(beam_acm)
+            client.add_attached_collision_mesh(ee_acm, {'robot': robot, 'mass': 1})
+        client.add_attached_collision_mesh(beam_acm, {'robot': robot, 'mass': 1})
 
         cprint('safe start conf', 'green')
         conf = Configuration(values=[0.]*6, types=ik_joint_types, joint_names=ik_joint_names)
-        assert not client.planner.configuration_in_collision(conf, group=move_group, options={'diagnosis':diagnosis})
+        assert not client.planner.configuration_in_collision(conf, group=move_group, options={'robot': robot, 'diagnosis':diagnosis})
 
         cprint('joint over limit', 'red')
         conf = Configuration(values=[0., 0., 1.5, 0, 0, 0], types=ik_joint_types, joint_names=ik_joint_names)
-        assert client.planner.configuration_in_collision(conf, group=move_group, options={'diagnosis':diagnosis})
+        assert client.planner.configuration_in_collision(conf, group=move_group, options={'robot': robot, 'diagnosis':diagnosis})
 
         cprint('attached beam-robot body self collision', 'red')
         vals = [0.73303828583761843, -0.59341194567807209, 0.54105206811824214, -0.17453292519943295, 1.064650843716541, 1.7278759594743862]
         conf = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
-        assert client.planner.configuration_in_collision(conf, group=move_group, options={'diagnosis':diagnosis})
+        assert client.planner.configuration_in_collision(conf, group=move_group, options={'robot': robot, 'diagnosis':diagnosis})
 
         cprint('attached beam-obstacle collision - column', 'red')
         vals = [0.087266462599716474, -0.19198621771937624, 0.20943951023931956, 0.069813170079773182, 1.2740903539558606, 0.069813170079773182]
         conf = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
-        assert client.planner.configuration_in_collision(conf, group=move_group, options={'diagnosis':diagnosis})
+        assert client.planner.configuration_in_collision(conf, group=move_group, options={'robot': robot, 'diagnosis':diagnosis})
 
         cprint('attached beam-obstacle collision - ground', 'red')
         vals = [-0.017453292519943295, 0.6108652381980153, 0.20943951023931956, 1.7627825445142729, 1.2740903539558606, 0.069813170079773182]
         conf = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
-        assert client.planner.configuration_in_collision(conf, group=move_group, options={'diagnosis':diagnosis})
+        assert client.planner.configuration_in_collision(conf, group=move_group, options={'robot': robot, 'diagnosis':diagnosis})
 
         cprint('robot link-obstacle collision - column', 'red')
         vals = [-0.41887902047863912, 0.20943951023931956, 0.20943951023931956, 1.7627825445142729, 1.2740903539558606, 0.069813170079773182]
         conf = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
-        assert client.planner.configuration_in_collision(conf, group=move_group, options={'diagnosis':diagnosis})
+        assert client.planner.configuration_in_collision(conf, group=move_group, options={'robot': robot, 'diagnosis':diagnosis})
         cprint('robot link-obstacle collision - ground', 'red')
         vals = [0.33161255787892263, 1.4660765716752369, 0.27925268031909273, 0.17453292519943295, 0.22689280275926285, 0.54105206811824214]
         conf = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
-        assert client.planner.configuration_in_collision(conf, group=move_group, options={'diagnosis':diagnosis})
+        assert client.planner.configuration_in_collision(conf, group=move_group, options={'robot': robot, 'diagnosis':diagnosis})
 
         # wait_if_gui()
 
@@ -240,21 +241,23 @@ def test_circle_cartesian(fixed_waam_setup, viewer, planner_ik_conf):
 @pytest.mark.plan_motion
 def test_plan_motion(abb_irb4600_40_255_setup, itj_TC_PG500_cms, itj_beam_cm, column_obstacle_cm, base_plate_cm, viewer, diagnosis):
     # modified from https://github.com/yijiangh/pybullet_planning/blob/dev/tests/test_collisions.py
-    urdf_filename, robot = abb_irb4600_40_255_setup
+    urdf_filename, semantics = abb_irb4600_40_255_setup
 
     move_group = 'bare_arm'
-    ik_joint_names = robot.get_configurable_joint_names(group=move_group)
-    ik_joint_types = robot.get_joint_types_by_names(ik_joint_names)
-    flange_link_name = robot.get_end_effector_link_name(group=move_group)
-
     ee_touched_link_names = ['link_5', 'link_6']
 
-    ee_acms = [AttachedCollisionMesh(ee_cm, flange_link_name, ee_touched_link_names) for ee_cm in itj_TC_PG500_cms]
-    beam_acm = AttachedCollisionMesh(itj_beam_cm, flange_link_name, ee_touched_link_names)
+    with PychoreoClient(viewer=viewer) as client:
+    # with PyBulletClient(connection_type='gui' if viewer else 'direct') as client:
+        robot = client.load_robot(urdf_filename)
+        robot.semantics = semantics
+        # client.disabled_collisions = robot.semantics.disabled_collisions
 
-    with PyBulletClient(viewer=viewer) as client:
-        client.load_robot_from_urdf(urdf_filename)
-        client.compas_fab_robot = robot
+        ik_joint_names = robot.get_configurable_joint_names(group=move_group)
+        ik_joint_types = robot.get_joint_types_by_names(ik_joint_names)
+        flange_link_name = robot.get_end_effector_link_name(group=move_group)
+
+        ee_acms = [AttachedCollisionMesh(ee_cm, flange_link_name, ee_touched_link_names) for ee_cm in itj_TC_PG500_cms]
+        beam_acm = AttachedCollisionMesh(itj_beam_cm, flange_link_name, ee_touched_link_names)
 
         # * add static obstacles
         client.add_collision_mesh(base_plate_cm)
@@ -262,22 +265,28 @@ def test_plan_motion(abb_irb4600_40_255_setup, itj_TC_PG500_cms, itj_beam_cm, co
 
         # * add attachment
         for ee_acm in ee_acms:
-            client.add_attached_collision_mesh(ee_acm)
-        client.add_attached_collision_mesh(beam_acm)
+            client.add_attached_collision_mesh(ee_acm, {'robot': robot, 'mass': 1})
+        client.add_attached_collision_mesh(beam_acm, {'robot': robot, 'mass': 1})
 
         vals = [-1.4660765716752369, -0.22689280275926285, 0.27925268031909273, 0.17453292519943295, 0.22689280275926285, -0.22689280275926285]
         start_conf = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
+        # client.set_robot_configuration(robot, start_conf, group=move_group)
+        # wait_if_gui()
 
         vals = [0.05235987755982989, -0.087266462599716474, -0.05235987755982989, 1.7104226669544429, 0.13962634015954636, -0.43633231299858238]
         end_conf = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
+        # client.set_robot_configuration(robot, end_conf, group=move_group)
+        # wait_if_gui()
 
         plan_options = {
             'diagnosis' : True,
             'resolutions' : 0.05
             }
 
+        goal_constraints = robot.constraints_from_configuration(end_conf, [0.01], [0.01])
+
         st_time = time.time()
-        trajectory = client.plan_motion(end_conf, start_configuration=start_conf, group=move_group, options=plan_options)
+        trajectory = client.plan_motion(robot, goal_constraints, start_configuration=start_conf, group=move_group, options=plan_options)
         print('Solving time: {}'.format(elapsed_time(st_time)))
 
         if trajectory is None:
@@ -285,16 +294,13 @@ def test_plan_motion(abb_irb4600_40_255_setup, itj_TC_PG500_cms, itj_beam_cm, co
             assert False, 'Client motion planner CANNOT find a plan!'
         else:
             cprint('Client motion planning find a plan!', 'green')
-            ik_joints = joints_from_names(client.robot_uid, ik_joint_names)
-            attachments = values_as_list(client.attachments)
             wait_if_gui('Start sim.')
             time_step = 0.03
             for traj_pt in trajectory.points:
-                set_joint_positions(client.robot_uid, ik_joints, traj_pt.values)
-                for attachment in attachments:
-                    attachment.assign()
+                client.set_robot_configuration(robot, traj_pt, group=move_group)
                 wait_for_duration(time_step)
-        wait_if_gui()
+
+        wait_if_gui("Finished.")
 
 #####################################
 
