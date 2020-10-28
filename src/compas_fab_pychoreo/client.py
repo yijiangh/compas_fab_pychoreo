@@ -1,3 +1,4 @@
+from collections import defaultdict
 from itertools import combinations
 from pybullet_planning import HideOutput
 from pybullet_planning import BASE_LINK, RED, GREEN, GREY
@@ -36,9 +37,9 @@ class PyChoreoClient(PyBulletClient):
         # this does not seem to work
         super(PyChoreoClient, self).__init__(connection_type='gui' if viewer else 'direct', verbose=verbose)
         self.planner = PyChoreoPlanner(self)
-        # attached object name => pybullet_planning `Attachment` object
+        # attached object name => a list of pybullet_planning `Attachment` object
         # notice that parent body (robot) info is stored inside Attachment
-        self.pychoreo_attachments = {}
+        self.pychoreo_attachments = defaultdict(list)
         self.extra_disabled_collision_link_ids = set()
 
     def get_robot_pybullet_uid(self, robot):
@@ -80,23 +81,23 @@ class PyChoreoClient(PyBulletClient):
 
         robot = options['robot']
         robot_uid = robot.attributes['pybullet_uid']
-        attached_constr_info = self.attached_collision_objects[name]
         tool_attach_link = link_from_name(robot_uid, attached_collision_mesh.link_name)
         ee_link_pose = get_link_pose(robot_uid, tool_attach_link)
-
-        body = attached_constr_info[0].body_id
         mass = is_valid_option(options, 'mass', STATIC_MASS)
         color = is_valid_option(options, 'color', GREEN)
 
-        # * update attachment collision links
-        for touched_link_name in attached_collision_mesh.touch_links:
-            self.extra_disabled_collision_link_ids.add(((robot_uid, link_from_name(robot_uid, touched_link_name)), (body, BASE_LINK)))
-        set_pose(body, ee_link_pose)
-        set_color(body, color)
-        attachment = create_attachment(robot_uid, tool_attach_link, body)
-        attachment.assign()
-        self.pychoreo_attachments[name] = attachment
-        return attachment
+        for constr_info in self.attached_collision_objects[name]:
+            # * update attachment collision links
+            body = constr_info.body_id
+            for touched_link_name in attached_collision_mesh.touch_links:
+                self.extra_disabled_collision_link_ids.add(((robot_uid, link_from_name(robot_uid, touched_link_name)), (body, BASE_LINK)))
+            set_pose(body, ee_link_pose)
+            set_color(body, color)
+            attachment = create_attachment(robot_uid, tool_attach_link, body)
+            attachment.assign()
+            self.pychoreo_attachments[name].append(attachment)
+
+        return self.pychoreo_attachments[name]
 
     def remove_attached_collision_mesh(self, name, options=None):
         self.planner.remove_attached_collision_mesh(self, name, options=options)
@@ -108,8 +109,9 @@ class PyChoreoClient(PyBulletClient):
     def set_robot_configuration(self, robot, configuration, group=None):
         # wrapper for PyBulletClient's `set_robot_configuration` so that all the attachments are updated as well
         super(PyChoreoClient, self).set_robot_configuration(robot, configuration, group=group)
-        for attachment in self.pychoreo_attachments.values():
-            attachment.assign()
+        for attachments in self.pychoreo_attachments.values():
+            for attachment in attachments:
+                attachment.assign()
 
     # def configuration_in_collision(self, *args, **kwargs):
     def check_collisions(self, *args, **kwargs):

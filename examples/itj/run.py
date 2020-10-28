@@ -293,17 +293,18 @@ def compute_movement(json_path_in=JSON_PATH_IN, json_out_dir=JSON_OUT_DIR, viewe
         # sanity check, is beam colliding with the obstacles?
         with WorldSaver():
             env_obstacles = values_as_list(client.collision_objects)
-            for attachment in client.pychoreo_attachments.values():
-                body_collision_fn = get_floating_body_collision_fn(attachment.child, obstacles=env_obstacles)
+            for attachments in client.pychoreo_attachments.values():
+                for attachment in attachments:
+                    body_collision_fn = get_floating_body_collision_fn(attachment.child, obstacles=env_obstacles)
 
-                inclamp_approach_pose = body_from_end_effector(cart_key_poses[0], attachment.grasp_pose)
-                if body_collision_fn(inclamp_approach_pose, diagnosis=True):
-                    cprint('wcf_inclamp_approach_pose in collision!', 'red')
-                    wait_for_user()
-                # final_retract_pose = body_from_end_effector(cart_key_poses[3], attachment.grasp_pose)
-                # if body_collision_fn(final_retract_pose, diagnosis=True):
-                #     cprint('final_retract_pose in collision!', 'red')
-                #     wait_for_user()
+                    inclamp_approach_pose = body_from_end_effector(cart_key_poses[0], attachment.grasp_pose)
+                    if body_collision_fn(inclamp_approach_pose, diagnosis=True):
+                        cprint('wcf_inclamp_approach_pose in collision!', 'red')
+                        wait_for_user()
+                    # final_retract_pose = body_from_end_effector(cart_key_poses[3], attachment.grasp_pose)
+                    # if body_collision_fn(final_retract_pose, diagnosis=True):
+                    #     cprint('final_retract_pose in collision!', 'red')
+                    #     wait_for_user()
             wait_if_gui('Check the inclamp approach pose.')
 
         # 50 mm/s cartesian
@@ -493,8 +494,9 @@ def compute_movement(json_path_in=JSON_PATH_IN, json_out_dir=JSON_OUT_DIR, viewe
                 # set_joint_positions(robot_uid, traj_joints, traj_pt.scaled(MIL2M).values)
                 set_joint_positions(robot_uid, traj_joints, traj_pt.values)
                 traj_pt.scale(1/MIL2M)
-                for _, attach in client.pychoreo_attachments.items():
-                    attach.assign()
+                for _, attachs in client.pychoreo_attachments.items():
+                    for attach in attachs:
+                        attach.assign()
                 if debug:
                     wait_if_gui('sim transit.')
                 # print(traj_pt)
