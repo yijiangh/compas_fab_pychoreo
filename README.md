@@ -6,4 +6,15 @@
 
 An experimental package containing research prototpyes to integrate more planning functionalities to `compas_fab`.
 
+## Installation
+
+```bash
+# don't forget to activate conda environment if you are using one
+$ git clone --recursive https://github.com/yijiangh/compas_fab_pychoreo.git
+$ cd compas_fab_pychoreo
+$ git submodule update --init --recursive
+```
+
+## Documentation
+
 A development journal can be found [here](https://docs.google.com/document/d/1iWSzxXZkS72vfJJMGflXAZhpGFig4QMZsQWk8Bve9YA/edit?usp=sharing).

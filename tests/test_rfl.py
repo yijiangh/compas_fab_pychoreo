@@ -18,7 +18,7 @@ from pybullet_planning import link_from_name, get_link_pose, draw_pose, get_bodi
     joints_from_names, quat_angle_between, get_collision_fn, create_obj, unit_pose, set_camera_pose
 from pybullet_planning import wait_if_gui, wait_for_duration
 from pybullet_planning import plan_cartesian_motion, plan_cartesian_motion_lg
-from pybullet_planning import randomize, elapsed_time
+from pybullet_planning import randomize, elapsed_time, GREY
 
 # from compas_fab.backends import PyBulletClient
 from compas_fab_pychoreo.client import PyChoreoClient
@@ -93,6 +93,7 @@ def test_collision_checker(rfl_setup, itj_TC_PG500_cms, itj_beam_cm, viewer, dia
     move_group = 'robot12_eaYZ'
 
     with PyChoreoClient(viewer=viewer) as client:
+        cprint(urdf_filename, 'green')
         robot = client.load_robot(urdf_filename)
         robot.semantics = semantics
         robot_uid = client.get_robot_pybullet_uid(robot)
@@ -117,13 +118,9 @@ def test_collision_checker(rfl_setup, itj_TC_PG500_cms, itj_beam_cm, viewer, dia
         r11_start_conf_vals = np.array([22700.0, 0.0, -4900.0, 0.0, -80.0, 65.0, 65.0, 20.0, -20.0])
         r12_start_conf_vals = np.array([-4056.0883789999998, -4000.8486330000001, 0.0, -22.834741999999999, -30.711554, 0.0, 57.335655000000003, 0.0])
         full_start_conf = to_rlf_robot_full_conf(r11_start_conf_vals, r12_start_conf_vals)
-        full_joints = joints_from_names(robot_uid, full_start_conf.joint_names)
+        # full_joints = joints_from_names(robot_uid, full_start_conf.joint_names)
 
         client.set_robot_configuration(robot, full_start_conf)
-
-        # # * add static obstacles
-        # for o_cm in itj_rfl_obstacle_cms:
-        #     client.add_collision_mesh(o_cm)
 
         # # * add attachment
         for ee_acm in ee_acms:

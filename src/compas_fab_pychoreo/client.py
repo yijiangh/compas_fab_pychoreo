@@ -1,6 +1,6 @@
 from itertools import combinations
 from pybullet_planning import HideOutput
-from pybullet_planning import BASE_LINK, RED, GREEN
+from pybullet_planning import BASE_LINK, RED, GREEN, GREY
 from pybullet_planning import get_link_pose, link_from_name, get_disabled_collisions
 from pybullet_planning import set_joint_positions
 from pybullet_planning import joints_from_names
@@ -13,6 +13,7 @@ from pybullet_planning import draw_pose, get_body_body_disabled_collisions
 from compas_fab.backends import PyBulletClient
 from compas_fab_pychoreo.planner import PyChoreoPlanner
 from compas_fab_pychoreo.utils import is_valid_option
+from compas_fab.backends.pybullet.const import STATIC_MASS
 
 from .exceptions import CollisionError
 from .exceptions import InverseKinematicsError
@@ -51,6 +52,14 @@ class PyChoreoClient(PyBulletClient):
 
     ###########################################################
 
+    def add_collision_mesh(self, collision_mesh, options=None):
+        # add color
+        self.planner.add_collision_mesh(collision_mesh, options=options)
+        color = is_valid_option(options, 'color', GREY)
+        name = collision_mesh.id
+        for body in self.collision_objects[name]:
+            set_color(body, color)
+
     def add_attached_collision_mesh(self, attached_collision_mesh, options=None):
         """Adds an attached collision object to the planning scene.
 
@@ -76,6 +85,7 @@ class PyChoreoClient(PyBulletClient):
         ee_link_pose = get_link_pose(robot_uid, tool_attach_link)
 
         body = attached_constr_info[0].body_id
+        mass = is_valid_option(options, 'mass', STATIC_MASS)
         color = is_valid_option(options, 'color', GREEN)
 
         # * update attachment collision links

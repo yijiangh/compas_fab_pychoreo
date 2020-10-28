@@ -31,15 +31,16 @@ from pybullet_planning import randomize, elapsed_time, apply_alpha, RED, BLUE, Y
 from pybullet_planning import get_sample_fn, link_from_name, sample_tool_ik, interpolate_poses, get_joint_positions, pairwise_collision, \
     get_floating_body_collision_fn
 
-from compas_fab_pychoreo.backend_features.pybullet_configuration_collision_checker import PybulletConfigurationCollisionChecker
-from compas_fab_pychoreo.client import PyBulletClient
+from compas_fab_pychoreo.backend_features.pychoreo_configuration_collision_checker import PyChoreoConfigurationCollisionChecker
+from compas_fab_pychoreo.client import PyChoreoClient
 from compas_fab_pychoreo.conversions import pose_from_frame, frame_from_pose
 from compas_fab_pychoreo_examples.ik_solver import ik_abb_irb4600_40_255, InverseKinematicsSolver, get_ik_fn_from_ikfast
 from compas_fab_pychoreo.utils import divide_list_chunks, values_as_list
 
-from parsing import rfl_setup, itj_TC_PG500_cms, itj_TC_PG1000_cms, itj_rfl_obstacle_cms, itj_rfl_pipe_cms
-from utils import to_rlf_robot_full_conf, rfl_camera, notify, R11_START_CONF_VALS, R12_START_CONF_VALS
+from .parsing import rfl_setup, itj_TC_PG500_cms, itj_TC_PG1000_cms, itj_rfl_obstacle_cms, itj_rfl_pipe_cms
+from .utils import to_rlf_robot_full_conf, rfl_camera, notify, R11_START_CONF_VALS, R12_START_CONF_VALS
 
+# unit conversion
 MIL2M = 1e-3
 
 # RETREAT_DISTANCE = 0.05
@@ -69,34 +70,19 @@ JSON_PATH_IN = os.path.join(HERE, 'data', "rfl_assembly_process.json")
 JSON_OUT_DIR = os.path.join(HERE, 'results')
 
 R11_INTER_CONF_VALS = [21000.0, 0.0, -4900.0, 0.0, -80.0, 65.0, 65.0, 20.0, -20.0]
-# R12_INTER_CONF_VALS = [-11753.0, -4915.0, 0.0, -45.0, 16.0, 10.0, 19.0, 0.0]
 R12_INTER_CONF_VALS = [-4056.0883789999998, -4000.8486330000001, 0.0, -22.834741999999999, -30.711554, 0.0, 57.335655000000003, 0.0]
+# | [-11753.0, -4915.0, 0.0, -45.0, 16.0, 10.0, 19.0, 0.0]
 
 def convert_r12_mil_deg(conf_vals, scale=MIL2M):
+    # convert degree to radians for revoluted joints
     return [conf_vals[i]*scale for i in range(0, 2)] + [rad(conf_vals[i]) for i in range(2, 8)]
 
 def compute_movement(json_path_in=JSON_PATH_IN, json_out_dir=JSON_OUT_DIR, viewer=False, debug=False, write=False, \
     seq_i=1, parse_transfer_motion=False, disable_attachment=False, disable_env=False):
     # * Connect to path planning backend and initialize robot parameters
-    urdf_filename, robot = rfl_setup()
+    urdf_filename, semantics = rfl_setup()
 
     arm_move_group = 'robot12'
-    ik_base_link_name = robot.get_base_link_name(group=arm_move_group)
-    ik_joint_names = robot.get_configurable_joint_names(group=arm_move_group)
-    ik_joint_types = robot.get_joint_types_by_names(ik_joint_names)
-    tool_link_name = robot.get_end_effector_link_name(group=arm_move_group)
-
-    yzarm_move_group = 'robot12_eaYZ'
-    yzarm_joint_names = robot.get_configurable_joint_names(group=yzarm_move_group)
-    yzarm_joint_types = robot.get_joint_types_by_names(yzarm_joint_names)
-
-    gantry_x_joint_name = 'bridge1_joint_EA_X'
-    gantry_joint_names = []
-    for jt_n, jt_t in zip(yzarm_joint_names, yzarm_joint_types):
-        if jt_t == 2:
-            gantry_joint_names.append(jt_n)
-    flange_link_name = robot.get_end_effector_link_name(group=yzarm_move_group)
-
     # * Load process from file
     with open(json_path_in, 'r') as f:
         json_str = f.read()
@@ -125,12 +111,30 @@ def compute_movement(json_path_in=JSON_PATH_IN, json_out_dir=JSON_OUT_DIR, viewe
     attached_cm_pipe2 = AttachedCollisionMesh(pipe_cms[0], 'robot12_link_2', ['robot12_link_2'])
     attached_cm_pipe3 = AttachedCollisionMesh(pipe_cms[1], 'robot12_link_3', ['robot12_link_3'])
 
-    with PyBulletClient(viewer=viewer) as client:
-        client.load_robot_from_urdf(urdf_filename)
-        client.compas_fab_robot = robot
-        robot_uid = client.robot_uid
+    with PyChoreoClient(viewer=viewer) as client:
+        robot = client.load_robot_from_urdf(urdf_filename)
+        robot.semantics = semantics
+        # robot's unique body index in pybullet
+        robot_uid = client.get_robot_pybullet_uid(robot)
 
-        # joint indices
+        # * link/joint info
+        ik_base_link_name = robot.get_base_link_name(group=arm_move_group)
+        ik_joint_names = robot.get_configurable_joint_names(group=arm_move_group)
+        ik_joint_types = robot.get_joint_types_by_names(ik_joint_names)
+        tool_link_name = robot.get_end_effector_link_name(group=arm_move_group)
+
+        yzarm_move_group = 'robot12_eaYZ'
+        yzarm_joint_names = robot.get_configurable_joint_names(group=yzarm_move_group)
+        yzarm_joint_types = robot.get_joint_types_by_names(yzarm_joint_names)
+
+        gantry_x_joint_name = 'bridge1_joint_EA_X'
+        gantry_joint_names = []
+        for jt_n, jt_t in zip(yzarm_joint_names, yzarm_joint_types):
+            if jt_t == 2:
+                gantry_joint_names.append(jt_n)
+        flange_link_name = robot.get_end_effector_link_name(group=yzarm_move_group)
+
+        # * joint indices in pybullet
         gantry_x_joint = joint_from_name(robot_uid, gantry_x_joint_name)
         gantry_joints = joints_from_names(robot_uid, gantry_joint_names)
         ik_base_link = link_from_name(robot_uid, ik_base_link_name)
@@ -138,6 +142,7 @@ def compute_movement(json_path_in=JSON_PATH_IN, json_out_dir=JSON_OUT_DIR, viewe
         ik_tool_link = link_from_name(robot_uid, tool_link_name)
         yzarm_joints = joints_from_names(robot_uid, yzarm_joint_names)
 
+        # * draw base frame and locate camera in pybullet
         draw_pose(unit_pose(), length=1.)
         cam = rfl_camera()
         set_camera_pose(cam['target'], cam['location'])
@@ -149,21 +154,24 @@ def compute_movement(json_path_in=JSON_PATH_IN, json_out_dir=JSON_OUT_DIR, viewe
 
         # * attachments
         for ee_acm in ee_acms:
-            client.add_attached_collision_mesh(ee_acm, YELLOW)
+            # ! note that options must contain 'robot' and 'mass' entries
+            client.add_attached_collision_mesh(ee_acm, options={'robot': robot, 'mass': 1, 'color': YELLOW})
         # pipe attachments
         # if not disable_attachment:
-        #     client.add_attached_collision_mesh(attached_cm_pipe2, BLUE)
-        #     client.add_attached_collision_mesh(attached_cm_pipe3, BLUE)
+        #     client.add_attached_collision_mesh(attached_cm_pipe2, options={'robot': robot, 'mass': 1, 'color': BLUE})
+        #     client.add_attached_collision_mesh(attached_cm_pipe3, options={'robot': robot, 'mass': 1, 'color': BLUE})
 
         # # * Add static collision mesh to planning scene
         if not disable_env:
             for o_cm in itj_rfl_obstacle_cms():
-                client.add_collision_mesh(o_cm, GREY)
+                client.add_collision_mesh(o_cm, {'color':GREY})
 
         # * collision sanity check
-        # start_confval = np.hstack([r12_start_conf_vals[:2]*1e-3, np.radians(r12_start_conf_vals[2:])])
-        # conf = Configuration(values=start_confval.tolist(), types=yzarm_joint_types, joint_names=yzarm_joint_names)
-        # assert not client.configuration_in_collision(conf, group=yzarm_move_group, options={'diagnosis':True})
+        start_confval = np.hstack([R12_START_CONF_VALS[:2]*1e-3, np.radians(R12_START_CONF_VALS[2:])])
+        conf = Configuration(values=start_confval.tolist(), types=yzarm_joint_types, joint_names=yzarm_joint_names)
+        assert not client.check_collisions(robot, conf, options={'diagnosis':True})
+        cprint('Valid initial conf.')
+        wait_if_gui()
 
         # * Individual process path planning
 
@@ -285,7 +293,7 @@ def compute_movement(json_path_in=JSON_PATH_IN, json_out_dir=JSON_OUT_DIR, viewe
         # sanity check, is beam colliding with the obstacles?
         with WorldSaver():
             env_obstacles = values_as_list(client.collision_objects)
-            for attachment in client.attachments.values():
+            for attachment in client.pychoreo_attachments.values():
                 body_collision_fn = get_floating_body_collision_fn(attachment.child, obstacles=env_obstacles)
 
                 inclamp_approach_pose = body_from_end_effector(cart_key_poses[0], attachment.grasp_pose)
@@ -485,7 +493,7 @@ def compute_movement(json_path_in=JSON_PATH_IN, json_out_dir=JSON_OUT_DIR, viewe
                 # set_joint_positions(robot_uid, traj_joints, traj_pt.scaled(MIL2M).values)
                 set_joint_positions(robot_uid, traj_joints, traj_pt.values)
                 traj_pt.scale(1/MIL2M)
-                for _, attach in client.attachments.items():
+                for _, attach in client.pychoreo_attachments.items():
                     attach.assign()
                 if debug:
                     wait_if_gui('sim transit.')

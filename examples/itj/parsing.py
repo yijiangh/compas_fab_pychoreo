@@ -36,13 +36,13 @@ def parse_collision_meshes_from_dir(dir_path, scale=1e-3):
 
 def rfl_setup():
     data_dir = os.path.abspath(os.path.join(HERE, "..", "..", "data", 'robots'))
+    # ! the original rfl.urdf use concave collision objects, over-conservative
     # urdf_filename = os.path.join(data_dir, 'rfl_description', 'rfl_description', "urdf", "rfl.urdf")
     urdf_filename = os.path.join(data_dir, 'rfl_description', 'rfl_description', "urdf", "rfl_pybullet.urdf")
     srdf_filename = os.path.join(data_dir, 'rfl_description', 'rfl_description', "urdf", "rfl.srdf")
     model = RobotModel.from_urdf_file(urdf_filename)
     semantics = RobotSemantics.from_srdf_file(srdf_filename, model)
-    robot = Robot(model, semantics=semantics)
-    return urdf_filename, robot
+    return urdf_filename, semantics
 
 def itj_TC_PG500_cms():
     tc_dir_path = os.path.abspath(os.path.join(HERE, "data", 'itj_TC'))

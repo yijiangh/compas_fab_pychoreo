@@ -11,6 +11,13 @@ and this project adheres to `Semantic Versioning <https://semver.org/spec/v2.0.0
 Unreleased
 ----------
 
+**Changed**
+
+* Changed client and backend_features to use `PyChoreoX` instead of `PybulletX`
+
+0.2.0
+----------
+
 See [Issue #1](https://github.com/yijiangh/compas_fab_pychoreo/issues/1) for a visual summary.
 
 **Added**
