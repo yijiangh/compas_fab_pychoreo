@@ -7,7 +7,7 @@ from compas_fab_pychoreo.utils import is_valid_option
 from compas_fab_pychoreo.backend_features.frame_variant_generator import FrameVariantGenerator
 
 # See also: # practical example: https://github.com/gramaziokohler/algorithmic_details/blob/e1d5e24a34738822638a157ca29a98afe05beefd/src/algorithmic_details/accessibility/reachability_map.py#L30
-class PychoreoFiniteEulerAngleVariantGenerator(FrameVariantGenerator):
+class PyChoreoFiniteEulerAngleVariantGenerator(FrameVariantGenerator):
     def __init__(self, options=None):
         self._options = options
 

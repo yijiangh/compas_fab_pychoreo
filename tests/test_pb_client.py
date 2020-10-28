@@ -22,11 +22,10 @@ from pybullet_planning import randomize, elapsed_time
 import ikfast_abb_irb4600_40_255
 
 from compas_fab.backends import PyBulletClient
-from compas_fab_pychoreo.client import PychoreoClient
-from compas_fab_pychoreo.planner import PychoreoPlanner
+from compas_fab_pychoreo.client import PyChoreoClient
 from compas_fab_pychoreo.utils import values_as_list
 from compas_fab_pychoreo.conversions import pose_from_frame, frame_from_pose
-from compas_fab_pychoreo.backend_features.pychoreo_frame_variant_generator import PychoreoFiniteEulerAngleVariantGenerator
+from compas_fab_pychoreo.backend_features.pychoreo_frame_variant_generator import PyChoreoFiniteEulerAngleVariantGenerator
 
 from compas_fab_pychoreo_examples.ik_solver import ik_abb_irb4600_40_255, InverseKinematicsSolver, get_ik_fn_from_ikfast
 
@@ -128,8 +127,8 @@ def test_frame_variant_generator(viewer):
     frame = frame_from_pose(pose)
 
     options = {'delta_yaw' : np.pi/6, 'yaw_sample_size' : 30}
-    frame_gen = PybulletFiniteEulerAngleVariantGenerator(options).generate_frame_variant
-    with PyBulletClient(viewer=viewer) as client:
+    frame_gen = PychoreoFiniteEulerAngleVariantGenerator(options).generate_frame_variant
+    with PychoreoClient(viewer=viewer) as client:
         draw_pose(pose)
         cnt = 0
         for frame in frame_gen(frame):
@@ -246,7 +245,7 @@ def test_plan_motion(abb_irb4600_40_255_setup, itj_TC_PG500_cms, itj_beam_cm, co
     move_group = 'bare_arm'
     ee_touched_link_names = ['link_5', 'link_6']
 
-    with PychoreoClient(viewer=viewer) as client:
+    with PyChoreoClient(viewer=viewer) as client:
     # with PyBulletClient(connection_type='gui' if viewer else 'direct') as client:
         robot = client.load_robot(urdf_filename)
         robot.semantics = semantics

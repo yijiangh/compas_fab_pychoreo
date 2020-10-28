@@ -10,9 +10,8 @@ from pybullet_planning import get_joint_names  # from pybullet_planning.interfac
 from pybullet_planning import set_pose, get_bodies, remove_body, create_attachment, set_color
 from pybullet_planning import draw_pose, get_body_body_disabled_collisions
 
-# // from compas_fab.backends.interfaces.client import ClientInterface
 from compas_fab.backends import PyBulletClient
-from compas_fab_pychoreo.planner import PychoreoPlanner
+from compas_fab_pychoreo.planner import PyChoreoPlanner
 from compas_fab_pychoreo.utils import is_valid_option
 
 from .exceptions import CollisionError
@@ -21,35 +20,19 @@ from .conversions import frame_from_pose
 from .conversions import pose_from_frame
 from .conversions import convert_mesh_to_body
 
-class PychoreoClient(PyBulletClient):
+class PyChoreoClient(PyBulletClient):
     """Interface to use pybullet as backend via the **pybullet_plannning**.
-
-    :class:`.PybulletClient` is a context manager type, so it's best
-    used in combination with the ``with`` statement to ensure
-    resource deallocation.
-
-    In compas_fab, multiple robots need to be assembled in a single URDF. And agent coordination is
-    done by working with manipulation groups.
-
-    https://github.com/compas-dev/compas_fab/blob/master/src/compas_fab/backends/interfaces/client.py
 
     Parameters
     ----------
     viewer : :obj:`bool`
         Enable pybullet GUI. Defaults to True.
 
-    Examples
-    --------
-    >>> from compas_fab.backends import PybulletClient
-    >>> with PybulletClient() as client:
-    ...     print('Connected: %s' % client.is_connected)
-    Connected: 1
-
     """
 
     def __init__(self, viewer=True, verbose=False):
-        super(PychoreoClient, self).__init__(connection_type='gui' if viewer else 'direct', verbose=verbose)
-        self.planner = PychoreoPlanner(self)
+        super(PyChoreoClient, self).__init__(connection_type='gui' if viewer else 'direct', verbose=verbose)
+        self.planner = PyChoreoPlanner(self)
         # attached object name => pybullet_planning `Attachment` object
         # notice that parent body (robot) info is stored inside Attachment
         self.pychoreo_attachments = {}
@@ -57,50 +40,20 @@ class PychoreoClient(PyBulletClient):
 
     ###########################################################
 
-    # def add_collision_mesh(self, collision_mesh, color=RED):
-    #     """
-    #     """
-    #     mesh = collision_mesh.mesh
-    #     name = collision_mesh.id
-    #     frame = collision_mesh.frame
-    #     body = convert_mesh_to_body(mesh, frame, name, color)
-    #     if name in self.collision_objects:
-    #         self.remove_collision_mesh(name)  # mimic ROS' behaviour: collision object with same name is replaced
-    #     self.collision_objects[name] = [body]
-    #     return self.collision_objects[name]
-
-    # def remove_collision_mesh(self, name):
-    #     if name in self.collision_objects:
-    #         for body in self.collision_objects[name]:
-    #             remove_body(body)
-    #         del self.collision_objects[name]
-    #     else:
-    #         LOG.warning("Collison object with name '{}' does not exist in scene.".format(name))
-
-    # def append_collision_mesh(self, collision_mesh, color=RED):
-    #     """
-    #     """
-    #     mesh = collision_mesh.mesh
-    #     name = collision_mesh.id
-    #     frame = collision_mesh.frame
-    #     if name in self.collision_objects:
-    #         body = convert_mesh_to_body(mesh, frame, name, color)
-    #         self.collision_objects[name].append(body)
-    #     else:
-    #         self.add_collision_mesh(collision_mesh, color)
-    #     return self.collision_objects[name]
-
     def add_attached_collision_mesh(self, attached_collision_mesh, options=None):
         """Adds an attached collision object to the planning scene.
 
+        Note: the pybullet fixed constraint only affects physics simulation by adding an artificial force,
+        Thus, by `set_joint_configuration` and `step_simulation`, the attached object will not move together.
+        Thus, we use `pybullet_planning`'s `Attachment` class to simplify kinematics.
+
         Parameters
         ----------
-        robot : robot model
         attached_collision_mesh : :class:`compas_fab.robots.AttachedCollisionMesh`
 
         Returns
         -------
-        attachment : pybullet_planning Attachment
+        attachment : a pybullet_planning `Attachment` object
         """
         name = attached_collision_mesh.collision_mesh.id
         self.planner.add_attached_collision_mesh(attached_collision_mesh, options=options)
@@ -111,8 +64,6 @@ class PychoreoClient(PyBulletClient):
         tool_attach_link = link_from_name(robot_uid, attached_collision_mesh.link_name)
         ee_link_pose = get_link_pose(robot_uid, tool_attach_link)
 
-        # mesh = attached_collision_mesh.collision_mesh.mesh
-        # frame = attached_collision_mesh.collision_mesh.frame
         body = attached_constr_info[0].body_id
         color = is_valid_option(options, 'color', GREEN)
 
@@ -134,7 +85,8 @@ class PychoreoClient(PyBulletClient):
     ########################################
 
     def set_robot_configuration(self, robot, configuration, group=None):
-        super(PychoreoClient, self).set_robot_configuration(robot, configuration, group=group)
+        # wrapper for PyBulletClient's `set_robot_configuration` so that all the attachments are updated as well
+        super(PyChoreoClient, self).set_robot_configuration(robot, configuration, group=group)
         for attachment in self.pychoreo_attachments.values():
             attachment.assign()
 

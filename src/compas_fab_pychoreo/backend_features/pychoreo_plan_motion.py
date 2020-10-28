@@ -7,12 +7,12 @@ from pybullet_planning import is_connected, get_bodies, WorldSaver, joints_from_
 from pybullet_planning import get_custom_limits, get_joint_positions, get_sample_fn, get_extend_fn, get_distance_fn, MAX_DISTANCE
 from pybullet_planning.motion_planners import birrt, lazy_prm
 from pybullet_planning import wait_if_gui
-from compas_fab_pychoreo.backend_features.pychoreo_configuration_collision_checker import PychoreoConfigurationCollisionChecker
+from compas_fab_pychoreo.backend_features.pychoreo_configuration_collision_checker import PyChoreoConfigurationCollisionChecker
 
 # from compas_fab_pychoreo.conversions import
 from compas_fab_pychoreo.utils import is_valid_option, values_as_list
 
-class PychoreoPlanMotion(PlanMotion):
+class PyChoreoPlanMotion(PlanMotion):
     def __init__(self, client):
         self.client = client
 
@@ -80,7 +80,7 @@ class PychoreoPlanMotion(PlanMotion):
             distance_fn = get_distance_fn(robot_uid, ik_joints, weights=weights)
             extend_fn = get_extend_fn(robot_uid, ik_joints, resolutions=resolutions)
             options['robot'] = robot
-            collision_fn = PychoreoConfigurationCollisionChecker(self.client)._get_collision_fn(group=group, options=options)
+            collision_fn = PyChoreoConfigurationCollisionChecker(self.client)._get_collision_fn(group=group, options=options)
 
             start_conf = get_joint_positions(robot_uid, ik_joints)
             end_conf = self._joint_values_from_joint_constraints(joint_names, goal_constraints)
@@ -92,6 +92,7 @@ class PychoreoPlanMotion(PlanMotion):
             #return plan_lazy_prm(start_conf, end_conf, sample_fn, extend_fn, collision_fn)
 
         if path is None:
+            # TODO use LOG
             print('No free motion found!')
             return None
         else:
