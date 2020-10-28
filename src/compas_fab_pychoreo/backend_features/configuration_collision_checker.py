@@ -11,22 +11,20 @@ class ConfigurationCollisionChecker(object):
     """
     __metaclass__ = ABCMeta
 
-    def __call__(self, configuration, group=None, options=None):
-        return self.configuration_in_collision(configuration, group, options)
+    def __call__(self, robot, configuration=None, options=None):
+        return self.check_collisions(robot, configuration, options)
 
     @abstractmethod
-    def configuration_in_collision(self, configuration, group=None, options=None):
+    def check_collisions(self, robot, configuration=None, options=None):
         """....
 
         Parameters
         ----------
+        robot : :class:`compas_fab.robots.Robot`
+            Robot whose configuration may be in collision.
         configuration : :class:`compas_fab.robots.Configuration`
-            TODO
-        group : str, optional
-            The name of the group to be used in the calculation.
-        options : dict, optional
-            Dictionary containing kwargs for arguments specific to
-            the client being queried.
+            Configuration to be checked for collisions.  If ``None`` is given, the current
+            configuration will be checked.  Defaults to ``None``.
 
         Returns
         -------

@@ -37,7 +37,8 @@ class PyChoreoPlanner(PlannerInterface):
 
     ###################################################
 
-    def configuration_in_collision(self, *args, **kwargs):
+    # def configuration_in_collision(self, *args, **kwargs):
+    def check_collisions(self, *args, **kwargs):
         return PyChoreoConfigurationCollisionChecker(self.client)(*args, **kwargs)
 
     ###################################################

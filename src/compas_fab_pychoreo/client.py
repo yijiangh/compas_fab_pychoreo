@@ -90,8 +90,9 @@ class PyChoreoClient(PyBulletClient):
         for attachment in self.pychoreo_attachments.values():
             attachment.assign()
 
-    def configuration_in_collision(self, *args, **kwargs):
-        return self.planner.configuration_in_collision(*args, **kwargs)
+    # def configuration_in_collision(self, *args, **kwargs):
+    def check_collisions(self, *args, **kwargs):
+        return self.planner.check_collisions(*args, **kwargs)
 
     ########################################
     # ignored collision info (similar to ROS's Allowed Collision Matrix)

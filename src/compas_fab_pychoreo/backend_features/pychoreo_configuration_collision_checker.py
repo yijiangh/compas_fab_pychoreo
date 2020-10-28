@@ -6,10 +6,12 @@ from pybullet_planning import set_joint_positions, get_link_pose, get_custom_lim
 from pybullet_planning import wait_if_gui, get_body_name, RED, BLUE, set_color
 
 class PyChoreoConfigurationCollisionChecker(ConfigurationCollisionChecker):
+    # TODO: overwrite PyBulletClient.check_collisions
     def __init__(self, client):
         self.client = client
 
-    def configuration_in_collision(self, configuration, group=None, options=None):
+    # def configuration_in_collision(self, configuration, group=None, options=None):
+    def check_collisions(self, robot, configuration=None, options=None):
         """[summary]
 
         Parameters
@@ -25,27 +27,23 @@ class PyChoreoConfigurationCollisionChecker(ConfigurationCollisionChecker):
         is_collision : bool
             True if in collision, False otherwise
         """
-        assert 'robot' in options, 'a robot model must be specified!'
+        assert len(configuration.joint_names) == len(configuration.values)
         diagnosis = is_valid_option(options, 'diagnosis', False)
-        collision_fn = self._get_collision_fn(group, options)
+        collision_fn = self._get_collision_fn(robot, configuration.joint_names, options)
         return collision_fn(configuration.values, diagnosis=diagnosis)
 
-    def _get_collision_fn(self, group=None, options=None):
+    def _get_collision_fn(self, robot, joint_names, options=None):
         """Returns a `pybullet_planning` collision_fn
         """
-        robot = options['robot']
         robot_uid = robot.attributes['pybullet_uid']
 
-        ik_joint_names = robot.get_configurable_joint_names(group=group)
-        ik_joints = joints_from_names(robot_uid, ik_joint_names)
+        # joint_names = robot.get_configurable_joint_names(group=group)
+        ik_joints = joints_from_names(robot_uid, joint_names)
 
-        # get disabled self-collision links (srdf)
         self_collisions = is_valid_option(options, 'self_collisions', True)
         obstacles = values_as_list(self.client.collision_objects)
-        # ConstraintInfo = namedtuple('ConstraintInfo', ['constraint_id', 'body_id', 'robot_uid'])
+        # // ConstraintInfo = namedtuple('ConstraintInfo', ['constraint_id', 'body_id', 'robot_uid'])
         attachments = values_as_list(self.client.pychoreo_attachments)
-
-        print('disabled_self_collision_links: ', self.client.get_self_collision_link_ids(robot))
 
         # TODO additional disabled collisions in options
         # option_disabled_linke_names = is_valid_option(options, 'extra_disabled_collisions', [])
@@ -54,7 +52,7 @@ class PyChoreoConfigurationCollisionChecker(ConfigurationCollisionChecker):
 
         collision_fn = get_collision_fn(robot_uid, ik_joints, obstacles=obstacles,
                                         attachments=attachments, self_collisions=self_collisions,
-                                        disabled_collisions=self.client.get_self_collision_link_ids(robot),
+                                        disabled_collisions=self.client.get_self_collision_link_ids(robot), # get disabled self-collision links (srdf)
                                         extra_disabled_collisions=self.client.extra_disabled_collision_link_ids, # | option_extra_disabled_collisions
                                         custom_limits={})
         return collision_fn

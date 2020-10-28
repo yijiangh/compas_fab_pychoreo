@@ -80,7 +80,7 @@ class PyChoreoPlanMotion(PlanMotion):
             distance_fn = get_distance_fn(robot_uid, ik_joints, weights=weights)
             extend_fn = get_extend_fn(robot_uid, ik_joints, resolutions=resolutions)
             options['robot'] = robot
-            collision_fn = PyChoreoConfigurationCollisionChecker(self.client)._get_collision_fn(group=group, options=options)
+            collision_fn = PyChoreoConfigurationCollisionChecker(self.client)._get_collision_fn(robot, joint_names, options=options)
 
             start_conf = get_joint_positions(robot_uid, ik_joints)
             end_conf = self._joint_values_from_joint_constraints(joint_names, goal_constraints)

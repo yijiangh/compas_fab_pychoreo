@@ -89,7 +89,7 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
 
         # * build collision fn
         attachments = values_as_list(self.client.attachments)
-        collision_fn = PyChoreoConfigurationCollisionChecker(self.client)._get_collision_fn(group=group, options=options)
+        collision_fn = PyChoreoConfigurationCollisionChecker(self.client)._get_collision_fn(robot, joint_names, options=options)
 
         with WorldSaver():
             # set to start conf

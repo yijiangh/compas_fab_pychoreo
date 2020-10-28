@@ -63,9 +63,7 @@ def test_collision_checker(abb_irb4600_40_255_setup, itj_TC_PG500_cms, itj_beam_
     move_group = 'bare_arm'
     ee_touched_link_names = ['link_5', 'link_6']
 
-    with PychoreoClient() as client:
-        client.planner = PychoreoPlanner(client)
-
+    with PyChoreoClient(viewer=viewer) as client:
         robot = client.load_robot(urdf_filename)
         robot.semantics = semantics
         client.disabled_collisions = robot.semantics.disabled_collisions
@@ -88,37 +86,37 @@ def test_collision_checker(abb_irb4600_40_255_setup, itj_TC_PG500_cms, itj_beam_
 
         cprint('safe start conf', 'green')
         conf = Configuration(values=[0.]*6, types=ik_joint_types, joint_names=ik_joint_names)
-        assert not client.planner.configuration_in_collision(conf, group=move_group, options={'robot': robot, 'diagnosis':diagnosis})
+        assert not client.check_collisions(robot, conf, options={'diagnosis':diagnosis})
 
         cprint('joint over limit', 'red')
         conf = Configuration(values=[0., 0., 1.5, 0, 0, 0], types=ik_joint_types, joint_names=ik_joint_names)
-        assert client.planner.configuration_in_collision(conf, group=move_group, options={'robot': robot, 'diagnosis':diagnosis})
+        assert client.check_collisions(robot, conf, options={'diagnosis':diagnosis})
 
         cprint('attached beam-robot body self collision', 'red')
         vals = [0.73303828583761843, -0.59341194567807209, 0.54105206811824214, -0.17453292519943295, 1.064650843716541, 1.7278759594743862]
         conf = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
-        assert client.planner.configuration_in_collision(conf, group=move_group, options={'robot': robot, 'diagnosis':diagnosis})
+        assert client.check_collisions(robot, conf, options={'diagnosis':diagnosis})
 
         cprint('attached beam-obstacle collision - column', 'red')
         vals = [0.087266462599716474, -0.19198621771937624, 0.20943951023931956, 0.069813170079773182, 1.2740903539558606, 0.069813170079773182]
         conf = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
-        assert client.planner.configuration_in_collision(conf, group=move_group, options={'robot': robot, 'diagnosis':diagnosis})
+        assert client.check_collisions(robot, conf, options={'diagnosis':diagnosis})
 
         cprint('attached beam-obstacle collision - ground', 'red')
         vals = [-0.017453292519943295, 0.6108652381980153, 0.20943951023931956, 1.7627825445142729, 1.2740903539558606, 0.069813170079773182]
         conf = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
-        assert client.planner.configuration_in_collision(conf, group=move_group, options={'robot': robot, 'diagnosis':diagnosis})
+        assert client.check_collisions(robot, conf, options={'diagnosis':diagnosis})
 
         cprint('robot link-obstacle collision - column', 'red')
         vals = [-0.41887902047863912, 0.20943951023931956, 0.20943951023931956, 1.7627825445142729, 1.2740903539558606, 0.069813170079773182]
         conf = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
-        assert client.planner.configuration_in_collision(conf, group=move_group, options={'robot': robot, 'diagnosis':diagnosis})
+        assert client.check_collisions(robot, conf, options={'diagnosis':diagnosis})
         cprint('robot link-obstacle collision - ground', 'red')
         vals = [0.33161255787892263, 1.4660765716752369, 0.27925268031909273, 0.17453292519943295, 0.22689280275926285, 0.54105206811824214]
         conf = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
-        assert client.planner.configuration_in_collision(conf, group=move_group, options={'robot': robot, 'diagnosis':diagnosis})
+        assert client.check_collisions(robot, conf, options={'diagnosis':diagnosis})
 
-        # wait_if_gui()
+        wait_if_gui("Finished.")
 
 #####################################
 @pytest.mark.frame_gen
@@ -127,8 +125,8 @@ def test_frame_variant_generator(viewer):
     frame = frame_from_pose(pose)
 
     options = {'delta_yaw' : np.pi/6, 'yaw_sample_size' : 30}
-    frame_gen = PychoreoFiniteEulerAngleVariantGenerator(options).generate_frame_variant
-    with PychoreoClient(viewer=viewer) as client:
+    frame_gen = PyChoreoFiniteEulerAngleVariantGenerator(options).generate_frame_variant
+    with PyChoreoClient(viewer=viewer) as client:
         draw_pose(pose)
         cnt = 0
         for frame in frame_gen(frame):
