@@ -16,14 +16,8 @@ from __future__ import print_function
 
 import os
 import sys
-
-
-__author__ = ["Yijiang Huang"]
-__copyright__ = "Yijiang Huang"
-__license__ = "MIT License"
-__email__ = "yijiangh@mit.edu"
-__version__ = "__version__ = '0.3.0'"
-
+from .__version__ import __author__, __author_email__, __copyright__, __description__, __license__, \
+    __title__, __url__, __version__
 
 HERE = os.path.dirname(__file__)
 
