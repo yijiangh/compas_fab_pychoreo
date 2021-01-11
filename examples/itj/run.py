@@ -37,8 +37,15 @@ from compas_fab_pychoreo.conversions import pose_from_frame, frame_from_pose
 from compas_fab_pychoreo_examples.ik_solver import ik_abb_irb4600_40_255, InverseKinematicsSolver, get_ik_fn_from_ikfast
 from compas_fab_pychoreo.utils import divide_list_chunks, values_as_list
 
-from .parsing import rfl_setup, itj_TC_PG500_cms, itj_TC_PG1000_cms, itj_rfl_obstacle_cms, itj_rfl_pipe_cms
-from .utils import to_rlf_robot_full_conf, rfl_camera, notify, R11_START_CONF_VALS, R12_START_CONF_VALS
+import sys
+from os import path
+EXAMPLES_DIR = path.abspath(path.join(path.dirname(__file__), '..'))
+sys.path.extend([
+    EXAMPLES_DIR,
+])
+
+from itj.parsing import rfl_setup, itj_TC_PG500_cms, itj_TC_PG1000_cms, itj_rfl_obstacle_cms, itj_rfl_pipe_cms
+from itj.utils import to_rlf_robot_full_conf, rfl_camera, notify, R11_START_CONF_VALS, R12_START_CONF_VALS
 
 # unit conversion
 MIL2M = 1e-3
@@ -60,6 +67,8 @@ CART_PROCESS_NAME_FROM_ID = {
     1 : 'inclamp_to_final',
     2 : 'final_to_retract',
 }
+
+# TODO use linkstatistics joint weight and resolutions
 
 ###########################################
 
@@ -100,19 +109,13 @@ def compute_movement(json_path_in=JSON_PATH_IN, json_out_dir=JSON_OUT_DIR, viewe
     #         transfer_path_data = json.load(json_file)
     #     transfer_traj = JointTrajectory.from_data(transfer_path_data)
 
-    gripper_type = assembly.get_beam_attribute(beam_id, 'gripper_type')
-    ee_touched_link_names = ['robot12_tool0', 'robot12_link_6']
-    ee_cms_fn = itj_TC_PG1000_cms if 'PG1000' in gripper_type else itj_TC_PG500_cms
-    ee_acms = [AttachedCollisionMesh(ee_cm, flange_link_name, ee_touched_link_names) for ee_cm in ee_cms_fn()]
-    cprint('Using gripper {}'.format(gripper_type), 'yellow')
-
     pipe_cms = itj_rfl_pipe_cms()
     # Attached CM (Pipes around Robot)
     attached_cm_pipe2 = AttachedCollisionMesh(pipe_cms[0], 'robot12_link_2', ['robot12_link_2'])
     attached_cm_pipe3 = AttachedCollisionMesh(pipe_cms[1], 'robot12_link_3', ['robot12_link_3'])
 
     with PyChoreoClient(viewer=viewer) as client:
-        robot = client.load_robot_from_urdf(urdf_filename)
+        robot = client.load_robot(urdf_filename)
         robot.semantics = semantics
         # robot's unique body index in pybullet
         robot_uid = client.get_robot_pybullet_uid(robot)
@@ -153,10 +156,17 @@ def compute_movement(json_path_in=JSON_PATH_IN, json_out_dir=JSON_OUT_DIR, viewe
         set_joint_positions(robot_uid, full_joints, full_start_conf.values)
 
         # * attachments
+        gripper_type = assembly.get_beam_attribute(beam_id, 'gripper_type')
+        ee_touched_link_names = ['robot12_tool0', 'robot12_link_6']
+        ee_cms_fn = itj_TC_PG1000_cms if 'PG1000' in gripper_type else itj_TC_PG500_cms
+        ee_acms = [AttachedCollisionMesh(ee_cm, flange_link_name, ee_touched_link_names) for ee_cm in ee_cms_fn()]
+        cprint('Using gripper {}'.format(gripper_type), 'yellow')
+
         for ee_acm in ee_acms:
             # ! note that options must contain 'robot' and 'mass' entries
             client.add_attached_collision_mesh(ee_acm, options={'robot': robot, 'mass': 1, 'color': YELLOW})
-        # pipe attachments
+
+        # * pipe attachments
         # if not disable_attachment:
         #     client.add_attached_collision_mesh(attached_cm_pipe2, options={'robot': robot, 'mass': 1, 'color': BLUE})
         #     client.add_attached_collision_mesh(attached_cm_pipe3, options={'robot': robot, 'mass': 1, 'color': BLUE})

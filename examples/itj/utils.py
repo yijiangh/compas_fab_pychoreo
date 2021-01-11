@@ -1,8 +1,7 @@
 import numpy as np
 from math import radians as rad
 from compas_fab.robots import Configuration, AttachedCollisionMesh, CollisionMesh
-
-from plyer import notification
+from termcolor import cprint
 
 R11_START_CONF_VALS = np.array([22700.0, 0.0, -4900.0, 0.0, -80.0, 65.0, 65.0, 20.0, -20.0])
 R12_START_CONF_VALS = np.array([-4056.0883789999998, -4000.8486330000001, 0.0, -22.834741999999999, -30.711554, 0.0, 57.335655000000003, 0.0])
@@ -68,9 +67,13 @@ def rfl_camera(scale=1e-3):
 ##########################################
 
 def notify(msg=''):
-    notification.notify(
-        title='pybullet planning',
-        message=msg,
-        app_icon=None,  # e.g. 'C:\\icon_32x32.ico'
-        timeout=10,  # seconds
-    )
+    try:
+        from plyer import notification
+        notification.notify(
+            title='pybullet planning',
+            message=msg,
+            app_icon=None,  # e.g. 'C:\\icon_32x32.ico'
+            timeout=10,  # seconds
+        )
+    except ImportError:
+        cprint(msg, 'yellow')

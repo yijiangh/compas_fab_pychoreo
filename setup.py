@@ -19,7 +19,8 @@ requirements = [
     'compas>=0.17.2,<0.18',
     'compas_fab>=0.13.1',
     'pybullet_planning>=0.5.1',
-    'ikfast_pybind>=0.1.0'
+    'ikfast_pybind>=0.1.0',
+    'termcolor',
 ]
 # 'compas_fab @ git+https://git@github.com/compas-dev/compas_fab.git@5163c5619d12e102f5e070731c7f21c139eb4549#egg=compas_fab-0.11.1',
 
