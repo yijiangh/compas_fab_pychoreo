@@ -4,7 +4,7 @@ import numpy as np
 import argparse
 import datetime
 import json
-import jsonpickle
+
 from math import radians as rad
 from termcolor import cprint
 from itertools import product
@@ -21,6 +21,7 @@ import pstats
 from compas.datastructures import Mesh
 from compas.geometry import Transformation
 from compas_fab.robots import Configuration, AttachedCollisionMesh, CollisionMesh, JointTrajectory, Duration, JointTrajectoryPoint
+from compas.utilities import DataDecoder, DataEncoder
 
 from pybullet_planning import link_from_name, get_link_pose, draw_pose, get_bodies, multiply, Pose, Euler, set_joint_positions, \
     joints_from_names, quat_angle_between, get_collision_fn, create_obj, unit_pose, set_camera_pose, pose_from_tform, set_pose, \
@@ -94,9 +95,7 @@ def compute_movement(json_path_in=JSON_PATH_IN, json_out_dir=JSON_OUT_DIR, viewe
     arm_move_group = 'robot12'
     # * Load process from file
     with open(json_path_in, 'r') as f:
-        json_str = f.read()
-        cprint ("{} loaded: json_str len: {}".format(json_path_in, len(json_str)), 'green')
-        process = jsonpickle.decode(json_str, keys=True) # type: RobotClampAssemblyProcess
+        process = json.load(f, cls=DataDecoder)  # type: RobotClampAssemblyProcess
     assembly = process.assembly # For convinence
     toolchanger = process.robot_toolchanger
     beam_ids = [b for b in process.assembly.sequence]
