@@ -1,6 +1,6 @@
 from collections import defaultdict
 from itertools import combinations
-from pybullet_planning import HideOutput
+from pybullet_planning import HideOutput, CLIENTS
 from pybullet_planning import BASE_LINK, RED, GREEN, GREY
 from pybullet_planning import get_link_pose, link_from_name, get_disabled_collisions
 from pybullet_planning import set_joint_positions
@@ -41,6 +41,12 @@ class PyChoreoClient(PyBulletClient):
         # notice that parent body (robot) info is stored inside Attachment
         self.pychoreo_attachments = defaultdict(list)
         self.extra_disabled_collision_link_ids = set()
+
+    def __enter__(self):
+        self.connect()
+        # TODO, CLIENTS dict required by LockRender
+        CLIENTS[self.client_id] = True if self.connection_type == 'gui' else None
+        return self
 
     def get_robot_pybullet_uid(self, robot):
         return robot.attributes['pybullet_uid']
@@ -84,6 +90,7 @@ class PyChoreoClient(PyBulletClient):
         tool_attach_link = link_from_name(robot_uid, attached_collision_mesh.link_name)
         ee_link_pose = get_link_pose(robot_uid, tool_attach_link)
         mass = is_valid_option(options, 'mass', STATIC_MASS)
+        options['mass'] = mass
         color = is_valid_option(options, 'color', GREEN)
 
         for constr_info in self.attached_collision_objects[name]:
@@ -100,7 +107,7 @@ class PyChoreoClient(PyBulletClient):
         return self.pychoreo_attachments[name]
 
     def remove_attached_collision_mesh(self, name, options=None):
-        self.planner.remove_attached_collision_mesh(self, name, options=options)
+        self.planner.remove_attached_collision_mesh(name, options=options)
         if name in self.pychoreo_attachments:
             del self.pychoreo_attachments[name]
 
