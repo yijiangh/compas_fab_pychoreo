@@ -73,6 +73,7 @@ CART_PROCESS_NAME_FROM_ID = {
 }
 
 # TODO use linkstatistics joint weight and resolutions
+# TODO wrap into stream functions
 
 ###########################################
 
