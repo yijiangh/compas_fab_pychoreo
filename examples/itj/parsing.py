@@ -11,6 +11,7 @@ from compas_fab.robots import Configuration, AttachedCollisionMesh, CollisionMes
 
 HERE = os.path.dirname(__file__)
 
+# TODO made a GH script for auto-gen URDF for static collision objects
 def parse_collision_mesh_from_path(dir_path, filename, scale=1e-3):
     file_path = os.path.join(dir_path, filename)
     obj_name = filename.split('.')[0]

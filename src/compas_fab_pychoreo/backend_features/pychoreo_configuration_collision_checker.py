@@ -2,7 +2,7 @@ from compas_fab_pychoreo.backend_features.configuration_collision_checker import
 from compas_fab_pychoreo.utils import is_valid_option, values_as_list
 
 from pybullet_planning import set_joint_positions, get_link_pose, get_custom_limits, joints_from_names, link_from_name, \
-    get_collision_fn, get_disabled_collisions, WorldSaver
+    get_collision_fn, get_disabled_collisions, WorldSaver, joint_from_name
 from pybullet_planning import wait_if_gui, get_body_name, RED, BLUE, set_color
 
 class PyChoreoConfigurationCollisionChecker(ConfigurationCollisionChecker):
@@ -36,14 +36,17 @@ class PyChoreoConfigurationCollisionChecker(ConfigurationCollisionChecker):
         """Returns a `pybullet_planning` collision_fn
         """
         robot_uid = robot.attributes['pybullet_uid']
+        self_collisions = is_valid_option(options, 'self_collisions', True)
+        custom_limits = is_valid_option(options, 'custom_limits', {})
 
         # joint_names = robot.get_configurable_joint_names(group=group)
         ik_joints = joints_from_names(robot_uid, joint_names)
-
-        self_collisions = is_valid_option(options, 'self_collisions', True)
         obstacles = values_as_list(self.client.collision_objects)
         # // ConstraintInfo = namedtuple('ConstraintInfo', ['constraint_id', 'body_id', 'robot_uid'])
         attachments = values_as_list(self.client.pychoreo_attachments)
+
+        pb_custom_limits = get_custom_limits(robot_uid, ik_joints,
+            custom_limits={joint_from_name(robot_uid, jn) : lims for jn, lims in custom_limits})
 
         # TODO additional disabled collisions in options
         # option_disabled_linke_names = is_valid_option(options, 'extra_disabled_collisions', [])
@@ -54,5 +57,5 @@ class PyChoreoConfigurationCollisionChecker(ConfigurationCollisionChecker):
                                         attachments=attachments, self_collisions=self_collisions,
                                         disabled_collisions=self.client.get_self_collision_link_ids(robot), # get disabled self-collision links (srdf)
                                         extra_disabled_collisions=self.client.extra_disabled_collision_link_ids, # | option_extra_disabled_collisions
-                                        custom_limits={})
+                                        custom_limits=pb_custom_limits)
         return collision_fn

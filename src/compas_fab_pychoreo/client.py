@@ -1,5 +1,7 @@
 from collections import defaultdict
 from itertools import combinations
+from termcolor import cprint
+
 from pybullet_planning import HideOutput, CLIENTS
 from pybullet_planning import BASE_LINK, RED, GREEN, GREY
 from pybullet_planning import get_link_pose, link_from_name, get_disabled_collisions
@@ -103,19 +105,36 @@ class PyChoreoClient(PyBulletClient):
             attachment = create_attachment(robot_uid, tool_attach_link, body)
             attachment.assign()
             self.pychoreo_attachments[name].append(attachment)
-
         return self.pychoreo_attachments[name]
 
     def remove_attached_collision_mesh(self, name, options=None):
+        # ! Remove and detach, ambiguity?
         self.planner.remove_attached_collision_mesh(name, options=options)
         if name in self.pychoreo_attachments:
             del self.pychoreo_attachments[name]
 
+    def detach_attached_collision_mesh(self, name, options=None):
+        if name in self.pychoreo_attachments:
+            attachments = self.pychoreo_attachments[name]
+            del self.pychoreo_attachments[name]
+            return attachments
+        else:
+            cprint('No attachment with name {} found.'.format(name), 'yellow')
+            return None
+
     ########################################
 
-    def set_robot_configuration(self, robot, configuration, group=None):
-        # wrapper for PyBulletClient's `set_robot_configuration` so that all the attachments are updated as well
-        super(PyChoreoClient, self).set_robot_configuration(robot, configuration, group=group)
+    def set_robot_configuration(self, robot, configuration): #, group=None
+        # We enforce that `joint_names` attribute must be specified in `configuration`
+        # ! YJ: I don't like the assumption that the "unspecified" joints are assumed to be zero
+        # I think it's better to leave them "as-is"
+        # https://github.com/compas-dev/compas_fab/blob/master/src/compas_fab/backends/pybullet/client.py#L402
+        # super(PyChoreoClient, self).set_robot_configuration(robot, configuration, group=group)
+        robot_uid = robot.attributes['pybullet_uid']
+        # TODO if joint_names are specified within configuration, take intersection
+        # group_joint_names = robot.get_configurable_joint_names(group=group)
+        joints = joints_from_names(robot_uid, configuration.joint_names)
+        set_joint_positions(robot_uid, joints, configuration.values)
         for attachments in self.pychoreo_attachments.values():
             for attachment in attachments:
                 attachment.assign()

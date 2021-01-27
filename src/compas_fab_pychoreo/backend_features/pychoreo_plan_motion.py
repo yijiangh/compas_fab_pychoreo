@@ -4,7 +4,7 @@ from compas_fab.backends.interfaces import InverseKinematics
 from compas_fab.robots import JointTrajectory, Duration, JointTrajectoryPoint, Configuration
 
 from pybullet_planning import is_connected, get_bodies, WorldSaver, joints_from_names, set_joint_positions, plan_joint_motion, check_initial_end
-from pybullet_planning import get_custom_limits, get_joint_positions, get_sample_fn, get_extend_fn, get_distance_fn, MAX_DISTANCE
+from pybullet_planning import get_custom_limits, get_joint_positions, get_sample_fn, get_extend_fn, get_distance_fn, MAX_DISTANCE, joint_from_name
 from pybullet_planning.motion_planners import birrt, lazy_prm
 from pybullet_planning import wait_if_gui
 from compas_fab_pychoreo.backend_features.pychoreo_configuration_collision_checker import PyChoreoConfigurationCollisionChecker
@@ -69,14 +69,15 @@ class PyChoreoPlanMotion(PlanMotion):
         joint_names = robot.get_configurable_joint_names(group=group)
         ik_joints = joints_from_names(robot_uid, joint_names)
         joint_types = robot.get_joint_types_by_names(joint_names)
+        pb_custom_limits = get_custom_limits(robot_uid, ik_joints,
+            custom_limits={joint_from_name(robot_uid, jn) : lims for jn, lims in custom_limits})
 
         with WorldSaver():
             # set to start conf
             if start_configuration is not None:
                 start_conf_vals = start_configuration.values
                 set_joint_positions(robot_uid, ik_joints, start_conf_vals)
-
-            sample_fn = get_sample_fn(robot_uid, ik_joints, custom_limits=custom_limits)
+            sample_fn = get_sample_fn(robot_uid, ik_joints, custom_limits=pb_custom_limits)
             distance_fn = get_distance_fn(robot_uid, ik_joints, weights=weights)
             extend_fn = get_extend_fn(robot_uid, ik_joints, resolutions=resolutions)
             options['robot'] = robot
@@ -98,8 +99,9 @@ class PyChoreoPlanMotion(PlanMotion):
         else:
             jt_traj_pts = []
             for i, conf in enumerate(path):
-                c_conf = Configuration(values=conf, types=joint_types, joint_names=joint_names)
-                jt_traj_pt = JointTrajectoryPoint(values=c_conf.values, types=c_conf.types, time_from_start=Duration(i*1,0))
+                # c_conf = Configuration(values=conf, types=joint_types, joint_names=joint_names)
+                jt_traj_pt = JointTrajectoryPoint(values=conf, types=joint_types, time_from_start=Duration(i*1,0))
+                jt_traj_pt.joint_names = joint_names
                 jt_traj_pts.append(jt_traj_pt)
             trajectory = JointTrajectory(trajectory_points=jt_traj_pts,
                 joint_names=joint_names, start_configuration=start_configuration, fraction=1.0)
