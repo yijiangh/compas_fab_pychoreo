@@ -45,11 +45,9 @@ from compas_fab_pychoreo.utils import divide_list_chunks, values_as_list
 
 from .parsing import rfl_setup, itj_TC_PG500_cms, itj_TC_PG1000_cms, itj_rfl_obstacle_cms, itj_rfl_pipe_cms
 from .visualization import rfl_camera
-from .robot_setup import to_rlf_robot_full_conf, R12_START_CONF_VALS, GANTRY_X_LIMIT, GANTRY_Y_LIMIT, GANTRY_Z_LIMIT, R11_GANTRY_CUSTOM_LIMITS
+from .robot_setup import to_rlf_robot_full_conf, R12_START_CONF_VALS, GANTRY_X_LIMIT, GANTRY_Y_LIMIT, GANTRY_Z_LIMIT, \
+    POS_STEP_SIZE, RETREAT_DISTANCE
 from .utils import notify, MIL2M, convert_rfl_robot_conf_unit
-
-# RETREAT_DISTANCE = 0.05
-RETREAT_DISTANCE = 0.00
 
 WORLD_FROM_DESIGN_POSE = pose_from_tform(np.array([
     [-6.79973677324631E-05,0.99999999327,9.40019036398793E-05,24141.9306103356*MIL2M],
@@ -124,17 +122,31 @@ def compute_movement(json_path_in=JSON_PATH_IN, json_out_dir=JSON_OUT_DIR, viewe
         yzarm_move_group = 'robot12_eaYZ'
         yzarm_joint_names = robot.get_configurable_joint_names(group=yzarm_move_group)
         yzarm_joint_types = robot.get_joint_types_by_names(yzarm_joint_names)
-
-        gantry_x_joint_name = 'bridge1_joint_EA_X'
-        gantry_joint_names = []
-        for jt_n, jt_t in zip(yzarm_joint_names, yzarm_joint_types):
-            if jt_t == 2:
-                gantry_joint_names.append(jt_n)
         flange_link_name = robot.get_end_effector_link_name(group=yzarm_move_group)
 
-        # * joint indices in pybullet
+        gantry_x_joint_name = 'bridge1_joint_EA_X'
+        custom_x_limits = {gantry_x_joint_name : GANTRY_X_LIMIT}
+        custom_yz_limits = {}
+
+        gantry_joint_names = []
+        for jt_n, jt_t in zip(yzarm_joint_names, yzarm_joint_types):
+            if 'Y' in jt_n:
+                custom_yz_limits[jt_n] = GANTRY_Y_LIMIT
+            elif 'Z' in jt_n:
+                custom_yz_limits[jt_n] = GANTRY_Z_LIMIT
+            if jt_t == 2:
+                gantry_joint_names.append(jt_n)
+
         gantry_x_joint = joint_from_name(robot_uid, gantry_x_joint_name)
         gantry_joints = joints_from_names(robot_uid, gantry_joint_names)
+
+        # * custom limits
+        gantry_x_sample_fn = get_sample_fn(robot_uid, [gantry_x_joint],
+            custom_limits={joint_from_name(robot_uid, jn) : limits for jn, limits in custom_x_limits.items()})
+        gantry_yz_sample_fn = get_sample_fn(robot_uid, gantry_joints,
+            custom_limits={joint_from_name(robot_uid, jn) : limits for jn, limits in custom_yz_limits.items()})
+
+        # * joint indices in pybullet
         ik_base_link = link_from_name(robot_uid, ik_base_link_name)
         ik_joints = joints_from_names(robot_uid, ik_joint_names)
         ik_tool_link = link_from_name(robot_uid, tool_link_name)
@@ -231,11 +243,10 @@ def compute_movement(json_path_in=JSON_PATH_IN, json_out_dir=JSON_OUT_DIR, viewe
         cart_key_poses = [multiply(wcf_inclamp_approach_pose, (retreat_vector, unit_quat())),
                           wcf_inclamp_pose, wcf_final_detach,
                           multiply(wcf_final_retract, (retreat_vector, unit_quat()))]
-        pos_step_size = 0.01
         cart_pose_groups = []
         cart_group_sizes = []
         for p1, p2 in zip(cart_key_poses[:-1], cart_key_poses[1:]):
-            c_interp_poses = list(interpolate_poses(p1, p2, pos_step_size=pos_step_size))
+            c_interp_poses = list(interpolate_poses(p1, p2, pos_step_size=POS_STEP_SIZE))
             cart_pose_groups.extend(c_interp_poses)
             cart_group_sizes.append(len(c_interp_poses))
             # interpolate_poses(pose1, pose2, pos_step_size=0.01, ori_step_size=np.pi/16):
@@ -269,20 +280,13 @@ def compute_movement(json_path_in=JSON_PATH_IN, json_out_dir=JSON_OUT_DIR, viewe
             #     print('Transfer start conf passed')
             # pass
 
-        # gantry x limit
-        # 20.500 to 25.000
-        custom_x_limits = {gantry_x_joint : GANTRY_X_LIMIT}
-        gantry_x_sample_fn = get_sample_fn(robot_uid, [gantry_x_joint], custom_limits=custom_x_limits)
-        custom_yz_limits = {gantry_joints[0] : GANTRY_Y_LIMIT,
-                            gantry_joints[1] : GANTRY_Z_LIMIT}
-        gantry_yz_sample_fn = get_sample_fn(robot_uid, gantry_joints, custom_limits=custom_yz_limits)
-
         # end_conf = transfer_traj.points[-1]
         # end_conf.scale(MIL2M)
         transfer_plan_options = {
             'diagnosis' : False,
             # 'resolution' : 0.01,
             'resolution' : 0.001,
+            'custom_limits' : custom_yz_limits,
         }
 
         x_attempts = 100
@@ -321,7 +325,7 @@ def compute_movement(json_path_in=JSON_PATH_IN, json_out_dir=JSON_OUT_DIR, viewe
         # jt_vel_vals = np.array([2.618, 2.618, 2.618, 6.2832, 6.2832, 7.854]) * 0.1
         # custom_vel_limits = {jt : vel for jt, vel in zip(ik_joints, jt_vel_vals)}
 
-        with LockRenderer(False):
+        with LockRenderer(True):
             for _ in range(x_attempts):
                 # sample x
                 gantry_x_val = gantry_x_sample_fn()
@@ -366,6 +370,7 @@ def compute_movement(json_path_in=JSON_PATH_IN, json_out_dir=JSON_OUT_DIR, viewe
                                         set_joint_positions(robot_uid, yzarm_joints, transfer_traj.points[-1].values)
 
                                         # * Cartesian planning
+                                        # TODO replace with client one
                                         # gradient-based one
                                         cart_conf_vals = plan_cartesian_motion(robot_uid, ik_joints[0], ik_tool_link, cart_pose_groups, get_sub_conf=True)
                                         # if cart_conf_vals is not None and all([not collision_fn(conf_val) for conf_val in cart_conf_vals]):
@@ -408,73 +413,45 @@ def compute_movement(json_path_in=JSON_PATH_IN, json_out_dir=JSON_OUT_DIR, viewe
         wait_if_gui('Transfer + Cartesian Planning done. Start simulation...')
 
         # * sim transfer motion
-        # traj_joints = joints_from_names(robot_uid, transfer_traj.joint_names)
         for traj_pt in transfer_traj.points:
-            # set_joint_positions(robot_uid, traj_joints, traj_pt.values)
-            # traj_pt.scale(1/MIL2M)
-            # for _, attach in client.attachments.items():
-            #     attach.assign()
-
-            print(traj_pt)
-            print(traj_pt.joint_names)
             client.set_robot_configuration(robot, traj_pt) #, group=yzarm_move_group
-            # wait_for_duration(time_step)
-
             if debug:
-                # print(traj_pt_scaled)
-                # wait_for_duration(0.1)
-                wait_if_gui('sim transfer.')
-
-        return
+                wait_for_duration(0.1)
+                # wait_for_duration(time_step)
+                # wait_if_gui('sim transfer.')
 
         assert cart_conf_vals is not None, 'Cartesian planning failure'
         confval_groups = divide_list_chunks(cart_conf_vals, cart_group_sizes)
 
-        cart_process_start_conf = transfer_traj.start_configuration.copy()
-        for i in range(9, 9+8):
-            cart_process_start_conf.values[i] = transfer_traj.points[-1].values[i-9]
-        cart_gantry_yz_vals = [cart_process_start_conf.values[i] for i in range(9, 11)]
+        # cart_process_start_conf = transfer_traj.start_configuration.copy()
+        # for i in range(9, 9+8):
+        #     cart_process_start_conf.values[i] = transfer_traj.points[-1].values[i-9]
+        # cart_gantry_yz_vals = [cart_process_start_conf.values[i] for i in range(9, 11)]
+
+        cart_process_start_conf = transfer_traj.points[-1].copy()
+        cart_gantry_yz_vals = [cart_process_start_conf.values[i] for i in range(0, 2)]
 
         cart_process = {}
         for k, conf_vals in enumerate(confval_groups):
             cprint('Cartesian phase: {} - {}'.format(k, CART_PROCESS_NAME_FROM_ID[k]), 'cyan')
             jt_traj_pts = []
+            # * drop the beam before final_to_retreat
+            if k==2:
+                client.detach_attached_collision_mesh(cur_beam.name)
             for i, conf_val in enumerate(conf_vals):
                 yzarm_conf = Configuration(values=cart_gantry_yz_vals+list(conf_val), types=yzarm_joint_types, joint_names=yzarm_joint_names)
                 jt_traj_pt = JointTrajectoryPoint(values=yzarm_conf.values, types=yzarm_conf.types, \
                     time_from_start=Duration(i*1,0))
                 jt_traj_pt.joint_names = yzarm_joint_names
                 jt_traj_pts.append(jt_traj_pt)
-
-                # simulation with unscaled
-                yzarm_conf_scaled = yzarm_conf.scaled(MIL2M)
-                set_joint_positions(robot_uid, yzarm_joints, yzarm_conf_scaled.values)
-                for attach_name, attachs in client.pychoreo_attachments.items():
-                    for attach in attachs:
-                        if attach_name != cur_beam.name:
-                            attach.assign()
-                        elif k < 2:
-                            attach.assign()
-                if k==2:
-                    client.detach_attached_collision_mesh(cur_beam.name)
-                client.set_robot_configuration(robot, traj_pt, group=yzarm_move_group)
-
+                client.set_robot_configuration(robot, jt_traj_pt) #, group=yzarm_move_group
                 if debug:
-                    print(jt_traj_pt)
                     wait_if_gui('step Cartesian.')
-
             # if k == 0:
             #     assert_almost_equal(np.array(cart_process_start_conf.values)[9:17], np.array(jt_traj_pts[0].values), decimal=4)
             trajectory = JointTrajectory(trajectory_points=jt_traj_pts, \
-                joint_names=yzarm_joint_names, start_configuration=cart_process_start_conf, fraction=1.0)
-
+                joint_names=yzarm_joint_names, start_configuration=jt_traj_pts[0], fraction=1.0)
             cart_process[CART_PROCESS_NAME_FROM_ID[k]] = trajectory
-            # update start conf
-            cart_process_start_conf = transfer_traj.start_configuration.copy()
-            for i in range(9, 9+8):
-                cart_process_start_conf.values[i] = jt_traj_pts[-1].values[i-9]
-
-        client.detach_attached_collision_mesh(cur_beam.name)
 
         cur_beam_assembled_cm = CollisionMesh(assembly.beam(beam_id).cached_mesh, assembly.beam(beam_id).name)
         cur_beam_assembled_cm.scale(MIL2M)

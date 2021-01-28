@@ -25,11 +25,11 @@ GANTRY_X_LIMIT = (25, 30) # (20.5, 25.0)
 GANTRY_Y_LIMIT = (-12.237, -5) # (-12.237, -9.5)
 GANTRY_Z_LIMIT = (-4.915, -3.5)
 
-R11_GANTRY_CUSTOM_LIMITS = {
-    'robot11_joint_EA_X' : GANTRY_X_LIMIT,
-    'robot11_joint_EA_Y' : GANTRY_Y_LIMIT,
-    'robot11_joint_EA_Z' : GANTRY_Z_LIMIT,
-}
+
+# meter
+POS_STEP_SIZE = 0.01
+# RETREAT_DISTANCE = 0.05
+RETREAT_DISTANCE = 0.00
 
 ############################################
 

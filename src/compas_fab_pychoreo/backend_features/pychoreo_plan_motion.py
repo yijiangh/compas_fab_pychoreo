@@ -70,7 +70,7 @@ class PyChoreoPlanMotion(PlanMotion):
         ik_joints = joints_from_names(robot_uid, joint_names)
         joint_types = robot.get_joint_types_by_names(joint_names)
         pb_custom_limits = get_custom_limits(robot_uid, ik_joints,
-            custom_limits={joint_from_name(robot_uid, jn) : lims for jn, lims in custom_limits})
+            custom_limits={joint_from_name(robot_uid, jn) : lims for jn, lims in custom_limits.items()})
 
         with WorldSaver():
             # set to start conf
@@ -101,10 +101,12 @@ class PyChoreoPlanMotion(PlanMotion):
             for i, conf in enumerate(path):
                 # c_conf = Configuration(values=conf, types=joint_types, joint_names=joint_names)
                 jt_traj_pt = JointTrajectoryPoint(values=conf, types=joint_types, time_from_start=Duration(i*1,0))
+                # TODO why don't we have a `joint_names` input for JointTrajectoryPoint?
+                # https://github.com/compas-dev/compas_fab/blob/master/src/compas_fab/robots/trajectory.py#L64
                 jt_traj_pt.joint_names = joint_names
                 jt_traj_pts.append(jt_traj_pt)
             trajectory = JointTrajectory(trajectory_points=jt_traj_pts,
-                joint_names=joint_names, start_configuration=start_configuration, fraction=1.0)
+                joint_names=joint_names, start_configuration=jt_traj_pts[0], fraction=1.0)
             return trajectory
 
     def _joint_values_from_joint_constraints(self, joint_names, constraints):

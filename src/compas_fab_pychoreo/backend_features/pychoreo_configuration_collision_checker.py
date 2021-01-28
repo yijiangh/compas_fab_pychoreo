@@ -46,7 +46,7 @@ class PyChoreoConfigurationCollisionChecker(ConfigurationCollisionChecker):
         attachments = values_as_list(self.client.pychoreo_attachments)
 
         pb_custom_limits = get_custom_limits(robot_uid, ik_joints,
-            custom_limits={joint_from_name(robot_uid, jn) : lims for jn, lims in custom_limits})
+            custom_limits={joint_from_name(robot_uid, jn) : lims for jn, lims in custom_limits.items()})
 
         # TODO additional disabled collisions in options
         # option_disabled_linke_names = is_valid_option(options, 'extra_disabled_collisions', [])
