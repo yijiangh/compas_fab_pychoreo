@@ -64,6 +64,8 @@ CART_PROCESS_NAME_FROM_ID = {
     2 : 'final_to_retract',
 }
 
+# TODO add clamp collision geometry to transit/transfer planning
+
 # TODO use linkstatistics joint weight and resolutions
 # TODO wrap into stream functions
 
@@ -461,26 +463,22 @@ def compute_movement(json_path_in=JSON_PATH_IN, json_out_dir=JSON_OUT_DIR, viewe
 
         # * Transit planning
         last_cart_conf = cart_process[CART_PROCESS_NAME_FROM_ID[2]].points[-1]
-        last_cart_conf_scaled = last_cart_conf.scaled(MIL2M)
         reset_conf = Configuration(R12_INTER_CONF_VALS, yzarm_joint_types, yzarm_joint_names)
-        print('last_conf: ', last_cart_conf)
-        print('rest_conf: ', reset_conf)
 
         transit_plan_options = {
             'diagnosis' : True,
-            # 'resolution' : 0.01,
-            'resolution' : 0.1,
+            'resolution' : 0.1, # 0.01
+            'custom_limits' : custom_yz_limits,
         }
         goal_constraints = robot.constraints_from_configuration(reset_conf, [0.01], [0.01], group=yzarm_move_group)
 
-        transit_attempts = 10
+        transit_attempts = 2
         transit_traj = None
         for _ in range(transit_attempts):
             with LockRenderer(True):
-                set_joint_positions(robot_uid, yzarm_joints, last_cart_conf_scaled.values)
+                set_joint_positions(robot_uid, yzarm_joints, last_cart_conf.values)
                 with WorldSaver():
-                    # transit_traj = client.plan_motion(reset_conf, start_configuration=start_conf, group=yzarm_move_group, options=transit_plan_options)
-                    transit_traj = client.plan_motion(robot, goal_constraints, start_configuration=last_cart_conf_scaled,
+                    transit_traj = client.plan_motion(robot, goal_constraints, start_configuration=last_cart_conf,
                         group=yzarm_move_group, options=transit_plan_options)
                 if transit_traj is not None:
                     break
@@ -491,22 +489,11 @@ def compute_movement(json_path_in=JSON_PATH_IN, json_out_dir=JSON_OUT_DIR, viewe
         if transit_traj is not None:
             if debug:
                 wait_if_gui('Transit Planning done. Start simulation...')
-
             # * sim transit motion
-            traj_joints = joints_from_names(robot_uid, transit_traj.joint_names)
             for traj_pt in transit_traj.points:
-                set_joint_positions(robot_uid, traj_joints, traj_pt.values)
-                traj_pt.scale(1/MIL2M)
-                for _, attachs in client.pychoreo_attachments.items():
-                    for attach in attachs:
-                        attach.assign()
+                client.set_robot_configuration(robot, traj_pt)
                 if debug:
                     wait_if_gui('sim transit.')
-                # print(traj_pt)
-                    # wait_for_duration(0.1)
-                    # yzarm_conf = Configuration(traj_pt_scaled.values, yzarm_joint_types, yzarm_joint_names)
-                    # if client.configuration_in_collision(yzarm_conf, group=yzarm_move_group, options={'diagnosis':True}):
-                    #     wait_if_gui('collision detected!!')
 
         assembly_plan_data = {k : v.data for k, v in cart_process.items()}
         assembly_plan_data.update({'transfer' : transfer_traj.data})
@@ -535,7 +522,7 @@ def main():
     parser.add_argument('--debug', action='store_true', help='Debug mode')
     parser.add_argument('-si', '--seq_i', default=1, help='individual step to plan, Victor starts from one.')
     parser.add_argument('-na', '--disable_attachment', action='store_true', help='Disable beam and pipe attachments.')
-    parser.add_argument('--disable_env', action='store_true', help='Disable .')
+    parser.add_argument('--disable_env', action='store_true', help='Disable environment collision geometry.')
     args = parser.parse_args()
     print('Arguments:', args)
 
