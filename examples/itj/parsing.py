@@ -1,4 +1,7 @@
 import os
+import json
+import sys
+from termcolor import cprint
 
 from compas.geometry import Frame
 from compas.datastructures import Mesh
@@ -8,6 +11,7 @@ from compas_fab.robots import Robot
 from compas_fab.robots import RobotSemantics
 from compas_fab.robots import Tool
 from compas_fab.robots import Configuration, AttachedCollisionMesh, CollisionMesh
+from compas.utilities import DataDecoder, DataEncoder
 
 HERE = os.path.dirname(__file__)
 
@@ -66,3 +70,23 @@ def itj_rfl_pipe_cms():
 def itj_rfl_obstacle_cms():
     dir_path = os.path.abspath(os.path.join(HERE, "data", 'itj_rfl_obstacles'))
     return parse_collision_meshes_from_dir(dir_path)
+
+###########################################
+
+DATA_DIR = os.path.join(HERE, 'data')
+
+def get_process_path(assembly_name, file_dir=DATA_DIR):
+    if assembly_name.endswith('.json'):
+        filename = os.path.basename(assembly_name)
+    else:
+        filename = '{}.json'.format(assembly_name)
+    model_path = os.path.abspath(os.path.join(file_dir, filename))
+    if not os.path.exists(model_path):
+        raise FileNotFoundError(model_path)
+    return model_path
+
+def parse_process(process):
+    # * Load process from file
+    with open(get_process_path(process), 'r') as f:
+        process = json.load(f, cls=DataDecoder)  # type: RobotClampAssemblyProcess
+    return process

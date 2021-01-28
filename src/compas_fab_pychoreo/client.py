@@ -44,11 +44,11 @@ class PyChoreoClient(PyBulletClient):
         self.pychoreo_attachments = defaultdict(list)
         self.extra_disabled_collision_link_ids = set()
 
-    def __enter__(self):
-        self.connect()
+    def connect(self):
+        with HideOutput(not self.verbose):
+            super(PyChoreoClient, self).connect()
         # TODO, CLIENTS dict required by LockRender
         CLIENTS[self.client_id] = True if self.connection_type == 'gui' else None
-        return self
 
     def get_robot_pybullet_uid(self, robot):
         return robot.attributes['pybullet_uid']
