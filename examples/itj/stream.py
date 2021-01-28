@@ -8,6 +8,8 @@ from itertools import islice
 
 # from extrusion.utils import get_disabled_collisions, get_custom_limits, MotionTrajectory
 
+Grasp = namedtuple('Grasp', ['beam_id', 'gripper_from_object'])
+
 from pybullet_planning import link_from_name, set_pose, \
     multiply, invert, inverse_kinematics, plan_direct_joint_motion, Attachment, set_joint_positions, plan_joint_motion, \
     get_configuration, wait_for_interrupt, point_from_pose, HideOutput, load_pybullet, draw_pose, unit_quat, create_obj, \
@@ -21,6 +23,8 @@ from pybullet_planning import link_from_name, set_pose, \
     get_link_pose, get_joint_positions, intrinsic_euler_from_quat, implies, pairwise_collision, randomize, get_link_name, get_relative_pose, \
     remove_handles, apply_alpha, pairwise_link_collision_info, joint_from_name
 
+from compas_fab_pychoreo.conversions import pose_from_frame, frame_from_pose
+
 # from .robot_setup import EE_LINK_NAME, get_disabled_collisions, IK_MODULE, get_custom_limits, CONTROL_JOINT_NAMES, BASE_LINK_NAME, \
 #     TOOL_LINK_NAME, ROBOT_NAME, GANTRY_JOINT_LIMITS, IK_BASE_LINK_NAME, IK_JOINT_NAMES, JOINT_WEIGHTSs
 # from .utils import Command, prune_dominated, get_index_from_bodies
@@ -28,6 +32,7 @@ from pybullet_planning import link_from_name, set_pose, \
 # from coop_assembly.help_functions.shared_const import METER_SCALE
 
 from .robot_setup import CARTESIAN_CONTROL_JOINTS
+from .utils import MIL2M
 
 # TODO: fix self collision
 ENABLE_SELF_COLLISIONS = True
@@ -81,9 +86,12 @@ PB_IK_TOL = 1e-3
 ###########################################
 
 def get_beam_grasp_gen_fn(process, tool_pose=unit_pose(), reverse_grasp=False, safety_margin_length=0.0):
-    def gen_fn(index):
+    def gen_fn(beam_id):
         # ! the grasp is currently fixed now, given by the Process
-        pass
+        gripper_tcp_in_ocf = process.assembly.get_beam_attribute(beam_id, "gripper_tcp_in_ocf")
+        beam_from_gripper = pose_from_frame(gripper_tcp_in_ocf, scale=MIL2M)
+        yield Grasp(beam_id, invert(beam_from_gripper)),
+
     # rotate the cylinder's frame to make x axis align with the longitude axis
     # longitude_x = Pose(euler=Euler(pitch=np.pi/2))
     # def gen_fn(index):
