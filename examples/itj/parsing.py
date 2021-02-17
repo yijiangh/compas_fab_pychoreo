@@ -14,9 +14,11 @@ from compas_fab.robots import Tool
 from compas_fab.robots import Configuration, AttachedCollisionMesh, CollisionMesh
 from compas.utilities import DataDecoder, DataEncoder
 
+from compas_fab_pychoreo.conversions import pose_from_frame
+
 HERE = os.path.dirname(__file__)
 
-from pybullet_planning import GREY, BLUE, YELLOW, GREEN
+from pybullet_planning import GREY, BLUE, YELLOW, GREEN, draw_pose
 
 BEAM_COLOR = GREY
 GRIPPER_COLOR = BLUE
@@ -113,7 +115,7 @@ def init_objects_from_process(client, process, scale=1e-3):
         if object_id.startswith('b'):
             beam = process.assembly.beam(object_id)
             # ! notice that the notch geometry will be convexified in pybullet
-            meshes = [beam.cached_mesh]
+            meshes = [beam.mesh]
             color = BEAM_COLOR
         elif object_id.startswith('c') or object_id.startswith('g'):
             tool = process.tool(object_id)
@@ -133,6 +135,7 @@ def init_objects_from_process(client, process, scale=1e-3):
         elif object_id.startswith('robot'):
             # ignore robot setup
             continue
+
         for i, m in enumerate(meshes):
             cm = CollisionMesh(m, object_id + '_{}'.format(i))
             cm.scale(scale)
@@ -141,8 +144,8 @@ def init_objects_from_process(client, process, scale=1e-3):
             # set pose according to state
         current_frame = copy(object_state.current_frame)
         assert current_frame is not None, 'object id : {} , state : {}'.format(object_id, object_state)
-        # current_frame.point *= scale
-        # client.set_collision_mesh_frame(object_id, current_frame,
-        #     options={'wildcard' : '{}_*'.format(object_id)})
+        current_frame.point *= scale
+        client.set_collision_mesh_frame(object_id, current_frame,
+            options={'wildcard' : '{}_*'.format(object_id)})
 
 ##########################################
