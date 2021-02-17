@@ -140,8 +140,8 @@ class PyChoreoClient(PyBulletClient):
                 set_pose(body, pose_from_frame(frame))
 
     # TODO separation between attached and collision objects might cause problems in mode changes
-    def _get_object_bodies(self, name, wildcard=None):
-        wildcard = wildcard or '^{}$'.format(name)
+    def _get_collision_object_bodies(self, wildcard):
+        # wildcard = wildcard or '^{}$'.format(name)
         names = wildcard_keys(self.collision_objects, wildcard)
         bodies = []
         for n in names:

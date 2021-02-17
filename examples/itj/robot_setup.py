@@ -13,9 +13,11 @@ from .parsing import rfl_setup, itj_rfl_obstacle_cms
 
 # Beam-pick up configuration
 R11_INTER_CONF_VALS = convert_rfl_robot_conf_unit([21000.0, 0.0, -4900.0,
-    0.0, -80.0, 65.0, 65.0, 20.0, -20.0])
-R12_INTER_CONF_VALS = convert_rfl_robot_conf_unit([-4056.0883789999998, -4000.8486330000001,
     0.0, -22.834741999999999, -30.711554, 0.0, 57.335655000000003, 0.0])
+# R12_INTER_CONF_VALS = convert_rfl_robot_conf_unit([-4056.0883789999998, -4000.8486330000001,
+#     0.0, -22.834741999999999, -30.711554, 0.0, 57.335655000000003, 0.0])
+R12_INTER_CONF_VALS = convert_rfl_robot_conf_unit([-12237, -4000.8486330000001,
+    0.0, -80.0, 65.0, 65.0, 20.0, -20.0])
 
 # ! we only use robot11 and robot12
 R21_IDLE_CONF_VALS = convert_rfl_robot_conf_unit([38000, 0, -4915,
@@ -65,20 +67,13 @@ def to_rlf_robot_full_conf(robot11_confval, robot12_confval):
             *rfl_robot_joint_names('robot12', include_gantry=False),
             *rfl_robot_joint_names('robot21', include_gantry=True),
             *rfl_robot_joint_names('robot22', include_gantry=False),
-            # 'bridge1_joint_EA_X', 'robot11_joint_EA_Y', 'robot11_joint_EA_Z',
-            # 'robot11_joint_1', 'robot11_joint_2', 'robot11_joint_3', 'robot11_joint_4', 'robot11_joint_5', 'robot11_joint_6',
-            # 'robot12_joint_EA_Y', 'robot12_joint_EA_Z',
-            # 'robot12_joint_1', 'robot12_joint_2', 'robot12_joint_3', 'robot12_joint_4', 'robot12_joint_5', 'robot12_joint_6',
-            # 'bridge2_joint_EA_X', 'robot21_joint_EA_Y', 'robot21_joint_EA_Z',
-            # 'robot21_joint_1', 'robot21_joint_2', 'robot21_joint_3', 'robot21_joint_4', 'robot21_joint_5', 'robot21_joint_6',
-            # 'robot22_joint_EA_Y', 'robot22_joint_EA_Z',
-            # 'robot22_joint_1', 'robot22_joint_2', 'robot22_joint_3', 'robot22_joint_4', 'robot22_joint_5', 'robot22_joint_6'
             )
         )
 
 ############################################
 
-CARTESIAN_CONTROL_JOINTS = rfl_robot_joint_names('robot12', False)[2:]
+def get_cartesian_control_joint_names(arm_move_group='robot11'):
+    return rfl_robot_joint_names(arm_move_group, False)[2:]
 
 ########################################
 
@@ -106,10 +101,11 @@ def load_RFL_world(viewer=True, disable_env=False):
     #     client.add_attached_collision_mesh(attached_cm_pipe3, options={'robot': robot, 'mass': 1, 'color': BLUE})
 
     # # * Add static collision mesh to planning scene
-    if not disable_env:
-        for o_cm in itj_rfl_obstacle_cms():
-            client.add_collision_mesh(o_cm, {'color':GREY})
+    # if not disable_env:
+    #     for o_cm in itj_rfl_obstacle_cms():
+    #         client.add_collision_mesh(o_cm, {'color':GREY})
 
+    # TODO move this to process.initial_state
     # * collision sanity check
     full_start_conf = to_rlf_robot_full_conf(R11_INTER_CONF_VALS, R12_INTER_CONF_VALS)
     client.set_robot_configuration(robot, full_start_conf)

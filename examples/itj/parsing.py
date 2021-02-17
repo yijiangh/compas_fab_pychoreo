@@ -1,8 +1,6 @@
 import os
 import json
 import sys
-from termcolor import cprint
-from copy import copy
 
 from compas.geometry import Frame
 from compas.datastructures import Mesh
@@ -14,16 +12,7 @@ from compas_fab.robots import Tool
 from compas_fab.robots import Configuration, AttachedCollisionMesh, CollisionMesh
 from compas.utilities import DataDecoder, DataEncoder
 
-from compas_fab_pychoreo.conversions import pose_from_frame
-
 HERE = os.path.dirname(__file__)
-
-from pybullet_planning import GREY, BLUE, YELLOW, GREEN, draw_pose
-
-BEAM_COLOR = GREY
-GRIPPER_COLOR = BLUE
-CLAMP_COLOR = YELLOW
-TOOL_CHANGER_COLOR = GREEN
 
 #######################################
 
@@ -106,46 +95,5 @@ def parse_process(process):
     with open(get_process_path(process), 'r') as f:
         process = json.load(f, cls=DataDecoder)  # type: RobotClampAssemblyProcess
     return process
-
-def init_objects_from_process(client, process, scale=1e-3):
-    # create objects in pybullet, convert mm to m
-    for object_id, object_state in process.initial_state.items():
-        # create each object in the state dictionary
-        color = GREY
-        if object_id.startswith('b'):
-            beam = process.assembly.beam(object_id)
-            # ! notice that the notch geometry will be convexified in pybullet
-            meshes = [beam.mesh]
-            color = BEAM_COLOR
-        elif object_id.startswith('c') or object_id.startswith('g'):
-            tool = process.tool(object_id)
-            tool.current_frame = Frame.worldXY()
-            if object_state.kinematic_config is not None:
-                tool._set_kinematic_state(object_state.kinematic_config)
-            meshes = tool.draw_visual()
-            if object_id.startswith('c'):
-                color = CLAMP_COLOR
-            elif object_id.startswith('g'):
-                color = GRIPPER_COLOR
-        elif object_id.startswith('t'):
-            tool = process.robot_toolchanger
-            tool.current_frame = Frame.worldXY()
-            meshes = tool.draw_visual()
-            color = TOOL_CHANGER_COLOR
-        elif object_id.startswith('robot'):
-            # ignore robot setup
-            continue
-
-        for i, m in enumerate(meshes):
-            cm = CollisionMesh(m, object_id + '_{}'.format(i))
-            cm.scale(scale)
-            # add mesh to environment at origin
-            client.add_collision_mesh(cm, {'color':color})
-            # set pose according to state
-        current_frame = copy(object_state.current_frame)
-        assert current_frame is not None, 'object id : {} , state : {}'.format(object_id, object_state)
-        current_frame.point *= scale
-        client.set_collision_mesh_frame(object_id, current_frame,
-            options={'wildcard' : '{}_*'.format(object_id)})
 
 ##########################################
