@@ -41,12 +41,13 @@ from compas_fab_pychoreo.utils import divide_list_chunks, values_as_list
 # if HERE not in sys.path:
 #     sys.path.append(HERE)
 
-from .parsing import parse_process, init_objects_from_process
+from .parsing import parse_process
 # rfl_setup, itj_TC_PG500_cms, itj_TC_PG1000_cms, itj_rfl_obstacle_cms, itj_rfl_pipe_cms,
 from .visualization import rfl_camera
 from .robot_setup import to_rlf_robot_full_conf, GANTRY_X_LIMIT, GANTRY_Y_LIMIT, GANTRY_Z_LIMIT, \
     R11_INTER_CONF_VALS, R12_INTER_CONF_VALS, load_RFL_world
 from .utils import notify, MIL2M, convert_rfl_robot_conf_unit
+from .stream import set_state
 
 from integral_timber_joints.process import RoboticFreeMovement, RoboticLinearMovement
 
@@ -71,19 +72,30 @@ CART_PROCESS_NAME_FROM_ID = {
 HERE = os.path.dirname(__file__)
 JSON_OUT_DIR = os.path.join(HERE, 'results')
 
-def compute_movement(client, robot, movement, process, object_from_name):
-    robot_uid = client.get_robot_pybullet_uid(robot)
+def compute_movement(client, robot, process, movement):
+    print(type(movement))
+    # robot_uid = client.get_robot_pybullet_uid(robot)
     if not (isinstance(movement, RoboticLinearMovement) or isinstance(movement, RoboticFreeMovement)):
         return None
-
-    # * visualize states?
     start_state = process.get_movement_start_state(movement)
     end_state = process.get_movement_end_state(movement)
 
-    # TODO use {object name -> u_id dict} and update all poses
-    wait_if_gui()
+    # * visualize states
+    set_state(client, robot, process, start_state)
+    wait_if_gui('Start state')
+    set_state(client, robot, process, end_state)
+    wait_if_gui('End state')
 
-    return
+    if isinstance(movement, RoboticLinearMovement):
+        pass
+    elif isinstance(movement, RoboticFreeMovement):
+        pass
+    else:
+        raise ValueError()
+
+    # movement.trajectory = traj
+
+    return movement
 
     # # * link/joint info
     # ik_base_link_name = robot.get_base_link_name(group=arm_move_group)
@@ -447,8 +459,7 @@ def main():
     print('Arguments:', args)
 
     # * Connect to path planning backend and initialize robot parameters
-    # TODO change to robot11
-    arm_move_group = 'robot12'
+    arm_move_group = 'robot11'
     seq_i = seq_i=int(args.seq_i)
     client, robot, robot_uid = load_RFL_world(viewer=args.viewer, disable_env=True)
 
@@ -458,14 +469,13 @@ def main():
     beam_id = beam_ids[seq_i-1]
     cprint('Beam #{} | previous beams: {}'.format(beam_id, assembly.get_already_built_beams(beam_id)), 'cyan')
 
-    # TODO create an object name -> u_id dict once
-    object_from_name = init_objects_from_process(client, process)
+    set_state(client, robot, process, process.initial_state, initialize=True)
+    wait_if_gui('Initial state.')
 
-    # movements = process.get_movements_by_beam_id(beam_id)
-    # for movement in movements:
-    #     updated_movement = compute_movement(client, robot, movement, process)
+    movements = process.get_movements_by_beam_id(beam_id)
+    for movement in movements:
+        updated_movement = compute_movement(client, robot, process, movement)
 
-    wait_if_gui()
 
     # * simulate ends
     client.disconnect()

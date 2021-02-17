@@ -1,4 +1,12 @@
 import numpy as np
+from pybullet_planning import GREY, BLUE, YELLOW, GREEN, draw_pose
+
+BEAM_COLOR = GREY
+GRIPPER_COLOR = BLUE
+CLAMP_COLOR = YELLOW
+TOOL_CHANGER_COLOR = GREEN
+
+################################################
 
 def rfl_camera(scale=1e-3):
     camera = {
