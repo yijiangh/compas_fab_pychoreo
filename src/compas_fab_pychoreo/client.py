@@ -15,7 +15,7 @@ from pybullet_planning import draw_pose, get_body_body_disabled_collisions
 
 from compas_fab.backends import PyBulletClient
 from compas_fab_pychoreo.planner import PyChoreoPlanner
-from compas_fab_pychoreo.utils import is_valid_option
+from compas_fab_pychoreo.utils import wildcard_keys
 from compas_fab.backends.pybullet.const import STATIC_MASS
 
 from .exceptions import CollisionError
@@ -64,7 +64,7 @@ class PyChoreoClient(PyBulletClient):
     def add_collision_mesh(self, collision_mesh, options=None):
         # add color
         self.planner.add_collision_mesh(collision_mesh, options=options)
-        color = is_valid_option(options, 'color', GREY)
+        color = options.get('color') or GREY
         name = collision_mesh.id
         for body in self.collision_objects[name]:
             set_color(body, color)
@@ -86,15 +86,13 @@ class PyChoreoClient(PyBulletClient):
         """
         name = attached_collision_mesh.collision_mesh.id
         self.planner.add_attached_collision_mesh(attached_collision_mesh, options=options)
-
         robot = options['robot']
         robot_uid = robot.attributes['pybullet_uid']
         tool_attach_link = link_from_name(robot_uid, attached_collision_mesh.link_name)
         ee_link_pose = get_link_pose(robot_uid, tool_attach_link)
-        mass = is_valid_option(options, 'mass', STATIC_MASS)
+        mass = options.get('mass') or STATIC_MASS
         options['mass'] = mass
-        color = is_valid_option(options, 'color', GREEN)
-
+        color = options.get('color') or GREEN
         for constr_info in self.attached_collision_objects[name]:
             # * update attachment collision links
             body = constr_info.body_id
@@ -110,17 +108,45 @@ class PyChoreoClient(PyBulletClient):
     def remove_attached_collision_mesh(self, name, options=None):
         # ! Remove and detach, ambiguity?
         self.planner.remove_attached_collision_mesh(name, options=options)
-        if name in self.pychoreo_attachments:
+        wildcard = options.get('wildcard') or '^{}$'.format(name)
+        names = wildcard_keys(self.pychoreo_attachments, wildcard)
+        for name in names:
+            del self.attached_collision_objects[name]
             del self.pychoreo_attachments[name]
 
     def detach_attached_collision_mesh(self, name, options=None):
-        if name in self.pychoreo_attachments:
-            attachments = self.pychoreo_attachments[name]
-            del self.pychoreo_attachments[name]
-            return attachments
-        else:
+        # detach attached collision mesh, and leave them in the world
+        wildcard = options.get('wildcard') or '^{}$'.format(name)
+        names = wildcard_keys(self.pychoreo_attachments, wildcard)
+        if len(names) == 0:
             cprint('No attachment with name {} found.'.format(name), 'yellow')
             return None
+        detached_attachments = []
+        for name in names:
+            attachments = self.pychoreo_attachments[name]
+            detached_attachments.extend(attachments)
+            del self.attached_collision_objects[name]
+            del self.pychoreo_attachments[name]
+        return detached_attachments
+
+    ########################################
+
+    def set_collision_mesh_frame(self, name, frame, options=None):
+        wildcard = options.get('wildcard') or '^{}$'.format(name)
+        names = wildcard_keys(self.collision_objects, wildcard)
+        assert len(names) > 0, 'wildcard {} not found in {}'.format(wildcard, self.collision_objects.keys())
+        for name in names:
+            for body in self.collision_objects[name]:
+                set_pose(body, pose_from_frame(frame))
+
+    # TODO separation between attached and collision objects might cause problems in mode changes
+    def _get_object_bodies(self, name, wildcard=None):
+        wildcard = wildcard or '^{}$'.format(name)
+        names = wildcard_keys(self.collision_objects, wildcard)
+        bodies = []
+        for n in names:
+            bodies.extend(self.collision_objects[n])
+        return bodies
 
     ########################################
 

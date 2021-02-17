@@ -41,13 +41,15 @@ from compas_fab_pychoreo.utils import divide_list_chunks, values_as_list
 # if HERE not in sys.path:
 #     sys.path.append(HERE)
 
-from .parsing import rfl_setup, itj_TC_PG500_cms, itj_TC_PG1000_cms, itj_rfl_obstacle_cms, itj_rfl_pipe_cms, parse_process
+from .parsing import parse_process, init_objects_from_process
+# rfl_setup, itj_TC_PG500_cms, itj_TC_PG1000_cms, itj_rfl_obstacle_cms, itj_rfl_pipe_cms,
 from .visualization import rfl_camera
 from .robot_setup import to_rlf_robot_full_conf, GANTRY_X_LIMIT, GANTRY_Y_LIMIT, GANTRY_Z_LIMIT, \
     R11_INTER_CONF_VALS, R12_INTER_CONF_VALS, load_RFL_world
 from .utils import notify, MIL2M, convert_rfl_robot_conf_unit
 
-from integral_timber_joints.process import RobotFreeMovement, RoboticLinearMovement
+from integral_timber_joints.process import RoboticFreeMovement, RoboticLinearMovement
+
 
 PREV_BEAM_COLOR = apply_alpha(RED, 1)
 CUR_BEAM_COLOR = apply_alpha(GREEN, 1)
@@ -69,9 +71,9 @@ CART_PROCESS_NAME_FROM_ID = {
 HERE = os.path.dirname(__file__)
 JSON_OUT_DIR = os.path.join(HERE, 'results')
 
-def compute_movement(client, robot, movement, process):
+def compute_movement(client, robot, movement, process, object_from_name):
     robot_uid = client.get_robot_pybullet_uid(robot)
-    if not (isinstance(movement, RoboticLinearMovement) or isinstance(movement, RobotFreeMovement)):
+    if not (isinstance(movement, RoboticLinearMovement) or isinstance(movement, RoboticFreeMovement)):
         return None
 
     # * visualize states?
@@ -79,7 +81,7 @@ def compute_movement(client, robot, movement, process):
     end_state = process.get_movement_end_state(movement)
 
     # TODO use {object name -> u_id dict} and update all poses
-
+    wait_if_gui()
 
     return
 
@@ -450,17 +452,20 @@ def main():
     seq_i = seq_i=int(args.seq_i)
     client, robot, robot_uid = load_RFL_world(viewer=args.viewer, disable_env=True)
 
-    # TODO create an object name -> u_id dict once
-
     process = parse_process(args.problem)
     assembly = process.assembly
     beam_ids = [b for b in process.assembly.sequence]
     beam_id = beam_ids[seq_i-1]
     cprint('Beam #{} | previous beams: {}'.format(beam_id, assembly.get_already_built_beams(beam_id)), 'cyan')
 
-    movements = process.get_movements_by_beam_id(beam_id)
-    for movement in movements:
-        updated_movement = compute_movement(client, robot, movement, process)
+    # TODO create an object name -> u_id dict once
+    object_from_name = init_objects_from_process(client, process)
+
+    # movements = process.get_movements_by_beam_id(beam_id)
+    # for movement in movements:
+    #     updated_movement = compute_movement(client, robot, movement, process)
+
+    wait_if_gui()
 
     # * simulate ends
     client.disconnect()

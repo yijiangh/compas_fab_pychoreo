@@ -1,4 +1,5 @@
 import logging
+import re
 
 ###########################################
 
@@ -24,5 +25,15 @@ def divide_list_chunks(list, size_list):
 
 ###########################################
 
+# TODO replace with options.get(key) or default_value
 def is_valid_option(options, key, default_value):
     return default_value if options is None or key not in options else options[key]
+
+def wildcard_keys(data, wildcard):
+    # https://docs.python.org/3/library/re.html
+    matched_keys = []
+    for k in data.keys():
+        if re.search(wildcard, k):
+            matched_keys.append(k)
+    return matched_keys
+
