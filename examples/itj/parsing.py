@@ -42,24 +42,6 @@ def parse_collision_meshes_from_dir(dir_path, scale=1e-3):
 # ! DEPRECATED, these objects are parsed from Process json file
 ARCHIVED_DATA_DIR = os.path.join(HERE, "data", "_archive")
 
-def itj_TC_PG500_cms():
-    tc_dir_path = os.path.abspath(os.path.join(ARCHIVED_DATA_DIR, 'itj_TC'))
-    cms = parse_collision_meshes_from_dir(tc_dir_path)
-    pg500_dir_path = os.path.abspath(os.path.join(ARCHIVED_DATA_DIR, 'itj_PG500'))
-    cms.extend(parse_collision_meshes_from_dir(pg500_dir_path))
-    return cms
-
-def itj_TC_PG1000_cms():
-    tc_dir_path = os.path.abspath(os.path.join(ARCHIVED_DATA_DIR, 'itj_TC'))
-    cms = parse_collision_meshes_from_dir(tc_dir_path)
-    pg1000_dir_path = os.path.abspath(os.path.join(ARCHIVED_DATA_DIR, 'itj_PG1000'))
-    cms.extend(parse_collision_meshes_from_dir(pg1000_dir_path))
-    return cms
-
-def itj_rfl_pipe_cms():
-    tc_dir_path = os.path.abspath(os.path.join(ARCHIVED_DATA_DIR, 'itj_rfl_pipe_acm'))
-    return parse_collision_meshes_from_dir(tc_dir_path)
-
 def itj_rfl_obstacle_cms():
     dir_path = os.path.abspath(os.path.join(ARCHIVED_DATA_DIR, 'itj_rfl_obstacles'))
     return parse_collision_meshes_from_dir(dir_path)

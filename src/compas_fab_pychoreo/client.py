@@ -100,6 +100,7 @@ class PyChoreoClient(PyBulletClient):
                 self.extra_disabled_collision_link_ids.add(((robot_uid, link_from_name(robot_uid, touched_link_name)), (body, BASE_LINK)))
             set_pose(body, ee_link_pose)
             set_color(body, color)
+            # create attachment based on their *current* pose
             attachment = create_attachment(robot_uid, tool_attach_link, body)
             attachment.assign()
             self.pychoreo_attachments[name].append(attachment)

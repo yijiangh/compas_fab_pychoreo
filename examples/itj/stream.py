@@ -1,13 +1,27 @@
 from termcolor import cprint
 from copy import copy
 
-from pybullet_planning import GREY
-
 from compas.geometry import Frame
-from compas_fab.robots import Configuration, AttachedCollisionMesh, CollisionMesh
+from compas_fab.robots import Configuration, AttachedCollisionMesh, CollisionMesh, tool
+
+from integral_timber_joints.process import RoboticFreeMovement, RoboticLinearMovement
+
+import ikfast_abb_irb4600_40_255
+from pybullet_planning import GREY
+from pybullet_planning import link_from_name, get_link_pose, draw_pose, multiply, Pose, Euler, set_joint_positions, \
+    joints_from_names, LockRenderer, WorldSaver, wait_for_user, joint_from_name
+from pybullet_planning import get_sample_fn, link_from_name, sample_tool_ik, interpolate_poses, get_joint_positions
+from pybullet_planning import plan_cartesian_motion
+
+from compas_fab_pychoreo.backend_features.pychoreo_configuration_collision_checker import PyChoreoConfigurationCollisionChecker
+from compas_fab_pychoreo.conversions import pose_from_frame, frame_from_pose
+from compas_fab_pychoreo_examples.ik_solver import InverseKinematicsSolver, get_ik_fn_from_ikfast
+from compas_fab_pychoreo.utils import divide_list_chunks, values_as_list
 from compas_fab_pychoreo.conversions import pose_from_frame
 
 from .visualization import BEAM_COLOR, GRIPPER_COLOR, CLAMP_COLOR, TOOL_CHANGER_COLOR
+from .robot_setup import R11_INTER_CONF_VALS, MAIN_ROBOT_ID, BARE_ARM_GROUP, GANTRY_ARM_GROUP
+from .robot_setup import get_gantry_control_joint_names, get_cartesian_control_joint_names, get_gantry_custom_limits
 
 ##############################
 
@@ -56,3 +70,113 @@ def set_state(client, robot, process, state_from_object, initialize=False, scale
                     options={'wildcard' : '{}_*'.format(object_id)})
 
 ##############################
+
+def _get_sample_bare_arm_ik_fn(client, robot):
+    robot_uid = client.get_robot_pybullet_uid(robot)
+    ik_base_link_name = robot.get_base_link_name(group=BARE_ARM_GROUP)
+    ik_joint_names = robot.get_configurable_joint_names(group=BARE_ARM_GROUP)
+    # * joint indices in pybullet
+    ik_base_link = link_from_name(robot_uid, ik_base_link_name)
+    ik_joints = joints_from_names(robot_uid, ik_joint_names)
+    ikfast_fn = ikfast_abb_irb4600_40_255.get_ik
+    def get_sample_ik_fn(robot, ik_fn, robot_base_link, ik_joints, tool_from_root=None):
+        def sample_ik_fn(world_from_tcp):
+            if tool_from_root:
+                world_from_tcp = multiply(world_from_tcp, tool_from_root)
+            return sample_tool_ik(ik_fn, robot, ik_joints, world_from_tcp, robot_base_link, get_all=True)
+        return sample_ik_fn
+    sample_ik_fn = get_sample_ik_fn(robot_uid, ikfast_fn, ik_base_link, ik_joints)
+    return sample_ik_fn
+
+##############################
+
+def compute_linear_movement(client, robot, process, movement, options={}):
+    assert isinstance(movement, RoboticLinearMovement)
+    robot_uid = client.get_robot_pybullet_uid(robot)
+
+    # sampling attempts
+    gantry_attempts = options.get('gantry_attempts') or 100
+    pose_step_size = options.get('pose_step_size') or 0.001 # meter
+
+    # * custom limits
+    ik_joint_names = robot.get_configurable_joint_names(group=BARE_ARM_GROUP)
+    ik_joint_types = robot.get_joint_types_by_names(ik_joint_names)
+    tool_link_name = robot.get_end_effector_link_name(group=BARE_ARM_GROUP)
+    # pb ids
+    ik_joints = joints_from_names(robot_uid, ik_joint_names)
+    ik_tool_link = link_from_name(robot_uid, tool_link_name)
+
+    gantry_arm_joint_names = robot.get_configurable_joint_names(group=GANTRY_ARM_GROUP)
+    gantry_arm_joint_types = robot.get_joint_types_by_names(gantry_arm_joint_names)
+    gantry_joint_names = list(set(gantry_arm_joint_names) - set(ik_joint_names))
+
+    custom_limit_from_names = get_gantry_custom_limits(MAIN_ROBOT_ID)
+    gantry_joints = joints_from_names(robot_uid, gantry_joint_names)
+    gantry_xyz_sample_fn = get_sample_fn(robot_uid, gantry_joints,
+        custom_limits={joint_from_name(robot_uid, jn) : limits for jn, limits in custom_limit_from_names.items()})
+
+    # * construct IK function
+    sample_ik_fn = _get_sample_bare_arm_ik_fn(client, robot)
+    # TODO switch to client IK
+    # ikfast_fn = get_ik_fn_from_ikfast(ikfast_abb_irb4600_40_255.get_ik)
+    # ik_solver = InverseKinematicsSolver(robot, move_group, ikfast_fn, base_frame, robotA_tool.frame)
+    # client.planner.inverse_kinematics = ik_solver.inverse_kinematics_function()
+
+    # * get target T0CF pose
+    start_state = process.get_movement_start_state(movement)
+    end_state = process.get_movement_end_state(movement)
+    start_t0cf_frame = start_state['robot'].current_frame
+    end_t0cf_frame = start_state['robot'].current_frame
+
+    # TODO remove later, use client
+    start_tool_pose = pose_from_frame(start_t0cf_frame, scale=1e-3)
+    end_tool_pose = pose_from_frame(end_t0cf_frame, scale=1e-3)
+    interp_poses = list(interpolate_poses(start_tool_pose, end_tool_pose, pos_step_size=pose_step_size))
+    for p in interp_poses:
+        draw_pose(p)
+    wait_for_user('Viz cartesian poses')
+
+    solution_found = False
+    samples_cnt = ik_failures = path_failures = 0
+    for _ in range(gantry_attempts):
+        gantry_xyz_vals = gantry_xyz_sample_fn()
+        print('xyz: ', gantry_xyz_vals)
+        # TODO swicth to client set_robot_configuration
+        set_joint_positions(robot_uid, gantry_joints, gantry_xyz_vals)
+        samples_cnt += 1
+
+        # check if collision-free ik solution exist for the four Cartesian poses
+        arm_conf_vals = sample_ik_fn(start_tool_pose)
+        if arm_conf_vals and len(arm_conf_vals) > 0:
+            wait_for_user('Conf found!')
+
+        for arm_conf_val in arm_conf_vals:
+            if arm_conf_val is None:
+                continue
+            gantry_arm_conf = Configuration(list(gantry_xyz_vals) + list(arm_conf_val),
+                gantry_arm_joint_types, gantry_arm_joint_names)
+            if not client.check_collisions(robot, gantry_arm_conf, options={'diagnosis':False}):
+                # * set start pick conf
+                with WorldSaver():
+                    # * Cartesian planning
+                    # TODO replace with client one
+                    cart_conf_vals = plan_cartesian_motion(robot_uid, ik_joints[0], ik_tool_link, interp_poses, get_sub_conf=True)
+                    if cart_conf_vals is not None:
+                        solution_found = True
+                        cprint('Collision free! After {} ik, {} path failure over {} samples.'.format(
+                            ik_failures, path_failures, samples_cnt), 'green')
+                        break
+                    else:
+                        path_failures += 1
+        else:
+            ik_failures += 1
+        if solution_found:
+            break
+    else:
+        cprint('Cartesian Path planning failure after {} attempts | {} due to IK, {} due to Cart.'.format(
+            samples_cnt, ik_failures, path_failures), 'yellow')
+
+    traj = None
+    # translate to compas_fab Trajectory
+    return traj
+
