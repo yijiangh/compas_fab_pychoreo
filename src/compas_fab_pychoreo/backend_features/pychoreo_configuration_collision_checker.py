@@ -1,5 +1,5 @@
 from compas_fab_pychoreo.backend_features.configuration_collision_checker import ConfigurationCollisionChecker
-from compas_fab_pychoreo.utils import is_valid_option, values_as_list
+from compas_fab_pychoreo.utils import is_valid_option, values_as_list, wildcard_keys
 
 from pybullet_planning import set_joint_positions, get_link_pose, get_custom_limits, joints_from_names, link_from_name, \
     get_collision_fn, get_disabled_collisions, WorldSaver, joint_from_name
@@ -21,6 +21,11 @@ class PyChoreoConfigurationCollisionChecker(ConfigurationCollisionChecker):
         options : dict, optional
             Dictionary containing the following key-value pairs:
             - "self_collisions": bool, set to True if checking self collisions of the robot, defaults to True
+            - "collision_object_wildcards": list of str, to check against a subset of collision objects, not everything
+                in the scene. Each entry of the list is a wildcard rule, learn more at:
+                    https://docs.python.org/3/library/re.html
+                Example: exact name match: `"^{}$".format(object_name)`
+                         partial name match: `"^{}_*".format(object_name)` for all objects with the name "object_name_*"
 
         Returns
         -------
@@ -28,7 +33,7 @@ class PyChoreoConfigurationCollisionChecker(ConfigurationCollisionChecker):
             True if in collision, False otherwise
         """
         assert len(configuration.joint_names) == len(configuration.values)
-        diagnosis = is_valid_option(options, 'diagnosis', False)
+        diagnosis = options.get('diagnosis') or False
         collision_fn = self._get_collision_fn(robot, configuration.joint_names, options)
         return collision_fn(configuration.values, diagnosis=diagnosis)
 
@@ -36,13 +41,23 @@ class PyChoreoConfigurationCollisionChecker(ConfigurationCollisionChecker):
         """Returns a `pybullet_planning` collision_fn
         """
         robot_uid = robot.attributes['pybullet_uid']
-        self_collisions = is_valid_option(options, 'self_collisions', True)
-        custom_limits = is_valid_option(options, 'custom_limits', {})
+        self_collisions = options.get('self_collisions') or True
+        custom_limits = options.get('custom_limits') or {}
 
         # joint_names = robot.get_configurable_joint_names(group=group)
         ik_joints = joints_from_names(robot_uid, joint_names)
-        obstacles = values_as_list(self.client.collision_objects)
+
+        wildcards = options.get('collision_object_wildcards') or None
+        if wildcards is None:
+            obstacles = values_as_list(self.client.collision_objects)
+        else:
+            obstacles = []
+            for wc in wildcards:
+                names = wildcard_keys(self.client.collision_objects, wc)
+                for n in names:
+                    obstacles.extend(self.client.collision_objects[n])
         # // ConstraintInfo = namedtuple('ConstraintInfo', ['constraint_id', 'body_id', 'robot_uid'])
+        # ! doesn't make sense to have a wildcard selection for attached objects
         attachments = values_as_list(self.client.pychoreo_attachments)
 
         pb_custom_limits = get_custom_limits(robot_uid, ik_joints,
