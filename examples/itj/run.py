@@ -27,9 +27,9 @@ from pybullet_planning import apply_alpha, RED, BLUE, YELLOW, GREEN, GREY
 #     sys.path.append(HERE)
 
 from .parsing import parse_process
-from .robot_setup import load_RFL_world
+from .robot_setup import load_RFL_world, to_rlf_robot_full_conf, R11_INTER_CONF_VALS, R12_INTER_CONF_VALS
 from .utils import notify, MIL2M, convert_rfl_robot_conf_unit
-from .stream import set_state, compute_linear_movement
+from .stream import set_state, compute_linear_movement, compute_free_movement
 
 from integral_timber_joints.process import RoboticFreeMovement, RoboticLinearMovement
 
@@ -53,7 +53,7 @@ CART_PROCESS_NAME_FROM_ID = {
 HERE = os.path.dirname(__file__)
 JSON_OUT_DIR = os.path.join(HERE, 'results')
 
-def compute_movement(client, robot, process, movement):
+def compute_movement(client, robot, process, movement, options=None):
     print(type(movement))
     if not (isinstance(movement, RoboticLinearMovement) or isinstance(movement, RoboticFreeMovement)):
         return None
@@ -66,17 +66,21 @@ def compute_movement(client, robot, process, movement):
     set_state(client, robot, process, end_state)
     wait_if_gui('End state')
 
-    # TODO compile built elements as obstacles
     obstacles = []
     traj = None
+    # TODO handle collision objects
+    # TODO compile built elements as obstacles
+
+    # TODO handle attached collision objects
 
     if isinstance(movement, RoboticLinearMovement):
         # linear movement has built-in kinematics sampler
-        traj = compute_linear_movement(client, robot, process, movement)
-        # type compas_fab : Trajectory
+        traj = compute_linear_movement(client, robot, process, movement, options)
+        # type compas_fab : JointTrajectory
     elif isinstance(movement, RoboticFreeMovement):
         # free movement needs exterior samplers for start/end configurations
-        # traj = compute_free_movement(client, robot, process, movement)
+        traj = compute_free_movement(client, robot, process, movement, options)
+        # type compas_fab : JointTrajectory
         pass
     else:
         raise ValueError()
@@ -91,14 +95,16 @@ def main():
     parser.add_argument('-p', '--problem', default='twelve_pieces_process.json', # pavilion.json
                         help='The name of the problem to solve')
     parser.add_argument('-v', '--viewer', action='store_true', help='Enables the viewer during planning, default False')
-    parser.add_argument('-w', '--write', action='store_true', help='Write output json.')
-    parser.add_argument('-ptm', '--parse_transfer_motion', action='store_true', help='Parse saved transfer motion.')
-    parser.add_argument('--debug', action='store_true', help='Debug mode')
     parser.add_argument('-si', '--seq_i', default=1, help='individual step to plan, Victor starts from one.')
-    parser.add_argument('-na', '--disable_attachment', action='store_true', help='Disable beam and pipe attachments.')
-    parser.add_argument('--disable_env', action='store_true', help='Disable environment collision geometry.')
+    parser.add_argument('--write', action='store_true', help='Write output json.')
+    parser.add_argument('--watch', action='store_true', help='Watch computed trajectories in the pybullet GUI.')
+    parser.add_argument('--debug', action='store_true', help='Debug mode')
+    parser.add_argument('--step_sim', action='store_true', help='Parse after each')
+    # parser.add_argument('--disable_env', action='store_true', help='Disable environment collision geometry.')
+    # parser.add_argument('-ptm', '--parse_transfer_motion', action='store_true', help='Parse saved transfer motion.')
     args = parser.parse_args()
     print('Arguments:', args)
+    print('='*10)
 
     # * Connect to path planning backend and initialize robot parameters
     seq_i = seq_i=int(args.seq_i)
@@ -110,13 +116,32 @@ def main():
     beam_id = beam_ids[seq_i-1]
     cprint('Beam #{} | previous beams: {}'.format(beam_id, assembly.get_already_built_beams(beam_id)), 'cyan')
 
+    # * collision sanity check
+    full_start_conf = to_rlf_robot_full_conf(R11_INTER_CONF_VALS, R12_INTER_CONF_VALS)
+    process.initial_state['robot'].kinematic_config = full_start_conf
     set_state(client, robot, process, process.initial_state, initialize=True)
+    assert not client.check_collisions(robot, full_start_conf, options={'diagnosis':True})
     wait_if_gui('Initial state.')
 
+    options = {
+        'debug' : args.debug,
+    }
     movements = process.get_movements_by_beam_id(beam_id)
     for movement in movements:
-        updated_movement = compute_movement(client, robot, process, movement)
-
+        print('------')
+        updated_movement = compute_movement(client, robot, process, movement, options)
+        if updated_movement is not None:
+            if updated_movement.trajectory is not None:
+                cprint('Solution found for {} : {}'.format(updated_movement, updated_movement.trajectory), 'green')
+                for jt_traj_pt in updated_movement.trajectory.points:
+                    if args.watch:
+                        client.set_robot_configuration(robot, jt_traj_pt) #, group=yzarm_move_group
+                        if args.step_sim:
+                            wait_if_gui('Step conf.')
+                        else:
+                            wait_for_duration(0.1)
+            else:
+                cprint('No solution found for {}'.format(updated_movement), 'red')
     # * simulate ends
     client.disconnect()
 

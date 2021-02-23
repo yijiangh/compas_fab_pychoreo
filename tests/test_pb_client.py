@@ -76,8 +76,8 @@ def test_collision_checker(abb_irb4600_40_255_setup, itj_TC_PG500_cms, itj_beam_
         beam_acm = AttachedCollisionMesh(itj_beam_cm, flange_link_name, ee_touched_link_names)
 
         # * add static obstacles
-        client.add_collision_mesh(base_plate_cm)
-        client.add_collision_mesh(column_obstacle_cm)
+        client.add_collision_mesh(base_plate_cm, {})
+        client.add_collision_mesh(column_obstacle_cm, {})
 
         # * add attachment
         for ee_acm in ee_acms:
@@ -147,9 +147,12 @@ def test_frame_variant_generator(viewer):
 
 #####################################
 @pytest.mark.circle_cartesian
-@pytest.mark.parametrize("planner_ik_conf", [('IterativeIK', 'default-single'),
-    ('LadderGraph', 'default-single'), ('LadderGraph', 'lobster-analytical'), ('LadderGraph', 'ikfast-analytical')])
-# @pytest.mark.parametrize("planner_ik_conf", [('IterativeIK', 'default-single'),])
+@pytest.mark.parametrize("planner_ik_conf", [
+    ('IterativeIK', 'default-single'),
+    ('LadderGraph', 'default-single'),
+    ('LadderGraph', 'lobster-analytical'),
+    ('LadderGraph', 'ikfast-analytical')
+    ])
 def test_circle_cartesian(fixed_waam_setup, viewer, planner_ik_conf):
     urdf_filename, semantics, robotA_tool = fixed_waam_setup
     planner_id, ik_engine = planner_ik_conf
@@ -259,8 +262,8 @@ def test_plan_motion(abb_irb4600_40_255_setup, itj_TC_PG500_cms, itj_beam_cm, co
         beam_acm = AttachedCollisionMesh(itj_beam_cm, flange_link_name, ee_touched_link_names)
 
         # * add static obstacles
-        client.add_collision_mesh(base_plate_cm)
-        client.add_collision_mesh(column_obstacle_cm)
+        client.add_collision_mesh(base_plate_cm, {})
+        client.add_collision_mesh(column_obstacle_cm, {})
 
         # * add attachment
         for ee_acm in ee_acms:
@@ -305,7 +308,11 @@ def test_plan_motion(abb_irb4600_40_255_setup, itj_TC_PG500_cms, itj_beam_cm, co
 #####################################
 
 @pytest.mark.ik_abb
-@pytest.mark.parametrize("ik_engine", [('default-single'), ('lobster-analytical'), ('ikfast-analytical')])
+@pytest.mark.parametrize("ik_engine", [
+        ('default-single'),
+        ('lobster-analytical'),
+        ('ikfast-analytical')
+        ])
 def test_ik(fixed_waam_setup, viewer, ik_engine):
     urdf_filename, semantics, robotA_tool = fixed_waam_setup
     move_group = 'robotA'
@@ -344,7 +351,7 @@ def test_ik(fixed_waam_setup, viewer, ik_engine):
         for p in ee_poses:
             frame_WCF = frame_from_pose(p)
             st_time = time.time()
-            qs = client.inverse_kinematics(robot, frame_WCF, group=move_group)
+            qs = client.inverse_kinematics(robot, frame_WCF, group=move_group, options={})
             ik_time += elapsed_time(st_time)
 
             if qs is None:

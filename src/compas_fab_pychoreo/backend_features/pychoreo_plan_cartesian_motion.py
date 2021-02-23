@@ -138,8 +138,9 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
         else:
             jt_traj_pts = []
             for i, conf in enumerate(path):
-                c_conf = Configuration(values=conf, types=joint_types, joint_names=joint_names)
-                jt_traj_pt = JointTrajectoryPoint(values=c_conf.values, types=c_conf.types, time_from_start=Duration(i*1,0))
+                # c_conf = Configuration(values=conf, types=joint_types, joint_names=joint_names)
+                jt_traj_pt = JointTrajectoryPoint(values=conf, types=joint_types, time_from_start=Duration(i*1,0))
+                jt_traj_pt.joint_names = joint_names
                 jt_traj_pts.append(jt_traj_pt)
             trajectory = JointTrajectory(trajectory_points=jt_traj_pts,
                 joint_names=joint_names, start_configuration=start_configuration, fraction=1.0)
