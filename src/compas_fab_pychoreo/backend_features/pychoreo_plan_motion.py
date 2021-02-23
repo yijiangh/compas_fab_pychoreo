@@ -57,13 +57,11 @@ class PyChoreoPlanMotion(PlanMotion):
         robot_uid = robot.attributes['pybullet_uid']
 
         # * parse options
-        diagnosis = is_valid_option(options, 'diagnosis', False)
-        custom_limits = is_valid_option(options, 'custom_limits', {})
-        resolutions = is_valid_option(options, 'resolutions', 0.1)
-        weights = is_valid_option(options, 'weights', None)
-        # # TODO: compute default joint weight as np.reciprocal(joint velocity bound) from URDF
-        # JOINT_WEIGHTS = np.reciprocal([6.28318530718, 5.23598775598, 6.28318530718,
-        #                        6.6497044501, 6.77187749774, 10.7337748998]) # sec / radian
+        diagnosis = options.get('diagnosis') or False
+        custom_limits = options.get('custom_limits') or {}
+        resolutions = options.get('resolutions') or 0.1
+        weights = options.get('weights') or None
+        # TODO: auto compute joint weight
 
         # * convert link/joint names to pybullet indices
         joint_names = robot.get_configurable_joint_names(group=group)

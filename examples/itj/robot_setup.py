@@ -30,9 +30,9 @@ R22_IDLE_CONF_VALS = convert_rfl_robot_conf_unit([-12237, -4915,
     0, 0, 0, 0, 0, 0])
 
 # meter
-GANTRY_X_LIMIT = (18, 25) # (20.5, 25.0)
-GANTRY_Y_LIMIT = (-12.237, -5) # (-12.237, -9.5)
-GANTRY_Z_LIMIT = (-4.915, -3.5)
+GANTRY_X_LIMIT = (18, 25) # (0, 37)
+GANTRY_Y_LIMIT = (-12.237, -5) # (-9, 0)
+GANTRY_Z_LIMIT = (-4.915, -3.5) # (-5, -1)
 
 ############################################
 
@@ -76,19 +76,19 @@ def to_rlf_robot_full_conf(robot11_confval, robot12_confval):
 
 ############################################
 # TODO use arm group from SRDF
-def get_gantry_control_joint_names(arm_move_group='robot11'):
-    return rfl_robot_joint_names(arm_move_group, True)[:3]
+def get_gantry_control_joint_names(robot_id='robot11'):
+    return rfl_robot_joint_names(robot_id, True)[:3]
 
-def get_gantry_custom_limits(arm_move_group='robot11'):
-    joint_names = get_gantry_control_joint_names(arm_move_group)
+def get_gantry_custom_limits(robot_id='robot11'):
+    joint_names = get_gantry_control_joint_names(robot_id)
     return {
         joint_names[0] : GANTRY_X_LIMIT,
         joint_names[1] : GANTRY_Y_LIMIT,
         joint_names[2] : GANTRY_Z_LIMIT,
     }
 
-def get_cartesian_control_joint_names(arm_move_group='robot11'):
-    return rfl_robot_joint_names(arm_move_group, False)[2:]
+def get_cartesian_control_joint_names(robot_id='robot11'):
+    return rfl_robot_joint_names(robot_id, False)[2:]
 
 ########################################
 
@@ -106,11 +106,5 @@ def load_RFL_world(viewer=True, disable_env=False):
     draw_pose(unit_pose(), length=1.)
     cam = rfl_camera()
     set_camera_pose(cam['target'], cam['location'])
-
-    # TODO move this to process.initial_state
-    # * collision sanity check
-    full_start_conf = to_rlf_robot_full_conf(R11_INTER_CONF_VALS, R12_INTER_CONF_VALS)
-    client.set_robot_configuration(robot, full_start_conf)
-    assert not client.check_collisions(robot, full_start_conf, options={'diagnosis':True})
 
     return client, robot, robot_uid
