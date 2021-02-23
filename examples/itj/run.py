@@ -29,7 +29,7 @@ from pybullet_planning import apply_alpha, RED, BLUE, YELLOW, GREEN, GREY
 from .parsing import parse_process
 from .robot_setup import load_RFL_world, to_rlf_robot_full_conf, R11_INTER_CONF_VALS, R12_INTER_CONF_VALS
 from .utils import notify, MIL2M, convert_rfl_robot_conf_unit
-from .stream import set_state, compute_linear_movement
+from .stream import set_state, compute_linear_movement, compute_free_movement
 
 from integral_timber_joints.process import RoboticFreeMovement, RoboticLinearMovement
 
@@ -79,7 +79,7 @@ def compute_movement(client, robot, process, movement, options=None):
         # type compas_fab : JointTrajectory
     elif isinstance(movement, RoboticFreeMovement):
         # free movement needs exterior samplers for start/end configurations
-        # traj = compute_free_movement(client, robot, process, movement)
+        traj = compute_free_movement(client, robot, process, movement, options)
         # type compas_fab : JointTrajectory
         pass
     else:
@@ -132,12 +132,12 @@ def main():
         updated_movement = compute_movement(client, robot, process, movement, options)
         if updated_movement is not None:
             if updated_movement.trajectory is not None:
-                cprint('Solution found for {}'.format(updated_movement), 'green')
+                cprint('Solution found for {} : {}'.format(updated_movement, updated_movement.trajectory), 'green')
                 for jt_traj_pt in updated_movement.trajectory.points:
                     if args.watch:
                         client.set_robot_configuration(robot, jt_traj_pt) #, group=yzarm_move_group
                         if args.step_sim:
-                            wait_if_gui('step Cartesian.')
+                            wait_if_gui('Step conf.')
                         else:
                             wait_for_duration(0.1)
             else:
