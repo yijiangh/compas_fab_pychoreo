@@ -55,37 +55,30 @@ JSON_OUT_DIR = os.path.join(HERE, 'results')
 
 def compute_movement(client, robot, process, movement, options=None):
     cprint(movement, 'cyan')
-    if not (isinstance(movement, RoboticLinearMovement) or isinstance(movement, RoboticFreeMovement)):
+    if not isinstance(movement, RoboticMovement):
         return None
 
     debug = options.get('debug') or False
     start_state = process.get_movement_start_state(movement)
     # end_state = process.get_movement_end_state(movement)
     set_state(client, robot, process, start_state)
-    if debug:
-        wait_if_gui('Start state')
+    # if debug:
+    #     wait_if_gui('Start state')
     # set_state(client, robot, process, end_state)
     # wait_if_gui('End state')
 
-    obstacles = []
     traj = None
-    # TODO handle collision objects
-    # TODO compile built elements as obstacles
-
-    # TODO handle attached collision objects
-
     if isinstance(movement, RoboticLinearMovement):
-        # linear movement has built-in kinematics sampler
+        # * linear movement has built-in kinematics sampler
         traj = compute_linear_movement(client, robot, process, movement, options)
-        # type compas_fab : JointTrajectory
     elif isinstance(movement, RoboticFreeMovement):
-        # free movement needs exterior samplers for start/end configurations
+        # * free movement needs exterior samplers for start/end configurations
         traj = compute_free_movement(client, robot, process, movement, options)
-        # type compas_fab : JointTrajectory
         pass
     else:
         raise ValueError()
 
+    # traj type compas_fab : JointTrajectory
     movement.trajectory = traj
     return movement
 
@@ -109,7 +102,7 @@ def main():
 
     # * Connect to path planning backend and initialize robot parameters
     seq_i = seq_i=int(args.seq_i)
-    client, robot, robot_uid = load_RFL_world(viewer=args.viewer, disable_env=True)
+    client, robot, _ = load_RFL_world(viewer=args.viewer, disable_env=True)
 
     process = parse_process(args.problem)
     assembly = process.assembly
@@ -123,9 +116,8 @@ def main():
     # if args.debug:
     #     wait_if_gui('Pre Initial state.')
 
-    # process.initial_state['robot'].kinematic_config = full_start_conf
     process.initial_state['robot'].kinematic_config = process.robot_initial_config
-    set_state(client, robot, process, process.initial_state, initialize=True)
+    set_state(client, robot, process, process.initial_state, initialize=True, options={'debug' : False})
     # * collision sanity check
     assert not client.check_collisions(robot, full_start_conf, options={'diagnosis':True})
     # if args.debug:
@@ -144,9 +136,9 @@ def main():
         movements[0].end_state['robot'].kinematic_config = Configuration(values=R11_INTER_CONF_VALS,
             types=[2] + RFL_SINGLE_ARM_JOINT_TYPES, joint_names = rfl_robot_joint_names('robot11', include_gantry=True))
 
-        compute_movement(client, robot, process, movements[2], options)
+        movements[2] = compute_movement(client, robot, process, movements[2], options)
         movements[1].end_state['robot'].kinematic_config = movements[2].trajectory.points[0]
-        compute_movement(client, robot, process, movements[1], options)
+        movements[1] = compute_movement(client, robot, process, movements[1], options)
 
     # for updated_movement in process.get_movements_by_planning_priority(beam_id, 1):
     for m in movements:
@@ -162,7 +154,7 @@ def main():
                             wait_for_duration(0.1)
             else:
                 cprint('No solution found for {}'.format(m), 'red')
-    p1_movements = process.get_movements_by_planning_priority(beam_id, 1)
+    # p1_movements = process.get_movements_by_planning_priority(beam_id, 1)
     # * simulate ends
     client.disconnect()
 
