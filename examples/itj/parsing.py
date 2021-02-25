@@ -60,7 +60,8 @@ def rfl_setup():
 
 ###########################################
 
-DATA_DIR = os.path.join(HERE, 'data')
+# DATA_DIR = os.path.join(HERE, 'data')
+DATA_DIR = r'C:\Users\harry\Dropbox (MIT)\code_ws_dropbox\itj_ws\itj_design_study\210128_RemodelFredPavilion'
 
 def get_process_path(assembly_name, file_dir=DATA_DIR):
     if assembly_name.endswith('.json'):
