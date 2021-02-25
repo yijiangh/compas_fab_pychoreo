@@ -1,3 +1,4 @@
+import pybullet
 from collections import defaultdict
 from itertools import combinations
 from termcolor import cprint
@@ -11,9 +12,12 @@ from pybullet_planning import inverse_kinematics
 from pybullet_planning import get_movable_joints  # from pybullet_planning.interfaces.robots.joint
 from pybullet_planning import get_joint_names  # from pybullet_planning.interfaces.robots.joint
 from pybullet_planning import set_pose, get_bodies, remove_body, create_attachment, set_color
+from pybullet_planning import add_fixed_constraint, remove_constraint
 from pybullet_planning import draw_pose, get_body_body_disabled_collisions
 
 from compas_fab.backends import PyBulletClient
+from compas_fab.backends.pybullet.const import ConstraintInfo
+
 from compas_fab_pychoreo.planner import PyChoreoPlanner
 from compas_fab_pychoreo.utils import wildcard_keys
 from compas_fab.backends.pybullet.const import STATIC_MASS
@@ -42,7 +46,9 @@ class PyChoreoClient(PyBulletClient):
         # attached object name => a list of pybullet_planning `Attachment` object
         # notice that parent body (robot) info is stored inside Attachment
         self.pychoreo_attachments = defaultdict(list)
-        self.extra_disabled_collision_link_ids = set()
+        # name -> ((robot_uid, touched_link_name), (body, None))
+        # None means BASE_LINK
+        self.extra_disabled_collision_links = defaultdict(set)
 
     def connect(self):
         with HideOutput(not self.verbose):
@@ -70,7 +76,9 @@ class PyChoreoClient(PyBulletClient):
             set_color(body, color)
 
     def add_attached_collision_mesh(self, attached_collision_mesh, options=None):
-        """Adds an attached collision object to the planning scene.
+        """Adds an attached collision object to the planning scene, the grasp pose is set according to the
+        **current** relative pose in the scene. Thus, the robot conf needs to be set to the right values to
+        make the grasp pose right.
 
         Note: the pybullet fixed constraint only affects physics simulation by adding an artificial force,
         Thus, by `set_joint_configuration` and `step_simulation`, the attached object will not move together.
@@ -84,26 +92,45 @@ class PyChoreoClient(PyBulletClient):
         -------
         attachment : a pybullet_planning `Attachment` object
         """
-        name = attached_collision_mesh.collision_mesh.id
-        self.planner.add_attached_collision_mesh(attached_collision_mesh, options=options)
+        options = options or {}
+        assert 'robot' in options, 'The robot option must be specified!'
         robot = options['robot']
-        robot_uid = robot.attributes['pybullet_uid']
-        tool_attach_link = link_from_name(robot_uid, attached_collision_mesh.link_name)
-        ee_link_pose = get_link_pose(robot_uid, tool_attach_link)
         mass = options.get('mass') or STATIC_MASS
         options['mass'] = mass
         color = options.get('color') or GREEN
-        for constr_info in self.attached_collision_objects[name]:
+
+        robot_uid = robot.attributes['pybullet_uid']
+        name = attached_collision_mesh.collision_mesh.id
+        attached_bodies = []
+        if name not in self.collision_objects:
+            # ! I don't want to add another copy of the objects
+            # self.planner.add_attached_collision_mesh(attached_collision_mesh, options=options)
+            # attached_bodies = [constr.body_id for constr in self.attached_collision_objects[name]]
+            self.planner.add_collision_mesh(attached_collision_mesh.collision_mesh, options=options)
+        attached_bodies = self.collision_objects[name]
+        del self.collision_objects[name]
+        self.attached_collision_objects[name] = []
+
+        tool_attach_link = link_from_name(robot_uid, attached_collision_mesh.link_name)
+        ee_link_pose = get_link_pose(robot_uid, tool_attach_link)
+        for body in attached_bodies:
             # * update attachment collision links
-            body = constr_info.body_id
             for touched_link_name in attached_collision_mesh.touch_links:
-                self.extra_disabled_collision_link_ids.add(((robot_uid, link_from_name(robot_uid, touched_link_name)), (body, BASE_LINK)))
-            set_pose(body, ee_link_pose)
+                self.extra_disabled_collision_links[name].add(
+                    ((robot_uid, touched_link_name), (body, None))
+                    )
+            # set_pose(body, ee_link_pose)
             set_color(body, color)
             # create attachment based on their *current* pose
             attachment = create_attachment(robot_uid, tool_attach_link, body)
             attachment.assign()
             self.pychoreo_attachments[name].append(attachment)
+
+            # create fixed constraint to conform to PybulletClient
+            constraint_id = add_fixed_constraint(attachment.child, attachment.parent, attachment.parent_link)
+            constraint_info = ConstraintInfo(constraint_id, attachment.child, attachment.parent)
+            self.attached_collision_objects[name].append(constraint_info)
+
         return self.pychoreo_attachments[name]
 
     def remove_attached_collision_mesh(self, name, options=None):
@@ -126,26 +153,48 @@ class PyChoreoClient(PyBulletClient):
         for name in names:
             attachments = self.pychoreo_attachments[name]
             detached_attachments.extend(attachments)
+            # * add detached attachments to collision_objects
+            self.collision_objects[name] = [at.child for at in attachments]
+            for constraint_info in self.attached_collision_objects[name]:
+                remove_constraint(constraint_info.constraint_id)
             del self.attached_collision_objects[name]
             del self.pychoreo_attachments[name]
         return detached_attachments
 
     ########################################
 
-    def set_collision_mesh_frame(self, name, frame, options=None):
+    def set_object_frame(self, name, frame, options=None):
         wildcard = options.get('wildcard') or '^{}$'.format(name)
-        names = wildcard_keys(self.collision_objects, wildcard)
-        assert len(names) > 0, 'wildcard {} not found in {}'.format(wildcard, self.collision_objects.keys())
+        status = self._get_body_statues(wildcard)
+        assert status != -1
+        contain_dict = self.collision_objects if status == 0 else self.pychoreo_attachments
+        names = wildcard_keys(contain_dict, wildcard)
+        # if len(names) == 0:
+        #     cprint('wildcard {} not found in {}'.format(wildcard, self.collision_objects.keys()), 'yellow')
         for name in names:
-            for body in self.collision_objects[name]:
-                set_pose(body, pose_from_frame(frame))
+            for bdata in contain_dict[name]:
+                set_pose(bdata if status == 0 else bdata.child, pose_from_frame(frame))
+
+    def _get_body_statues(self, wildcard):
+        co_names = wildcard_keys(self.collision_objects, wildcard)
+        at_names = wildcard_keys(self.pychoreo_attachments, wildcard)
+        if len(co_names) == 0 and len(at_names) == 0:
+            return -1
+        elif len(co_names) > 0 and len(at_names) == 0:
+            return 0
+        elif len(co_names) == 0 and len(at_names) > 0:
+            return 1
+        else:
+            raise ValueError('names should not appear at both collision objects and attached objects at the same time!')
+
+    def _get_collision_object_names(self, wildcard):
+        return wildcard_keys(self.collision_objects, wildcard)
 
     # TODO separation between attached and collision objects might cause problems in mode changes
     def _get_collision_object_bodies(self, wildcard):
         # wildcard = wildcard or '^{}$'.format(name)
-        names = wildcard_keys(self.collision_objects, wildcard)
         bodies = []
-        for n in names:
+        for n in self._get_collision_object_names(wildcard):
             bodies.extend(self.collision_objects[n])
         return bodies
 

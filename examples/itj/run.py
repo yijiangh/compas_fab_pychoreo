@@ -19,7 +19,7 @@ from compas.datastructures import Mesh
 from compas.geometry import Transformation
 from compas_fab.robots import Configuration, AttachedCollisionMesh, CollisionMesh, JointTrajectory, Duration, JointTrajectoryPoint
 
-from pybullet_planning import wait_if_gui, wait_for_duration, wait_for_user
+from pybullet_planning import wait_if_gui, wait_for_duration, wait_for_user, LockRenderer
 from pybullet_planning import apply_alpha, RED, BLUE, YELLOW, GREEN, GREY
 
 # HERE = os.path.dirname(__file__)
@@ -57,14 +57,15 @@ def compute_movement(client, robot, process, movement, options=None):
     print(type(movement))
     if not (isinstance(movement, RoboticLinearMovement) or isinstance(movement, RoboticFreeMovement)):
         return None
-    start_state = process.get_movement_start_state(movement)
-    end_state = process.get_movement_end_state(movement)
 
-    # * visualize states
+    debug = options.get('debug') or False
+    start_state = process.get_movement_start_state(movement)
+    # end_state = process.get_movement_end_state(movement)
     set_state(client, robot, process, start_state)
-    wait_if_gui('Start state')
-    set_state(client, robot, process, end_state)
-    wait_if_gui('End state')
+    if debug:
+        wait_if_gui('Start state')
+    # set_state(client, robot, process, end_state)
+    # wait_if_gui('End state')
 
     obstacles = []
     traj = None
@@ -125,23 +126,26 @@ def main():
 
     options = {
         'debug' : args.debug,
+        'diagnosis' : True,
     }
-    movements = process.get_movements_by_beam_id(beam_id)
-    for movement in movements:
-        print('------')
-        updated_movement = compute_movement(client, robot, process, movement, options)
-        if updated_movement is not None:
-            if updated_movement.trajectory is not None:
-                cprint('Solution found for {} : {}'.format(updated_movement, updated_movement.trajectory), 'green')
-                for jt_traj_pt in updated_movement.trajectory.points:
-                    if args.watch:
-                        client.set_robot_configuration(robot, jt_traj_pt) #, group=yzarm_move_group
-                        if args.step_sim:
-                            wait_if_gui('Step conf.')
-                        else:
-                            wait_for_duration(0.1)
-            else:
-                cprint('No solution found for {}'.format(updated_movement), 'red')
+    p1_movements = process.get_movements_by_planning_priority(beam_id, 1)
+    with LockRenderer(not args.debug):
+        for movement in p1_movements:
+            updated_movement = compute_movement(client, robot, process, movement, options)
+
+    for updated_movement in process.get_movements_by_planning_priority(beam_id, 1):
+        if updated_movement.trajectory is not None:
+            cprint('Solution found for {} : {}'.format(updated_movement, updated_movement.trajectory), 'green')
+            for jt_traj_pt in updated_movement.trajectory.points:
+                if args.watch:
+                    client.set_robot_configuration(robot, jt_traj_pt) #, group=yzarm_move_group
+                    if args.step_sim:
+                        wait_if_gui('Step conf.')
+                    else:
+                        wait_for_duration(0.1)
+        else:
+            cprint('No solution found for {}'.format(updated_movement), 'red')
+    p1_movements = process.get_movements_by_planning_priority(beam_id, 1)
     # * simulate ends
     client.disconnect()
 
