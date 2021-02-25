@@ -1,3 +1,4 @@
+from compas.utilities import encoders
 from termcolor import cprint
 from copy import copy
 
@@ -6,6 +7,7 @@ from compas_fab.robots import Configuration, JointTrajectoryPoint, JointTrajecto
 from compas_fab.robots import CollisionMesh, Duration, AttachedCollisionMesh
 
 from integral_timber_joints.process import RoboticFreeMovement, RoboticLinearMovement
+from integral_timber_joints.process.state import get_object_from_flange
 
 import ikfast_abb_irb4600_40_255
 from pybullet_planning import GREY
@@ -39,10 +41,21 @@ def set_state(client, robot, process, state_from_object, initialize=False, scale
     gantry_z_sample_fn = get_sample_fn(robot_uid, [gantry_z_joint], custom_limits={gantry_z_joint : GANTRY_Z_LIMIT})
 
     with LockRenderer():
+        # * Do robot first
+        robot_state = state_from_object['robot']
+        if robot_state.kinematic_config is not None:
+            client.set_robot_configuration(robot, robot_state.kinematic_config)
+            # perform FK
+            if robot_state.current_frame is None:
+                tool_link = link_from_name(robot_uid, flange_link_name)
+                robot_state.current_frame = frame_from_pose(get_link_pose(robot_uid, tool_link), scale=1/scale)
+            else:
+                pass
+                # assert frame ~= current_frame
+
         for object_id, object_state in state_from_object.items():
             if object_id.startswith('robot'):
-                if object_state.kinematic_config is not None:
-                    client.set_robot_configuration(robot, object_state.kinematic_config)
+                continue
             else:
                 if initialize:
                     # * create each object in the state dictionary
@@ -74,16 +87,17 @@ def set_state(client, robot, process, state_from_object, initialize=False, scale
                         cm.scale(scale)
                         # add mesh to environment at origin
                         client.add_collision_mesh(cm, {'color':color})
+                # end if initialize
 
                 if object_state.current_frame is not None:
                     current_frame = copy(object_state.current_frame)
                     current_frame.point *= scale
                     # * set pose according to state
                     client.set_object_frame(object_id, current_frame,
-                        options={'wildcard' : '{}*'.format(object_id)})
+                        options={'wildcard' : '^{}'.format(object_id)})
 
                 # TODO move to compute_*_movement
-                wildcard = '{}*'.format(object_id)
+                wildcard = '^{}'.format(object_id)
                 # -1 if not attached and not collision object
                 # 0 if collision object, 1 if attached
                 status = client._get_body_statues(wildcard)
@@ -94,28 +108,25 @@ def set_state(client, robot, process, state_from_object, initialize=False, scale
                 else:
                     # * promote to attached_collision_object if needed
                     if status == 0:
-                        # attached collision objects haven't been added
+                        # * attached collision objects haven't been added
                         assert initialize or state_from_object['robot'].current_frame is not None
-                        if state_from_object['robot'].current_frame:
-                            robot_tool_frame = copy(state_from_object['robot'].current_frame)
-                            robot_tool_frame.point *= scale
-                            robot_tool_pose = pose_from_frame(robot_tool_frame)
-                        else:
-                            # robot_tool_pose = world_from_object * invert(gripper_from_object)
-                            # robot_tool_pose = get_link_pose(robot_uid, link_from_name(robot_uid, flange_link_name))
-                            robot_tool_frame = frame_from_pose(robot_tool_pose)
+                        # object_from_flange = get_object_from_flange(state_from_object, object_id)
+                        flange_frame = copy(state_from_object['robot'].current_frame)
+                        object_frame = copy(state_from_object[object_id].current_frame)
+                        flange_frame.point *= scale
+                        object_frame.point *= scale
+                        flange_pose = pose_from_frame(flange_frame, scale=scale)
                         # * sample from a ball near the pose
-                        base_gen_fn = uniform_pose_generator(robot_uid, robot_tool_pose, reachable_range=(0.2,1.5))
+                        base_gen_fn = uniform_pose_generator(robot_uid, flange_pose, reachable_range=(0.2,1.5))
                         for _ in range(gantry_attempts):
                             x, y, yaw = next(base_gen_fn)
                             # TODO a more formal gantry_base_from_world_base
                             y *= -1
                             z, = gantry_z_sample_fn()
                             gantry_xyz_vals = [x,y,z]
-                            # set_joint_positions(robot_uid, gantry_joints, gantry_xyz_vals)
                             client.set_robot_configuration(robot, Configuration(gantry_xyz_vals, gantry_arm_joint_types, sorted_gantry_joint_names))
 
-                            conf = client.inverse_kinematics(robot, robot_tool_frame, group=GANTRY_ARM_GROUP, options={'avoid_collisions' : False})
+                            conf = client.inverse_kinematics(robot, flange_frame, group=GANTRY_ARM_GROUP, options={'avoid_collisions' : False})
                             if conf is not None:
                                 break
                         else:
@@ -124,7 +135,7 @@ def set_state(client, robot, process, state_from_object, initialize=False, scale
                         client.set_robot_configuration(robot, conf)
 
                         # create attachments
-                        wildcard = '{}*'.format(object_id)
+                        wildcard = '^{}'.format(object_id)
                         names = client._get_collision_object_names(wildcard)
                         touched_links = ['{}_tool0'.format(MAIN_ROBOT_ID), '{}_link_6'.format(MAIN_ROBOT_ID)] if object_id.startswith('t') else []
                         for name in names:
@@ -159,7 +170,7 @@ def compute_linear_movement(client, robot, process, movement, options=None):
 
     # * options
     # sampling attempts
-    gantry_attempts = options.get('gantry_attempts') or 100
+    gantry_attempts = options.get('gantry_attempts') or 200
     pose_step_size = options.get('pose_step_size') or 0.01 # meter
     reachable_range = options.get('reachable_range') or (0.2, 1.5)
     debug = options.get('debug') or False
@@ -187,10 +198,17 @@ def compute_linear_movement(client, robot, process, movement, options=None):
     end_state = process.get_movement_end_state(movement)
     start_t0cf_frame = start_state['robot'].current_frame
     end_t0cf_frame = end_state['robot'].current_frame
+    # TODO wait for Victor's change
+    # end_conf = end_state['robot'].kinematic_config
+    end_conf = None
 
     # TODO remove later, use client
     start_tool_pose = pose_from_frame(start_t0cf_frame, scale=1e-3)
-    end_tool_pose = pose_from_frame(end_t0cf_frame, scale=1e-3)
+    if end_conf is not None:
+        client.set_robot_configuration(robot, end_conf)
+        end_tool_pose = get_link_pose(robot_uid, ik_tool_link)
+    else:
+        end_tool_pose = pose_from_frame(end_t0cf_frame, scale=1e-3)
     interp_poses = list(interpolate_poses(start_tool_pose, end_tool_pose, pos_step_size=pose_step_size))
     # if debug:
     for p in interp_poses:
@@ -209,49 +227,59 @@ def compute_linear_movement(client, robot, process, movement, options=None):
 
     solution_found = False
     samples_cnt = ik_failures = path_failures = 0
-    for _ in range(gantry_attempts):
-        x, y, yaw = next(base_gen_fn)
-        # TODO a more formal gantry_base_from_world_base
-        y *= -1
-        z, = gantry_z_sample_fn()
-        gantry_xyz_vals = [x,y,z]
-        # print('gantry_xyz_vals: ({})'.format(gantry_xyz_vals))
-        # TODO swicth to client set_robot_configuration
-        set_joint_positions(robot_uid, gantry_joints, gantry_xyz_vals)
-        samples_cnt += 1
 
-        # check if collision-free ik solution exist for the four Cartesian poses
-        arm_conf_vals = sample_ik_fn(start_tool_pose)
-        # if arm_conf_vals and len(arm_conf_vals) > 0:
-        #     wait_for_user('Conf found!')
+    if end_conf is None:
+        for _ in range(gantry_attempts):
+            x, y, yaw = next(base_gen_fn)
+            # TODO a more formal gantry_base_from_world_base
+            y *= -1
+            z, = gantry_z_sample_fn()
+            gantry_xyz_vals = [x,y,z]
+            # print('gantry_xyz_vals: ({})'.format(gantry_xyz_vals))
+            # TODO swicth to client set_robot_configuration
+            set_joint_positions(robot_uid, gantry_joints, gantry_xyz_vals)
+            samples_cnt += 1
 
-        for arm_conf_val in arm_conf_vals:
-            if arm_conf_val is None:
-                continue
-            gantry_arm_conf = Configuration(list(gantry_xyz_vals) + list(arm_conf_val),
-                gantry_arm_joint_types, gantry_arm_joint_names)
-            # print('extra_disabled_collision_links: ', client.extra_disabled_collision_links)
-            if not client.check_collisions(robot, gantry_arm_conf, options=options):
-                # * set start pick conf
-                with WorldSaver():
-                    # * Cartesian planning, only for the six-axis arm (aka sub_conf)
-                    # TODO replace with client one
-                    # client.plan_cartesian_motion(robot, frames_WCF, start_configuration=None, group=None, options=None)
-                    cart_conf_vals = plan_cartesian_motion(robot_uid, ik_joints[0], ik_tool_link, interp_poses, get_sub_conf=True)
-                    if cart_conf_vals is not None:
-                        solution_found = True
-                        cprint('Collision free! After {} ik, {} path failure over {} samples.'.format(
-                            ik_failures, path_failures, samples_cnt), 'green')
-                        break
-                    else:
-                        path_failures += 1
+            # check if collision-free ik solution exist for the four Cartesian poses
+            arm_conf_vals = sample_ik_fn(start_tool_pose)
+            # if arm_conf_vals and len(arm_conf_vals) > 0:
+            #     wait_for_user('Conf found!')
+
+            for arm_conf_val in arm_conf_vals:
+                if arm_conf_val is None:
+                    continue
+                gantry_arm_conf = Configuration(list(gantry_xyz_vals) + list(arm_conf_val),
+                    gantry_arm_joint_types, gantry_arm_joint_names)
+                # print('extra_disabled_collision_links: ', client.extra_disabled_collision_links)
+                if not client.check_collisions(robot, gantry_arm_conf, options=options):
+                    # * set start pick conf
+                    with WorldSaver():
+                        # * Cartesian planning, only for the six-axis arm (aka sub_conf)
+                        # TODO replace with client one
+                        # client.plan_cartesian_motion(robot, frames_WCF, start_configuration=None, group=None, options=None)
+                        cart_conf_vals = plan_cartesian_motion(robot_uid, ik_joints[0], ik_tool_link, interp_poses, get_sub_conf=True)
+                        if cart_conf_vals is not None:
+                            solution_found = True
+                            cprint('Collision free! After {} ik, {} path failure over {} samples.'.format(
+                                ik_failures, path_failures, samples_cnt), 'green')
+                            break
+                        else:
+                            path_failures += 1
+            else:
+                ik_failures += 1
+            if solution_found:
+                break
         else:
-            ik_failures += 1
-        if solution_found:
-            break
+            cprint('Cartesian Path planning failure after {} attempts | {} due to IK, {} due to Cart.'.format(
+                samples_cnt, ik_failures, path_failures), 'yellow')
     else:
-        cprint('Cartesian Path planning failure after {} attempts | {} due to IK, {} due to Cart.'.format(
-            samples_cnt, ik_failures, path_failures), 'yellow')
+        cart_conf_vals = plan_cartesian_motion(robot_uid, ik_joints[0], ik_tool_link, interp_poses, get_sub_conf=True)
+        if cart_conf_vals is not None:
+            solution_found = True
+            cprint('Collision free! After {} ik, {} path failure over {} samples.'.format(
+                ik_failures, path_failures, samples_cnt), 'green')
+        else:
+            cprint('Cartesian Path planning failure with prescribed end conf.', 'yellow')
 
     traj = None
     if solution_found:
@@ -280,6 +308,8 @@ def compute_free_movement(client, robot, process, movement, options=None):
     end_state = process.get_movement_end_state(movement)
     start_conf = start_state['robot'].kinematic_config
     end_conf = end_state['robot'].kinematic_config
+    print('end conf: ', end_conf)
+    print('end conf joint_names: ', end_conf.joint_names)
     initial_conf = process.initial_state['robot'].kinematic_config
     if start_conf is None and end_conf is None:
         # * sample from t0cp if no conf is provided for the robot
@@ -316,4 +346,7 @@ def compute_free_movement(client, robot, process, movement, options=None):
     if 'custom_limits' not in options:
         options.update({'custom_limits' : custom_limits})
 
-    return client.plan_motion(robot, end_conf, start_configuration=start_conf, group=GANTRY_ARM_GROUP, options=options)
+    # return client.plan_motion(robot, end_conf, start_configuration=start_conf, group=GANTRY_ARM_GROUP, options=options)
+    goal_constraints = robot.constraints_from_configuration(end_conf, [0.01], [0.01])
+    return client.plan_motion(robot, goal_constraints, start_configuration=start_conf, group=GANTRY_ARM_GROUP, options=options)
+

@@ -34,7 +34,8 @@ def wildcard_keys(data, wildcard):
     # https://docs.python.org/3/library/re.html
     matched_keys = []
     for k in data.keys():
-        if re.search(wildcard, k):
+        # if re.search(wildcard, k):
+        if re.match(wildcard, k):
             matched_keys.append(k)
     return matched_keys
 
