@@ -3,7 +3,7 @@ from compas_fab.robots import Configuration, AttachedCollisionMesh, CollisionMes
 from termcolor import cprint
 
 from compas_fab_pychoreo.client import PyChoreoClient
-from pybullet_planning import draw_pose, set_camera_pose, GREY, unit_pose
+from pybullet_planning import draw_pose, set_camera_pose, GREY, unit_pose, LockRenderer
 
 from .utils import convert_rfl_robot_conf_unit
 from .visualization import rfl_camera
@@ -97,7 +97,8 @@ def load_RFL_world(viewer=True, disable_env=False):
     client = PyChoreoClient(viewer=viewer)
     client.connect()
 
-    robot = client.load_robot(urdf_filename)
+    with LockRenderer():
+        robot = client.load_robot(urdf_filename)
     robot.semantics = semantics
     # robot's unique body index in pybullet
     robot_uid = client.get_robot_pybullet_uid(robot)

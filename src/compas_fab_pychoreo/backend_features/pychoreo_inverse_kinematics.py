@@ -123,4 +123,6 @@ class PyChoreoInverseKinematics(InverseKinematics):
             remove_body(sub_robot)
             return []
         remove_body(sub_robot)
-        return [sub_kinematic_conf]
+        conf = [kinematic_conf[i] for i, jt in enumerate(selected_movable_joints) if jt in ik_joints]
+        # TODO in RFL case, the base_link will give us 17 joint, needs some pruning according to the ik_joints
+        return [conf]

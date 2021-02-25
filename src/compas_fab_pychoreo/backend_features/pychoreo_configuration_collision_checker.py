@@ -1,3 +1,4 @@
+from pybullet_planning import BASE_LINK
 from compas_fab_pychoreo.backend_features.configuration_collision_checker import ConfigurationCollisionChecker
 from compas_fab_pychoreo.utils import is_valid_option, values_as_list, wildcard_keys
 
@@ -56,7 +57,6 @@ class PyChoreoConfigurationCollisionChecker(ConfigurationCollisionChecker):
                 names = wildcard_keys(self.client.collision_objects, wc)
                 for n in names:
                     obstacles.extend(self.client.collision_objects[n])
-        # // ConstraintInfo = namedtuple('ConstraintInfo', ['constraint_id', 'body_id', 'robot_uid'])
         # ! doesn't make sense to have a wildcard selection for attached objects
         attachments = values_as_list(self.client.pychoreo_attachments)
 
@@ -64,13 +64,21 @@ class PyChoreoConfigurationCollisionChecker(ConfigurationCollisionChecker):
             custom_limits={joint_from_name(robot_uid, jn) : lims for jn, lims in custom_limits.items()})
 
         # TODO additional disabled collisions in options
-        # option_disabled_linke_names = is_valid_option(options, 'extra_disabled_collisions', [])
+        extra_disabled_collision_names = values_as_list(self.client.extra_disabled_collision_links)
+        option_disabled_link_names = options.get('extra_disabled_collisions') or set()
         # option_extra_disabled_collisions = get_body_body_disabled_collisions(robot_uid, workspace, extra_disabled_link_names)
-        option_extra_disabled_collisions = set()
-
+        extra_disabled_collisions = set()
+        for bpair in list(extra_disabled_collision_names) + list(option_disabled_link_names):
+            b1, b1link_name = bpair[0]
+            b2, b2link_name = bpair[1]
+            b1_link = BASE_LINK if b1link_name is None else link_from_name(b1, b1link_name)
+            b2_link = BASE_LINK if b2link_name is None else link_from_name(b2, b2link_name)
+            extra_disabled_collisions.add(
+                ((b1, b1_link), (b2, b2_link))
+                )
         collision_fn = get_collision_fn(robot_uid, ik_joints, obstacles=obstacles,
                                         attachments=attachments, self_collisions=self_collisions,
                                         disabled_collisions=self.client.get_self_collision_link_ids(robot), # get disabled self-collision links (srdf)
-                                        extra_disabled_collisions=self.client.extra_disabled_collision_link_ids, # | option_extra_disabled_collisions
+                                        extra_disabled_collisions=extra_disabled_collisions,
                                         custom_limits=pb_custom_limits)
         return collision_fn
