@@ -285,7 +285,7 @@ def test_plan_motion(abb_irb4600_40_255_setup, itj_TC_PG500_cms, itj_beam_cm, co
             'resolutions' : 0.05
             }
 
-        goal_constraints = robot.constraints_from_configuration(end_conf, [0.01], [0.01])
+        goal_constraints = robot.constraints_from_configuration(end_conf, [0.01], [0.01], group=move_group)
 
         st_time = time.time()
         trajectory = client.plan_motion(robot, goal_constraints, start_configuration=start_conf, group=move_group, options=plan_options)

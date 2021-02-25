@@ -1,3 +1,5 @@
+import sys
+import pybullet
 from compas.utilities import encoders
 from termcolor import cprint
 from copy import copy
@@ -96,14 +98,14 @@ def set_state(client, robot, process, state_from_object, initialize=False, scale
                     client.set_object_frame(object_id, current_frame,
                         options={'wildcard' : '^{}'.format(object_id)})
 
-                # TODO move to compute_*_movement
+                # * attachment management
                 wildcard = '^{}'.format(object_id)
                 # -1 if not attached and not collision object
                 # 0 if collision object, 1 if attached
                 status = client._get_body_statues(wildcard)
                 if not object_state.attached_to_robot:
+                    # * demote attachedCM to collision_objects
                     if status == 1:
-                        # demote attachedCM to collision_objects
                         client.detach_attached_collision_mesh(object_id, {'wildcard' : wildcard})
                 else:
                     # * promote to attached_collision_object if needed
@@ -132,11 +134,13 @@ def set_state(client, robot, process, state_from_object, initialize=False, scale
                         else:
                             raise RuntimeError('no attach conf found for {} after {} attempts.'.format(object_state, gantry_attempts))
 
+                        # ? do we need WorldSaver?
                         client.set_robot_configuration(robot, conf)
 
-                        # create attachments
+                        # * create attachments
                         wildcard = '^{}'.format(object_id)
                         names = client._get_collision_object_names(wildcard)
+                        # ! ACM for attachments
                         touched_links = ['{}_tool0'.format(MAIN_ROBOT_ID), '{}_link_6'.format(MAIN_ROBOT_ID)] if object_id.startswith('t') else []
                         for name in names:
                             # a faked AttachedCM since we are not adding a new mesh, just promoting collision meshes to AttachedCMes
@@ -199,8 +203,8 @@ def compute_linear_movement(client, robot, process, movement, options=None):
     start_t0cf_frame = start_state['robot'].current_frame
     end_t0cf_frame = end_state['robot'].current_frame
     # TODO wait for Victor's change
-    # end_conf = end_state['robot'].kinematic_config
-    end_conf = None
+    end_conf = end_state['robot'].kinematic_config
+    # end_conf = None
 
     # TODO remove later, use client
     start_tool_pose = pose_from_frame(start_t0cf_frame, scale=1e-3)
@@ -209,10 +213,11 @@ def compute_linear_movement(client, robot, process, movement, options=None):
         end_tool_pose = get_link_pose(robot_uid, ik_tool_link)
     else:
         end_tool_pose = pose_from_frame(end_t0cf_frame, scale=1e-3)
+        # TODO print warning if en_tool_pose and current_frame is not close
     interp_poses = list(interpolate_poses(start_tool_pose, end_tool_pose, pos_step_size=pose_step_size))
     # if debug:
-    for p in interp_poses:
-        draw_pose(p)
+    # for p in interp_poses:
+    #     draw_pose(p)
     # wait_for_user('Viz cartesian poses')
 
     custom_limit_from_names = get_gantry_custom_limits(MAIN_ROBOT_ID)
@@ -257,7 +262,17 @@ def compute_linear_movement(client, robot, process, movement, options=None):
                         # * Cartesian planning, only for the six-axis arm (aka sub_conf)
                         # TODO replace with client one
                         # client.plan_cartesian_motion(robot, frames_WCF, start_configuration=None, group=None, options=None)
-                        cart_conf_vals = plan_cartesian_motion(robot_uid, ik_joints[0], ik_tool_link, interp_poses, get_sub_conf=True)
+                        try:
+                            cart_conf_vals = plan_cartesian_motion(robot_uid, ik_joints[0], ik_tool_link, interp_poses, get_sub_conf=True)
+                        except pybullet.error as e:
+                            cprint(e, 'red')
+                            print('{} | {} | {}'.format(ik_joint_names, tool_link_name, interp_poses))
+
+                            for p in interp_poses:
+                                draw_pose(p)
+                            wait_for_user('IK failure: Viz cartesian poses')
+                            # raise e
+
                         if cart_conf_vals is not None:
                             solution_found = True
                             cprint('Collision free! After {} ik, {} path failure over {} samples.'.format(
@@ -273,6 +288,7 @@ def compute_linear_movement(client, robot, process, movement, options=None):
             cprint('Cartesian Path planning failure after {} attempts | {} due to IK, {} due to Cart.'.format(
                 samples_cnt, ik_failures, path_failures), 'yellow')
     else:
+        gantry_xyz_vals = end_conf.prismatic_values
         cart_conf_vals = plan_cartesian_motion(robot_uid, ik_joints[0], ik_tool_link, interp_poses, get_sub_conf=True)
         if cart_conf_vals is not None:
             solution_found = True
@@ -347,6 +363,8 @@ def compute_free_movement(client, robot, process, movement, options=None):
         options.update({'custom_limits' : custom_limits})
 
     # return client.plan_motion(robot, end_conf, start_configuration=start_conf, group=GANTRY_ARM_GROUP, options=options)
-    goal_constraints = robot.constraints_from_configuration(end_conf, [0.01], [0.01])
-    return client.plan_motion(robot, goal_constraints, start_configuration=start_conf, group=GANTRY_ARM_GROUP, options=options)
+    goal_constraints = robot.constraints_from_configuration(end_conf, [0.01], [0.01], group=GANTRY_ARM_GROUP)
+    with LockRenderer():
+        traj = client.plan_motion(robot, goal_constraints, start_configuration=start_conf, group=GANTRY_ARM_GROUP, options=options)
+    return traj
 
