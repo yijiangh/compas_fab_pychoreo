@@ -27,7 +27,8 @@ from pybullet_planning import apply_alpha, RED, BLUE, YELLOW, GREEN, GREY
 #     sys.path.append(HERE)
 
 from .parsing import parse_process
-from .robot_setup import load_RFL_world, to_rlf_robot_full_conf, R11_INTER_CONF_VALS, R12_INTER_CONF_VALS
+from .robot_setup import load_RFL_world, to_rlf_robot_full_conf, R11_INTER_CONF_VALS, R12_INTER_CONF_VALS, \
+    RFL_SINGLE_ARM_JOINT_TYPES, rfl_robot_joint_names
 from .utils import notify, MIL2M, convert_rfl_robot_conf_unit
 from .stream import set_state, compute_linear_movement, compute_free_movement
 
@@ -54,7 +55,7 @@ HERE = os.path.dirname(__file__)
 JSON_OUT_DIR = os.path.join(HERE, 'results')
 
 def compute_movement(client, robot, process, movement, options=None):
-    print(type(movement))
+    cprint(movement, 'cyan')
     if not (isinstance(movement, RoboticLinearMovement) or isinstance(movement, RoboticFreeMovement)):
         return None
 
@@ -117,23 +118,36 @@ def main():
     beam_id = beam_ids[seq_i-1]
     cprint('Beam #{} | previous beams: {}'.format(beam_id, assembly.get_already_built_beams(beam_id)), 'cyan')
 
-    # * collision sanity check
+    # set all other unused robot
     full_start_conf = to_rlf_robot_full_conf(R11_INTER_CONF_VALS, R12_INTER_CONF_VALS)
+    # client.set_robot_configuration(robot, full_start_conf)
+    # wait_if_gui('Pre Initial state.')
+    # process.initial_state['robot'].kinematic_config = process.robot_initial_config
     process.initial_state['robot'].kinematic_config = full_start_conf
     set_state(client, robot, process, process.initial_state, initialize=True)
+    # * collision sanity check
     assert not client.check_collisions(robot, full_start_conf, options={'diagnosis':True})
-    wait_if_gui('Initial state.')
+    # wait_if_gui('Initial state.')
 
     options = {
         'debug' : args.debug,
         'diagnosis' : True,
     }
-    p1_movements = process.get_movements_by_planning_priority(beam_id, 1)
-    with LockRenderer(not args.debug):
-        for movement in p1_movements:
-            updated_movement = compute_movement(client, robot, process, movement, options)
 
-    for updated_movement in process.get_movements_by_planning_priority(beam_id, 1):
+    movements = process.get_movements_by_beam_id(beam_id)
+    # p1_movements = process.get_movements_by_planning_priority(beam_id, 1)
+    with LockRenderer(not args.debug):
+        # for movement in movements:
+        # ! let's just compute free and pick up gripper for now
+        movements[0].end_state['robot'].kinematic_config = Configuration(values=R11_INTER_CONF_VALS,
+            types=[2] + RFL_SINGLE_ARM_JOINT_TYPES, joint_names = rfl_robot_joint_names('robot11', include_gantry=True))
+
+        compute_movement(client, robot, process, movements[2], options)
+        movements[1].end_state['robot'].kinematic_config = movements[2].trajectory.points[0]
+        compute_movement(client, robot, process, movements[1], options)
+
+    # for updated_movement in process.get_movements_by_planning_priority(beam_id, 1):
+    for updated_movement in movements:
         if updated_movement.trajectory is not None:
             cprint('Solution found for {} : {}'.format(updated_movement, updated_movement.trajectory), 'green')
             for jt_traj_pt in updated_movement.trajectory.points:

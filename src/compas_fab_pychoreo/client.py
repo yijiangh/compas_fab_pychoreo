@@ -112,14 +112,12 @@ class PyChoreoClient(PyBulletClient):
         self.attached_collision_objects[name] = []
 
         tool_attach_link = link_from_name(robot_uid, attached_collision_mesh.link_name)
-        ee_link_pose = get_link_pose(robot_uid, tool_attach_link)
         for body in attached_bodies:
             # * update attachment collision links
             for touched_link_name in attached_collision_mesh.touch_links:
                 self.extra_disabled_collision_links[name].add(
                     ((robot_uid, touched_link_name), (body, None))
                     )
-            # set_pose(body, ee_link_pose)
             set_color(body, color)
             # create attachment based on their *current* pose
             attachment = create_attachment(robot_uid, tool_attach_link, body)
@@ -143,7 +141,7 @@ class PyChoreoClient(PyBulletClient):
             del self.pychoreo_attachments[name]
 
     def detach_attached_collision_mesh(self, name, options=None):
-        # detach attached collision mesh, and leave them in the world
+        # detach attached collision mesh, and leave them in the world as collision objects
         wildcard = options.get('wildcard') or '^{}$'.format(name)
         names = wildcard_keys(self.pychoreo_attachments, wildcard)
         if len(names) == 0:
@@ -185,7 +183,8 @@ class PyChoreoClient(PyBulletClient):
         elif len(co_names) == 0 and len(at_names) > 0:
             return 1
         else:
-            raise ValueError('names should not appear at both collision objects and attached objects at the same time!')
+            raise ValueError('names {} should not appear at both collision objects ({}) and attached objects ({}) at the same time!'.format(
+                wildcard, co_names, at_names))
 
     def _get_collision_object_names(self, wildcard):
         return wildcard_keys(self.collision_objects, wildcard)
