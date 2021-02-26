@@ -19,7 +19,7 @@ from compas.geometry import Transformation
 from compas_fab.robots import Configuration, AttachedCollisionMesh, CollisionMesh, JointTrajectory, Duration, JointTrajectoryPoint
 
 from pybullet_planning import wait_if_gui, wait_for_duration, wait_for_user, LockRenderer
-from pybullet_planning import apply_alpha, RED, BLUE, YELLOW, GREEN, GREY
+from pybullet_planning import apply_alpha, RED, BLUE, YELLOW, GREEN, GREY, WorldSaver
 
 # HERE = os.path.dirname(__file__)
 # if HERE not in sys.path:
@@ -54,6 +54,7 @@ HERE = os.path.dirname(__file__)
 JSON_OUT_DIR = os.path.join(HERE, 'results')
 
 def compute_movement(client, robot, process, movement, options=None):
+    print('-'*10)
     cprint(movement, 'cyan')
     if not isinstance(movement, RoboticMovement):
         return None
@@ -62,8 +63,8 @@ def compute_movement(client, robot, process, movement, options=None):
     start_state = process.get_movement_start_state(movement)
     # end_state = process.get_movement_end_state(movement)
     set_state(client, robot, process, start_state)
-    # if debug:
-    #     wait_if_gui('Start state')
+    if debug:
+        wait_if_gui('Start state')
     # set_state(client, robot, process, end_state)
     # wait_if_gui('End state')
 
@@ -128,17 +129,46 @@ def main():
         'diagnosis' : True,
     }
 
+    # action = process.get_action_by_beam_id(beam_id)
+    # movements = action.movements
+    # cprint(action, 'blue')
     movements = process.get_movements_by_beam_id(beam_id)
+
     # p1_movements = process.get_movements_by_planning_priority(beam_id, 1)
+
+    # movements[0].end_state['robot'].kinematic_config = Configuration(values=R11_INTER_CONF_VALS,
+    #     types=[2] + RFL_SINGLE_ARM_JOINT_TYPES, joint_names = rfl_robot_joint_names('robot11', include_gantry=True))
+    # planning_seq = [2,5,1,8,10,6,12,14,11,16,19,15]
+    # TODO beam attachment not right
+    planning_seq = [2,5,1]
+    impacted_end_movement_ids = [1,None,None]
+    impacted_start_movement_ids = [5,None,None]
     with LockRenderer(not args.debug):
         # for movement in movements:
-        # ! let's just compute free and pick up gripper for now
-        movements[0].end_state['robot'].kinematic_config = Configuration(values=R11_INTER_CONF_VALS,
-            types=[2] + RFL_SINGLE_ARM_JOINT_TYPES, joint_names = rfl_robot_joint_names('robot11', include_gantry=True))
-
-        movements[2] = compute_movement(client, robot, process, movements[2], options)
-        movements[1].end_state['robot'].kinematic_config = movements[2].trajectory.points[0]
-        movements[1] = compute_movement(client, robot, process, movements[1], options)
+        # movements[2] = compute_movement(client, robot, process, movements[2], options)
+        # movements[1].end_state['robot'].kinematic_config = movements[2].trajectory.points[0]
+        # movements[1] = compute_movement(client, robot, process, movements[1], options)
+        # TODO start state needs to be propagated to the adjacent state's end state
+        # like "merging" two states
+        for m_id, end_m_id, start_m_id in zip(planning_seq, impacted_end_movement_ids, impacted_start_movement_ids):
+            movements[m_id] = compute_movement(client, robot, process, movements[m_id], options)
+            with WorldSaver():
+                if movements[m_id].trajectory is not None and args.watch and args.debug:
+                    m = movements[m_id]
+                    cprint('Solution found for {} : {}'.format(m, m.trajectory), 'green')
+                    for jt_traj_pt in m.trajectory.points:
+                        client.set_robot_configuration(robot, jt_traj_pt)
+                        if args.step_sim:
+                            wait_if_gui('Step conf.')
+                        else:
+                            wait_for_duration(0.1)
+            if end_m_id is not None:
+                movements[end_m_id].end_state['robot'].kinematic_config = \
+                    movements[m_id].trajectory.points[0]
+                    # movements[m_id].start_state['robot'].kinematic_config
+            if start_m_id is not None:
+                movements[start_m_id-1].end_state['robot'].kinematic_config = \
+                    movements[m_id].trajectory.points[-1]
 
     # for updated_movement in process.get_movements_by_planning_priority(beam_id, 1):
     for m in movements:
@@ -154,7 +184,7 @@ def main():
                             wait_for_duration(0.1)
             else:
                 cprint('No solution found for {}'.format(m), 'red')
-    # p1_movements = process.get_movements_by_planning_priority(beam_id, 1)
+
     # * simulate ends
     client.disconnect()
 

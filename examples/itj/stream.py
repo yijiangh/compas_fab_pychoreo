@@ -54,9 +54,11 @@ def set_state(client, robot, process, state_from_object, initialize=False, scale
                 robot_state.current_frame = FK_tool_frame
             else:
                 # assert frame ~= current_frame
-                assert distance_point_point(robot_state.current_frame.point, FK_tool_frame.point) < 1e-6
-                assert distance_point_point(robot_state.current_frame.xaxis, FK_tool_frame.xaxis) < 1e-6
-                assert distance_point_point(robot_state.current_frame.yaxis, FK_tool_frame.yaxis) < 1e-6
+                tol = 1e-6
+                if distance_point_point(robot_state.current_frame.point, FK_tool_frame.point) < tol \
+                  and distance_point_point(robot_state.current_frame.xaxis, FK_tool_frame.xaxis) < tol \
+                  and distance_point_point(robot_state.current_frame.yaxis, FK_tool_frame.yaxis) < tol:
+                  raise ValueError('Robot FK tool pose and current frame diverge: {}'.format(distance_point_point(robot_state.current_frame.point, FK_tool_frame.point)))
             if initialize:
                 # update tool_changer's current_frame
                 # ! change if tool_changer has a non-trivial grasp pose
@@ -274,14 +276,9 @@ def compute_linear_movement(client, robot, process, movement, options=None):
                         try:
                             cart_conf_vals = plan_cartesian_motion(robot_uid, ik_joints[0], ik_tool_link, interp_poses, get_sub_conf=True)
                         except pybullet.error as e:
-                            cprint(e, 'red')
-                            print('{} | {} | {}'.format(ik_joint_names, tool_link_name, interp_poses))
-
-                            for p in interp_poses:
-                                draw_pose(p)
-                            wait_for_user('IK failure: Viz cartesian poses')
-                            # raise e
-
+                            cart_conf_vals = None
+                            # cprint(e, 'red')
+                            # print('{} | {} | {}'.format(ik_joint_names, tool_link_name, interp_poses))
                         if cart_conf_vals is not None:
                             solution_found = True
                             cprint('Collision free! After {} ik, {} path failure over {} samples.'.format(
