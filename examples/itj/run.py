@@ -16,10 +16,11 @@ from compas.utilities import DataDecoder, DataEncoder
 from pybullet_planning import wait_if_gui, wait_for_duration, wait_for_user, LockRenderer
 from pybullet_planning import apply_alpha, RED, BLUE, YELLOW, GREEN, GREY, WorldSaver, has_gui
 
-from .parsing import parse_process, DESIGN_DIR
+from .parsing import parse_process, save_process_and_movements
 from .robot_setup import load_RFL_world, to_rlf_robot_full_conf, R11_INTER_CONF_VALS, R12_INTER_CONF_VALS
 from .utils import notify
 from .stream import set_state, compute_linear_movement, compute_free_movement
+from .visualization import visualize_movement_trajectory
 
 from integral_timber_joints.process import RoboticFreeMovement, RoboticLinearMovement, RoboticMovement
 
@@ -28,6 +29,8 @@ CUR_BEAM_COLOR = apply_alpha(GREEN, 1)
 
 # TODO add clamp collision geometry to transit/transfer planning
 # TODO use linkstatistics joint weight and resolutions
+
+print_title = lambda x: cprint(x, 'red', 'on_cyan', attrs=['bold'])
 
 ###########################################
 
@@ -65,25 +68,8 @@ def compute_movement(client, robot, process, movement, options=None):
         start_state = process.get_movement_start_state(movement)
         start_state['robot'].kinematic_config = traj.points[0]
         end_state = process.get_movement_end_state(movement)
-        end_state['robot'].kinematic_config = traj.points[0]
+        end_state['robot'].kinematic_config = traj.points[-1]
     return movement
-
-def visualize_movement_trajectory(client, robot, process, m, step_sim=True):
-    if not has_gui() or not isinstance(m, RoboticMovement):
-        return
-    print('===')
-    cprint('Viz:')
-    if m.trajectory is not None:
-        for jt_traj_pt in m.trajectory.points:
-            client.set_robot_configuration(robot, jt_traj_pt)
-            if step_sim:
-                wait_if_gui('Step conf.')
-            else:
-                wait_for_duration(0.1)
-    else:
-        has_start_conf = process.movement_has_start_robot_config(m)
-        has_end_conf = process.movement_has_end_robot_config(m)
-        cprint('No traj found for {}\n -- has_start_conf {}, has_end_conf {}'.format(m, has_start_conf, has_end_conf), 'yellow')
 
 def propagate_states(process, sub_movements, all_movements):
     for m in sub_movements:
@@ -158,7 +144,7 @@ def main():
 
     all_movements = process.get_movements_by_beam_id(beam_id)
 
-    cprint('0) Before planning', 'blue')
+    print_title('0) Before planning')
     process.get_movement_summary_by_beam_id(beam_id)
 
     with LockRenderer(not args.debug):
@@ -172,13 +158,13 @@ def main():
             #     with WorldSaver():
             #         visualize_movement_trajectory(client, robot, process, m, step_sim=args.step_sim)
 
-        cprint('1) compute Linear movements (priority 1)', 'blue')
+        print_title('1) compute Linear movements (priority 1)')
         process.get_movement_summary_by_beam_id(beam_id)
 
         # * 2) propagate (priority 1) movement's start/end state to adjacent (prio -1) movements
         propagate_states(process, p1_movements, all_movements)
 
-        cprint('2) propagate', 'blue')
+        print_title('2) propagate')
         process.get_movement_summary_by_beam_id(beam_id)
 
         # * 3) compute linear movements with one state (start OR end) specified
@@ -199,13 +185,13 @@ def main():
                     #     with WorldSaver():
                     #         visualize_movement_trajectory(client, robot, process, m, step_sim=args.step_sim)
 
-        cprint('3) compute linear movements with one state (start OR end) specified', 'blue')
+        print_title('3) compute linear movements with one state (start OR end) specified')
         process.get_movement_summary_by_beam_id(beam_id)
 
         # * 4) propagate newly computed movement's start/end state to adjacent (prio -1) movements
         propagate_states(process, p1_movements, all_movements)
 
-        cprint('4) Propagate', 'blue')
+        print_title('4) Propagate')
         process.get_movement_summary_by_beam_id(beam_id)
 
         # * 5) compute all free movements, start and end should be both specified by now?
@@ -218,23 +204,20 @@ def main():
                 #     with WorldSaver():
                 #         visualize_movement_trajectory(client, robot, process, m, step_sim=args.step_sim)
 
-        cprint('5) Compute free move', 'blue')
+        print_title('5) Compute free move')
         process.get_movement_summary_by_beam_id(beam_id)
 
     # * final visualization
+    print('='*20)
     if args.watch:
-        cprint('Visualize results')
+        print_title('Visualize results')
         # for updated_movement in process.get_movements_by_planning_priority(beam_id, 1):
         for m in all_movements:
             visualize_movement_trajectory(client, robot, process, m, step_sim=args.step_sim)
 
     # export computed movements
     if args.write:
-        for m in all_movements:
-            m_file_path = os.path.abspath(os.path.join(DESIGN_DIR, m.filepath))
-            with open(m_file_path, 'w') as f:
-                json.dump(m, f, cls=DataEncoder, indent=1, sort_keys=True)
-            cprint('Movement written to {}'.format(m_file_path), 'green')
+        save_process_and_movements(args.problem, process, all_movements, overwrite=False, include_traj_in_process=False)
 
     # * simulate ends
     client.disconnect()

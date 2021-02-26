@@ -32,6 +32,7 @@ from .robot_setup import get_gantry_control_joint_names, get_cartesian_control_j
 def set_state(client, robot, process, state_from_object, initialize=False, scale=1e-3, options={}):
     gantry_attempts = options.get('gantry_attempts') or 20
     debug = options.get('debug') or False
+    include_env = options.get('include_env') or True
 
     # robot needed for creating attachments
     robot_uid = client.get_robot_pybullet_uid(robot)
@@ -99,6 +100,7 @@ def set_state(client, robot, process, state_from_object, initialize=False, scale
                     cm.scale(scale)
                     # add mesh to environment at origin
                     client.add_collision_mesh(cm, {'color':color})
+                # * environment
             # end if initialize
 
             if object_state.current_frame is not None:
@@ -211,29 +213,40 @@ def compute_linear_movement(client, robot, process, movement, options=None):
     # * get target T0CF pose
     start_state = process.get_movement_start_state(movement)
     end_state = process.get_movement_end_state(movement)
-    start_t0cf_frame = start_state['robot'].current_frame
-    end_t0cf_frame = end_state['robot'].current_frame
-    # TODO wait for Victor's change
+    start_conf = start_state['robot'].kinematic_config
     end_conf = end_state['robot'].kinematic_config
-    # end_conf = None
 
     # TODO remove later, use client
+
+    start_t0cf_frame = copy(start_state['robot'].current_frame)
+    end_t0cf_frame = copy(end_state['robot'].current_frame)
+
+    with WorldSaver():
+        if start_conf is not None:
+            client.set_robot_configuration(robot, end_conf)
+            start_tool_pose = get_link_pose(robot_uid, ik_tool_link)
+            start_t0cf_frame_temp = frame_from_pose(start_tool_pose, scale=1e3)
+            if not start_t0cf_frame_temp.__eq__(start_t0cf_frame, tol=1e-6):
+                cprint('start conf FK inconsistent with given current frame in start state, overwriting with the FK one.', 'yellow')
+            start_t0cf_frame = start_t0cf_frame_temp
+            start_state['robot'].current_frame = start_t0cf_frame_temp
+        if end_conf is not None:
+            client.set_robot_configuration(robot, end_conf)
+            end_tool_pose = get_link_pose(robot_uid, ik_tool_link)
+            end_t0cf_frame_temp = frame_from_pose(end_tool_pose, scale=1e3)
+            if not end_t0cf_frame_temp.__eq__(end_t0cf_frame, tol=1e-6):
+                cprint('end conf FK inconsistent with given current frame in end state, overwriting with the FK one.', 'yellow')
+            end_t0cf_frame = end_t0cf_frame_temp
+            end_state['robot'].current_frame = end_t0cf_frame_temp
+
+    end_tool_pose = pose_from_frame(end_t0cf_frame, scale=1e-3)
     start_tool_pose = pose_from_frame(start_t0cf_frame, scale=1e-3)
-    if end_conf is not None:
-        client.set_robot_configuration(robot, end_conf)
-        end_tool_pose = get_link_pose(robot_uid, ik_tool_link)
-    else:
-        end_tool_pose = pose_from_frame(end_t0cf_frame, scale=1e-3)
-        # TODO print warning if en_tool_pose and current_frame is not close
     interp_poses = list(interpolate_poses(start_tool_pose, end_tool_pose, pos_step_size=pose_step_size))
     # if debug:
     # for p in interp_poses:
     #     draw_pose(p)
     # wait_for_user('Viz cartesian poses')
 
-    custom_limit_from_names = get_gantry_custom_limits(MAIN_ROBOT_ID)
-    # gantry_xyz_sample_fn = get_sample_fn(robot_uid, gantry_joints,
-    #     custom_limits={joint_from_name(robot_uid, jn) : limits for jn, limits in custom_limit_from_names.items()})
     sorted_gantry_joint_names = get_gantry_control_joint_names(MAIN_ROBOT_ID)
     gantry_joints = joints_from_names(robot_uid, sorted_gantry_joint_names)
     gantry_z_joint = joint_from_name(robot_uid, sorted_gantry_joint_names[2])
@@ -244,7 +257,7 @@ def compute_linear_movement(client, robot, process, movement, options=None):
     solution_found = False
     samples_cnt = ik_failures = path_failures = 0
 
-    if end_conf is None:
+    if start_conf is None and end_conf is None:
         for _ in range(gantry_attempts):
             x, y, yaw = next(base_gen_fn)
             # TODO a more formal gantry_base_from_world_base
@@ -256,11 +269,7 @@ def compute_linear_movement(client, robot, process, movement, options=None):
             set_joint_positions(robot_uid, gantry_joints, gantry_xyz_vals)
             samples_cnt += 1
 
-            # check if collision-free ik solution exist for the four Cartesian poses
             arm_conf_vals = sample_ik_fn(start_tool_pose)
-            # if arm_conf_vals and len(arm_conf_vals) > 0:
-            #     wait_for_user('Conf found!')
-
             for arm_conf_val in arm_conf_vals:
                 if arm_conf_val is None:
                     continue
@@ -273,12 +282,7 @@ def compute_linear_movement(client, robot, process, movement, options=None):
                         # * Cartesian planning, only for the six-axis arm (aka sub_conf)
                         # TODO replace with client one
                         # client.plan_cartesian_motion(robot, frames_WCF, start_configuration=None, group=None, options=None)
-                        try:
-                            cart_conf_vals = plan_cartesian_motion(robot_uid, ik_joints[0], ik_tool_link, interp_poses, get_sub_conf=True)
-                        except pybullet.error as e:
-                            cart_conf_vals = None
-                            # cprint(e, 'red')
-                            # print('{} | {} | {}'.format(ik_joint_names, tool_link_name, interp_poses))
+                        cart_conf_vals = plan_cartesian_motion(robot_uid, ik_joints[0], ik_tool_link, interp_poses, get_sub_conf=True)
                         if cart_conf_vals is not None:
                             solution_found = True
                             cprint('Collision free! After {} ik, {} path failure over {} samples.'.format(
@@ -294,13 +298,18 @@ def compute_linear_movement(client, robot, process, movement, options=None):
             cprint('Cartesian Path planning failure after {} attempts | {} due to IK, {} due to Cart.'.format(
                 samples_cnt, ik_failures, path_failures), 'yellow')
     else:
-        gantry_xyz_vals = end_conf.prismatic_values
-        for _ in range(gantry_attempts):
-            try:
-                cart_conf_vals = plan_cartesian_motion(robot_uid, ik_joints[0], ik_tool_link, interp_poses, get_sub_conf=True)
-            except pybullet.error as e:
-                cart_conf_vals = None
+        if start_conf is not None and end_conf is not None:
+            cprint('Both start/end confs are pre-specified, problem might be too stiff to be solved.', 'yellow')
+        if end_conf is not None:
+            client.set_robot_configuration(robot, end_conf)
+        if start_conf is not None:
+            client.set_robot_configuration(robot, start_conf)
 
+        gantry_xyz_vals = end_conf.prismatic_values
+        # sometimes pybullet default IK is unhappy
+        for _ in range(10):
+            with WorldSaver():
+                cart_conf_vals = plan_cartesian_motion(robot_uid, ik_joints[0], ik_tool_link, interp_poses, get_sub_conf=True)
             if cart_conf_vals is not None:
                 solution_found = True
                 cprint('Collision free! After {} ik, {} path failure over {} samples.'.format(
@@ -311,6 +320,8 @@ def compute_linear_movement(client, robot, process, movement, options=None):
         else:
             cprint('Cartesian Path planning failure after {} attempts | {} due to IK, {} due to Cart.'.format(
                 samples_cnt, ik_failures, path_failures), 'yellow')
+
+        # TODO check if start_conf or end_conf is specified
 
     traj = None
     if solution_found:
@@ -323,8 +334,12 @@ def compute_linear_movement(client, robot, process, movement, options=None):
             jt_traj_pts.append(jt_traj_pt)
         traj = JointTrajectory(trajectory_points=jt_traj_pts, \
             joint_names=gantry_arm_joint_names, start_configuration=jt_traj_pts[0], fraction=1.0)
+        if start_conf is not None and not start_conf.close_to(traj.points[0], tol=1e-3):
+            cprint('Start conf not coincided - max diff {}'.format(start_conf.max_difference(traj.points[0])))
+        if end_conf is not None and not end_conf.close_to(traj.points[-1], tol=1e-3):
+            cprint('End conf not coincided - max diff {}'.format(end_conf.max_difference(traj.points[-1])))
     else:
-        cprint('No linear movement found for {}.'.format(movement), 'red')
+        cprint('No linear movement found for {}.'.format(movement.short_summary), 'red')
     return traj
 
 ##############################
@@ -345,7 +360,7 @@ def compute_free_movement(client, robot, process, movement, options=None):
     # print('end conf joint_names: ', end_conf.joint_names)
     initial_conf = process.initial_state['robot'].kinematic_config
     if start_conf is None and end_conf is None:
-        cprint('No robot start/end conf is specified in {}, return None'.format(movement), 'yellow')
+        cprint('No robot start/end conf is specified in {}, return None'.format(movement.short_summary), 'yellow')
         return None
         # * sample from t0cp if no conf is provided for the robot
         # cprint('No robot start/end conf is specified in {}, performing random IK solves.'.format(movement), 'yellow')
@@ -384,6 +399,11 @@ def compute_free_movement(client, robot, process, movement, options=None):
     # return client.plan_motion(robot, end_conf, start_configuration=start_conf, group=GANTRY_ARM_GROUP, options=options)
     goal_constraints = robot.constraints_from_configuration(end_conf, [0.01], [0.01], group=GANTRY_ARM_GROUP)
     with LockRenderer():
-        traj = client.plan_motion(robot, goal_constraints, start_configuration=start_conf, group=GANTRY_ARM_GROUP, options=options)
+        with WorldSaver():
+            traj = client.plan_motion(robot, goal_constraints, start_configuration=start_conf, group=GANTRY_ARM_GROUP, options=options)
+    if traj is None:
+        cprint('No free movement found for {}.'.format(movement.short_summary), 'red')
+    else:
+        cprint('Free movement found for {}!'.format(movement.short_summary), 'green')
     return traj
 

@@ -1,16 +1,17 @@
 import os
 import json
 import sys
+from termcolor import cprint
 
-from compas.geometry import Frame
 from compas.datastructures import Mesh
 from compas.robots import RobotModel
-from compas.robots import LocalPackageMeshLoader
-from compas_fab.robots import Robot
 from compas_fab.robots import RobotSemantics
-from compas_fab.robots import Tool
-from compas_fab.robots import Configuration, AttachedCollisionMesh, CollisionMesh
+from compas_fab.robots import CollisionMesh
 from compas.utilities import DataDecoder, DataEncoder
+
+from pybullet_planning import get_date
+
+from integral_timber_joints.process import RoboticFreeMovement, RoboticLinearMovement, RoboticMovement
 
 HERE = os.path.dirname(__file__)
 
@@ -72,10 +73,34 @@ def get_process_path(assembly_name, file_dir=DESIGN_DIR):
         raise FileNotFoundError(model_path)
     return model_path
 
-def parse_process(process):
+def parse_process(process_name):
     # * Load process from file
-    with open(get_process_path(process), 'r') as f:
+    with open(get_process_path(process_name), 'r') as f:
         process = json.load(f, cls=DataDecoder)  # type: RobotClampAssemblyProcess
     return process
+
+def save_process_and_movements(process_name, process, movements, overwrite=False, include_traj_in_process=False, indent=None):
+    for m in movements:
+        m_file_path = os.path.abspath(os.path.join(DESIGN_DIR, m.filepath))
+        with open(m_file_path, 'w') as f:
+            json.dump(m, f, cls=DataEncoder, indent=indent, sort_keys=True)
+    cprint('#{} movements written to {}'.format(len(movements), os.path.abspath(DESIGN_DIR)), 'green')
+
+    if not include_traj_in_process:
+        for m in process.movements:
+            if isinstance(m, RoboticMovement):
+                m.trajectory = None
+
+    process_file_path = get_process_path(process_name)
+    if not overwrite:
+        process_dir = os.path.dirname(process_file_path)
+        process_fnames = os.path.basename(process_file_path).split('.json')
+        process_file_path = os.path.join(process_dir, process_fnames[0] + ('' if overwrite else '_'+get_date()) + '.json')
+
+    with open(process_file_path, 'w') as f:
+        json.dump(process, f, cls=DataEncoder, indent=indent, sort_keys=True)
+    cprint('Process written to {}'.format(process_file_path), 'green')
+
+
 
 ##########################################
