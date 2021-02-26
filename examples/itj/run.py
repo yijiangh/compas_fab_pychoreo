@@ -11,10 +11,12 @@ from termcolor import cprint
 from itertools import product
 from copy import copy, deepcopy
 
+from compas.utilities import DataDecoder, DataEncoder
+
 from pybullet_planning import wait_if_gui, wait_for_duration, wait_for_user, LockRenderer
 from pybullet_planning import apply_alpha, RED, BLUE, YELLOW, GREEN, GREY, WorldSaver, has_gui
 
-from .parsing import parse_process
+from .parsing import parse_process, DESIGN_DIR
 from .robot_setup import load_RFL_world, to_rlf_robot_full_conf, R11_INTER_CONF_VALS, R12_INTER_CONF_VALS
 from .utils import notify
 from .stream import set_state, compute_linear_movement, compute_free_movement
@@ -42,8 +44,8 @@ def compute_movement(client, robot, process, movement, options=None):
     start_state = process.get_movement_start_state(movement)
     # end_state = process.get_movement_end_state(movement)
     set_state(client, robot, process, start_state)
-    if debug:
-        wait_if_gui('Start state')
+    # if debug:
+    #     wait_if_gui('Start state')
     # set_state(client, robot, process, end_state)
     # wait_if_gui('End state')
 
@@ -66,7 +68,7 @@ def compute_movement(client, robot, process, movement, options=None):
         end_state['robot'].kinematic_config = traj.points[0]
     return movement
 
-def visualize_movement_trajectory(client, process, robot, m, step_sim=True):
+def visualize_movement_trajectory(client, robot, process, m, step_sim=True):
     if not has_gui() or not isinstance(m, RoboticMovement):
         return
     print('===')
@@ -151,7 +153,7 @@ def main():
 
     options = {
         'debug' : args.debug,
-        'diagnosis' : True,
+        'diagnosis' : False,
     }
 
     all_movements = process.get_movements_by_beam_id(beam_id)
@@ -166,9 +168,9 @@ def main():
             print('-'*10)
             print('{})'.format(all_movements.index(m)))
             m = compute_movement(client, robot, process, m, options)
-            if args.debug:
-                with WorldSaver():
-                    visualize_movement_trajectory(client, robot, m, step_sim=args.step_sim)
+            # if args.debug:
+            #     with WorldSaver():
+            #         visualize_movement_trajectory(client, robot, process, m, step_sim=args.step_sim)
 
         cprint('1) compute Linear movements (priority 1)', 'blue')
         process.get_movement_summary_by_beam_id(beam_id)
@@ -193,9 +195,9 @@ def main():
                     print('-'*10)
                     print('{})'.format(all_movements.index(m)))
                     m = compute_movement(client, robot, process, m, options)
-                    if args.debug:
-                        with WorldSaver():
-                            visualize_movement_trajectory(client, robot, m, step_sim=args.step_sim)
+                    # if args.debug:
+                    #     with WorldSaver():
+                    #         visualize_movement_trajectory(client, robot, process, m, step_sim=args.step_sim)
 
         cprint('3) compute linear movements with one state (start OR end) specified', 'blue')
         process.get_movement_summary_by_beam_id(beam_id)
@@ -212,9 +214,9 @@ def main():
                 print('-'*10)
                 print('{})'.format(all_movements.index(m)))
                 m = compute_movement(client, robot, process, m, options)
-                if args.debug:
-                    with WorldSaver():
-                        visualize_movement_trajectory(client, robot, m, step_sim=args.step_sim)
+                # if args.debug:
+                #     with WorldSaver():
+                #         visualize_movement_trajectory(client, robot, process, m, step_sim=args.step_sim)
 
         cprint('5) Compute free move', 'blue')
         process.get_movement_summary_by_beam_id(beam_id)
@@ -224,7 +226,15 @@ def main():
         cprint('Visualize results')
         # for updated_movement in process.get_movements_by_planning_priority(beam_id, 1):
         for m in all_movements:
-            visualize_movement_trajectory(client, robot, m, step_sim=args.step_sim)
+            visualize_movement_trajectory(client, robot, process, m, step_sim=args.step_sim)
+
+    # export computed movements
+    if args.write:
+        for m in all_movements:
+            m_file_path = os.path.abspath(os.path.join(DESIGN_DIR, m.filepath))
+            with open(m_file_path, 'w') as f:
+                json.dump(m, f, cls=DataEncoder, indent=1, sort_keys=True)
+            cprint('Movement written to {}'.format(m_file_path), 'green')
 
     # * simulate ends
     client.disconnect()

@@ -60,9 +60,9 @@ def rfl_setup():
 
 ###########################################
 
-DATA_DIR = os.path.abspath(os.path.join(HERE, '..', '..', '..', 'itj_design_study', '210128_RemodelFredPavilion'))
+DESIGN_DIR = os.path.abspath(os.path.join(HERE, '..', '..', '..', 'itj_design_study', '210128_RemodelFredPavilion'))
 
-def get_process_path(assembly_name, file_dir=DATA_DIR):
+def get_process_path(assembly_name, file_dir=DESIGN_DIR):
     if assembly_name.endswith('.json'):
         filename = os.path.basename(assembly_name)
     else:
