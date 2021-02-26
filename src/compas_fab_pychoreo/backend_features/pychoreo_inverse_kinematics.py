@@ -1,3 +1,4 @@
+import pybullet
 from compas_fab.backends.interfaces import InverseKinematics
 from compas_fab.robots import Configuration
 
@@ -78,7 +79,11 @@ class PyChoreoInverseKinematics(InverseKinematics):
 
             # if group not in self.client.planner.ik_fn_from_group:
             # use default ik fn
-            conf_vals = self._compute_ik(robot_uid, ik_joints, tool_link, target_pose, max_iterations, custom_limits=pb_custom_limits)
+            try:
+                conf_vals = self._compute_ik(robot_uid, ik_joints, tool_link, target_pose, max_iterations, custom_limits=pb_custom_limits)
+            except pybullet.error as e:
+                conf_vals = []
+
             joint_types = robot.get_joint_types_by_names(ik_joint_names)
             configurations = [Configuration(values=conf_val, types=joint_types, joint_names=ik_joint_names) \
                 for conf_val in conf_vals if conf_val is not None]

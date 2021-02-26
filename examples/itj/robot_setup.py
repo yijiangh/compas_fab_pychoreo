@@ -92,7 +92,7 @@ def get_cartesian_control_joint_names(robot_id='robot11'):
 
 ########################################
 
-def load_RFL_world(viewer=True, disable_env=False):
+def load_RFL_world(viewer=True):
     urdf_filename, semantics = rfl_setup()
     client = PyChoreoClient(viewer=viewer)
     client.connect()

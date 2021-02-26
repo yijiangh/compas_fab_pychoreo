@@ -295,13 +295,22 @@ def compute_linear_movement(client, robot, process, movement, options=None):
                 samples_cnt, ik_failures, path_failures), 'yellow')
     else:
         gantry_xyz_vals = end_conf.prismatic_values
-        cart_conf_vals = plan_cartesian_motion(robot_uid, ik_joints[0], ik_tool_link, interp_poses, get_sub_conf=True)
-        if cart_conf_vals is not None:
-            solution_found = True
-            cprint('Collision free! After {} ik, {} path failure over {} samples.'.format(
-                ik_failures, path_failures, samples_cnt), 'green')
+        for _ in range(gantry_attempts):
+            try:
+                cart_conf_vals = plan_cartesian_motion(robot_uid, ik_joints[0], ik_tool_link, interp_poses, get_sub_conf=True)
+            except pybullet.error as e:
+                cart_conf_vals = None
+
+            if cart_conf_vals is not None:
+                solution_found = True
+                cprint('Collision free! After {} ik, {} path failure over {} samples.'.format(
+                    ik_failures, path_failures, samples_cnt), 'green')
+                break
+            else:
+                path_failures += 1
         else:
-            cprint('Cartesian Path planning failure with prescribed end conf.', 'yellow')
+            cprint('Cartesian Path planning failure after {} attempts | {} due to IK, {} due to Cart.'.format(
+                samples_cnt, ik_failures, path_failures), 'yellow')
 
     traj = None
     if solution_found:
@@ -332,35 +341,37 @@ def compute_free_movement(client, robot, process, movement, options=None):
     end_state = process.get_movement_end_state(movement)
     start_conf = start_state['robot'].kinematic_config
     end_conf = end_state['robot'].kinematic_config
-    print('end conf: ', end_conf)
-    print('end conf joint_names: ', end_conf.joint_names)
+    # print('end conf: ', end_conf)
+    # print('end conf joint_names: ', end_conf.joint_names)
     initial_conf = process.initial_state['robot'].kinematic_config
     if start_conf is None and end_conf is None:
+        cprint('No robot start/end conf is specified in {}, return None'.format(movement), 'yellow')
+        return None
         # * sample from t0cp if no conf is provided for the robot
-        cprint('No robot start/end conf is specified in {}, performing random IK solves.'.format(movement), 'yellow')
-        start_t0cf_frame = start_state['robot'].current_frame
-        end_t0cf_frame = end_state['robot'].current_frame
-        if start_t0cf_frame is not None:
-            start_conf = client.inverse_kinematics(robot, start_t0cf_frame, group=GANTRY_ARM_GROUP, options=options)
-        else:
-            if initial_conf is not None:
-                cprint('No robot start frame is specified in {}, using initial conf.'.format(movement), 'yellow')
-                start_conf = initial_conf
-            else:
-                cprint('Underspecified problem, solve fails.', 'red')
-                return None
-        if end_t0cf_frame is not None:
-            end_conf = client.inverse_kinematics(robot, end_t0cf_frame, group=GANTRY_ARM_GROUP, options=options)
-        else:
-            if initial_conf is not None:
-                cprint('No robot end frame is specified in {}, using initial conf.'.format(movement), 'yellow')
-                end_conf = initial_conf
-            else:
-                cprint('Underspecified problem, solve fails.', 'red')
-                return None
-        if start_conf is None or end_conf is None:
-            cprint('IK solves for start and end conf fails.', 'red')
-            return None
+        # cprint('No robot start/end conf is specified in {}, performing random IK solves.'.format(movement), 'yellow')
+        # start_t0cf_frame = start_state['robot'].current_frame
+        # end_t0cf_frame = end_state['robot'].current_frame
+        # if start_t0cf_frame is not None:
+        #     start_conf = client.inverse_kinematics(robot, start_t0cf_frame, group=GANTRY_ARM_GROUP, options=options)
+        # else:
+        #     if initial_conf is not None:
+        #         cprint('No robot start frame is specified in {}, using initial conf.'.format(movement), 'yellow')
+        #         start_conf = initial_conf
+        #     else:
+        #         cprint('Underspecified problem, solve fails.', 'red')
+        #         return None
+        # if end_t0cf_frame is not None:
+        #     end_conf = client.inverse_kinematics(robot, end_t0cf_frame, group=GANTRY_ARM_GROUP, options=options)
+        # else:
+        #     if initial_conf is not None:
+        #         cprint('No robot end frame is specified in {}, using initial conf.'.format(movement), 'yellow')
+        #         end_conf = initial_conf
+        #     else:
+        #         cprint('Underspecified problem, solve fails.', 'red')
+        #         return None
+        # if start_conf is None or end_conf is None:
+        #     cprint('IK solves for start and end conf fails.', 'red')
+        #     return None
 
     # * custom limits
     # gantry_arm_joint_names = robot.get_configurable_joint_names(group=GANTRY_ARM_GROUP)
