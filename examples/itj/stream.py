@@ -54,12 +54,9 @@ def set_state(client, robot, process, state_from_object, initialize=False, scale
             if robot_state.current_frame is None:
                 robot_state.current_frame = FK_tool_frame
             else:
-                # assert frame ~= current_frame
-                tol = 1e-6
-                if distance_point_point(robot_state.current_frame.point, FK_tool_frame.point) < tol \
-                  and distance_point_point(robot_state.current_frame.xaxis, FK_tool_frame.xaxis) < tol \
-                  and distance_point_point(robot_state.current_frame.yaxis, FK_tool_frame.yaxis) < tol:
-                  raise ValueError('Robot FK tool pose and current frame diverge: {}'.format(distance_point_point(robot_state.current_frame.point, FK_tool_frame.point)))
+                if not robot_state.current_frame.__eq__(FK_tool_frame, tol=1e-5):
+                  msg = 'Robot FK tool pose and current frame diverge: {}'.format(distance_point_point(robot_state.current_frame.point, FK_tool_frame.point))
+                  cprint(msg, 'yellow')
             if initialize:
                 # update tool_changer's current_frame
                 # ! change if tool_changer has a non-trivial grasp pose

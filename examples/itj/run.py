@@ -95,6 +95,7 @@ def propagate_states(process, sub_movements, all_movements):
             print('forward: ({}) {} - {}'.format(forward_id, forward_m, forward_m.tag))
             process.set_movement_start_state(forward_m, end_state, deep_copy=True)
             forward_id += 1
+        return all_movements
 
 #################################
 
@@ -149,25 +150,25 @@ def main():
 
     with LockRenderer(not args.debug):
         # * 1) compute Linear movements (priority 1)
+        print_title('1) compute Linear movements (priority 1)')
         p1_movements = process.get_movements_by_planning_priority(beam_id, 1)
         for m in p1_movements:
             print('-'*10)
-            print('{})'.format(all_movements.index(m)))
-            m = compute_movement(client, robot, process, m, options)
+            m_id = all_movements.index(m)
+            print('{})'.format(m_id))
+            all_movements[m_id] = compute_movement(client, robot, process, m, options)
             # if args.debug:
             #     with WorldSaver():
             #         visualize_movement_trajectory(client, robot, process, m, step_sim=args.step_sim)
-
-        print_title('1) compute Linear movements (priority 1)')
         process.get_movement_summary_by_beam_id(beam_id)
 
         # * 2) propagate (priority 1) movement's start/end state to adjacent (prio -1) movements
-        propagate_states(process, p1_movements, all_movements)
-
         print_title('2) propagate')
+        propagate_states(process, p1_movements, all_movements)
         process.get_movement_summary_by_beam_id(beam_id)
 
         # * 3) compute linear movements with one state (start OR end) specified
+        print_title('3) compute linear movements with one state (start OR end) specified')
         p0_movements = process.get_movements_by_planning_priority(beam_id, 0)
         for m in p0_movements:
             if isinstance(m, RoboticLinearMovement):
@@ -179,32 +180,30 @@ def main():
                     wait_for_user()
                 if not has_traj and (has_traj ^ has_end_conf): # XOR
                     print('-'*10)
-                    print('{})'.format(all_movements.index(m)))
-                    m = compute_movement(client, robot, process, m, options)
+                    m_id = all_movements.index(m)
+                    print('{})'.format(m_id))
+                    all_movements[m_id] = compute_movement(client, robot, process, m, options)
                     # if args.debug:
                     #     with WorldSaver():
                     #         visualize_movement_trajectory(client, robot, process, m, step_sim=args.step_sim)
-
-        print_title('3) compute linear movements with one state (start OR end) specified')
         process.get_movement_summary_by_beam_id(beam_id)
 
         # * 4) propagate newly computed movement's start/end state to adjacent (prio -1) movements
-        propagate_states(process, p1_movements, all_movements)
-
         print_title('4) Propagate')
+        propagate_states(process, p1_movements, all_movements)
         process.get_movement_summary_by_beam_id(beam_id)
 
         # * 5) compute all free movements, start and end should be both specified by now?
+        print_title('5) Compute free move')
         for m in p0_movements:
             if isinstance(m, RoboticFreeMovement):
                 print('-'*10)
-                print('{})'.format(all_movements.index(m)))
-                m = compute_movement(client, robot, process, m, options)
+                m_id = all_movements.index(m)
+                print('{})'.format(m_id))
+                all_movements[m_id] = compute_movement(client, robot, process, m, options)
                 # if args.debug:
                 #     with WorldSaver():
                 #         visualize_movement_trajectory(client, robot, process, m, step_sim=args.step_sim)
-
-        print_title('5) Compute free move')
         process.get_movement_summary_by_beam_id(beam_id)
 
     # * final visualization
