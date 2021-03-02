@@ -43,19 +43,10 @@ HERE = os.path.dirname(__file__)
 JSON_OUT_DIR = os.path.join(HERE, 'results')
 
 def compute_movement(client, robot, process, movement, options=None):
-    cprint(movement.short_summary, 'cyan')
     if not isinstance(movement, RoboticMovement):
         return None
 
-    debug = options.get('debug') or False
-    start_state = process.get_movement_start_state(movement)
-    # end_state = process.get_movement_end_state(movement)
-    set_state(client, robot, process, start_state)
-    # if debug:
-    #     wait_if_gui('Start state')
-    # set_state(client, robot, process, end_state)
-    # wait_if_gui('End state')
-
+    cprint(movement.short_summary, 'cyan')
     traj = None
     if isinstance(movement, RoboticLinearMovement):
         # * linear movement has built-in kinematics sampler
@@ -74,6 +65,8 @@ def compute_movement(client, robot, process, movement, options=None):
         start_state['robot'].kinematic_config = traj.points[0]
         end_state = process.get_movement_end_state(movement)
         end_state['robot'].kinematic_config = traj.points[-1]
+    else:
+        wait_for_user('Planning fails, press Enter to continue.')
     return movement
 
 def propagate_states(process, sub_movements, all_movements):
@@ -127,7 +120,7 @@ def main():
     parser.add_argument('--watch', action='store_true', help='Watch computed trajectories in the pybullet GUI.')
     parser.add_argument('--debug', action='store_true', help='Debug mode')
     parser.add_argument('--step_sim', action='store_true', help='Parse after each')
-    # parser.add_argument('--disable_env', action='store_true', help='Disable environment collision geometry.')
+    parser.add_argument('--disable_env', action='store_true', help='Disable environment collision geometry.')
     # parser.add_argument('-ptm', '--parse_transfer_motion', action='store_true', help='Parse saved transfer motion.')
     args = parser.parse_args()
     print('Arguments:', args)
@@ -150,11 +143,11 @@ def main():
     #     wait_if_gui('Pre Initial state.')
 
     process.initial_state['robot'].kinematic_config = process.robot_initial_config
-    set_state(client, robot, process, process.initial_state, initialize=True, options={'debug' : False})
+    set_state(client, robot, process, process.initial_state, initialize=True,
+        options={'debug' : False, 'include_env' : not args.disable_env})
     # * collision sanity check
     assert not client.check_collisions(robot, full_start_conf, options={'diagnosis':True})
-    # if args.debug:
-    #     wait_if_gui('Initial state.')
+    # wait_if_gui('Initial state.')
 
     options = {
         'debug' : args.debug,

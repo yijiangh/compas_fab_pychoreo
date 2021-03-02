@@ -26,13 +26,14 @@ class PyChoreoConfigurationCollisionChecker(ConfigurationCollisionChecker):
                 in the scene. Each entry of the list is a wildcard rule, learn more at:
                     https://docs.python.org/3/library/re.html
                 Example: exact name match: `"^{}$".format(object_name)`
-                         partial name match: `"^{}_*".format(object_name)` for all objects with the name "object_name_*"
+                         partial name match: `"^{}_".format(object_name)` for all objects with the name "object_name_*"
 
         Returns
         -------
         is_collision : bool
             True if in collision, False otherwise
         """
+        options = options or {}
         assert len(configuration.joint_names) == len(configuration.values)
         diagnosis = options.get('diagnosis') or False
         collision_fn = self._get_collision_fn(robot, configuration.joint_names, options)
@@ -50,6 +51,7 @@ class PyChoreoConfigurationCollisionChecker(ConfigurationCollisionChecker):
 
         wildcards = options.get('collision_object_wildcards') or None
         if wildcards is None:
+            # consider all of them
             obstacles = values_as_list(self.client.collision_objects)
         else:
             obstacles = []
@@ -59,6 +61,8 @@ class PyChoreoConfigurationCollisionChecker(ConfigurationCollisionChecker):
                     obstacles.extend(self.client.collision_objects[n])
         # ! doesn't make sense to have a wildcard selection for attached objects
         attachments = values_as_list(self.client.pychoreo_attachments)
+        # print('attachment: ', self.client.pychoreo_attachments)
+        # print('extra_disabled_collision_links: ', self.client.extra_disabled_collision_links)
 
         pb_custom_limits = get_custom_limits(robot_uid, ik_joints,
             custom_limits={joint_from_name(robot_uid, jn) : lims for jn, lims in custom_limits.items()})
@@ -76,6 +80,8 @@ class PyChoreoConfigurationCollisionChecker(ConfigurationCollisionChecker):
             extra_disabled_collisions.add(
                 ((b1, b1_link), (b2, b2_link))
                 )
+            # print(bpair)
+        # wait_if_gui('check ignore collision')
         collision_fn = get_collision_fn(robot_uid, ik_joints, obstacles=obstacles,
                                         attachments=attachments, self_collisions=self_collisions,
                                         disabled_collisions=self.client.get_self_collision_link_ids(robot), # get disabled self-collision links (srdf)

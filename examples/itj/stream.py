@@ -29,10 +29,11 @@ from .robot_setup import get_gantry_control_joint_names, get_cartesian_control_j
 
 ##############################
 
-def set_state(client, robot, process, state_from_object, initialize=False, scale=1e-3, options={}):
+def set_state(client, robot, process, state_from_object, initialize=False, scale=1e-3, options=None):
+    options = options or {}
     gantry_attempts = options.get('gantry_attempts') or 20
-    debug = options.get('debug') or False
-    include_env = options.get('include_env') or True
+    debug = options.get('debug', False)
+    include_env = options.get('include_env', True)
 
     # robot needed for creating attachments
     robot_uid = client.get_robot_pybullet_uid(robot)
@@ -54,13 +55,20 @@ def set_state(client, robot, process, state_from_object, initialize=False, scale
             if robot_state.current_frame is None:
                 robot_state.current_frame = FK_tool_frame
             else:
-                if not robot_state.current_frame.__eq__(FK_tool_frame, tol=1e-5):
-                  msg = 'Robot FK tool pose and current frame diverge: {}'.format(distance_point_point(robot_state.current_frame.point, FK_tool_frame.point))
+                if not robot_state.current_frame.__eq__(FK_tool_frame, tol=1e-4):
+                  msg = 'Robot FK tool pose and current frame diverge: {:.3f} (mm)'.format(distance_point_point(robot_state.current_frame.point, FK_tool_frame.point))
                   cprint(msg, 'yellow')
             if initialize:
                 # update tool_changer's current_frame
                 # ! change if tool_changer has a non-trivial grasp pose
                 state_from_object['tool_changer'].current_frame = FK_tool_frame
+
+        # * environment meshes
+        if initialize and include_env:
+            for name, m in process.environment_models.items():
+                cm = CollisionMesh(m, name)
+                cm.scale(scale)
+                client.add_collision_mesh(cm, {'color':GREY})
 
         for object_id, object_state in state_from_object.items():
             # print('====')
@@ -97,7 +105,6 @@ def set_state(client, robot, process, state_from_object, initialize=False, scale
                     cm.scale(scale)
                     # add mesh to environment at origin
                     client.add_collision_mesh(cm, {'color':color})
-                # * environment
             # end if initialize
 
             if object_state.current_frame is not None:
@@ -213,6 +220,9 @@ def compute_linear_movement(client, robot, process, movement, options=None):
     start_conf = start_state['robot'].kinematic_config
     end_conf = end_state['robot'].kinematic_config
 
+    # * set start state
+    set_state(client, robot, process, start_state)
+
     # TODO remove later, use client
 
     start_t0cf_frame = copy(start_state['robot'].current_frame)
@@ -275,18 +285,17 @@ def compute_linear_movement(client, robot, process, movement, options=None):
                 # print('extra_disabled_collision_links: ', client.extra_disabled_collision_links)
                 if not client.check_collisions(robot, gantry_arm_conf, options=options):
                     # * set start pick conf
-                    with WorldSaver():
-                        # * Cartesian planning, only for the six-axis arm (aka sub_conf)
-                        # TODO replace with client one
-                        # client.plan_cartesian_motion(robot, frames_WCF, start_configuration=None, group=None, options=None)
-                        cart_conf_vals = plan_cartesian_motion(robot_uid, ik_joints[0], ik_tool_link, interp_poses, get_sub_conf=True)
-                        if cart_conf_vals is not None:
-                            solution_found = True
-                            cprint('Collision free! After {} ik, {} path failure over {} samples.'.format(
-                                ik_failures, path_failures, samples_cnt), 'green')
-                            break
-                        else:
-                            path_failures += 1
+                    # * Cartesian planning, only for the six-axis arm (aka sub_conf)
+                    # TODO replace with client one
+                    # client.plan_cartesian_motion(robot, frames_WCF, start_configuration=None, group=None, options=None)
+                    cart_conf_vals = plan_cartesian_motion(robot_uid, ik_joints[0], ik_tool_link, interp_poses, get_sub_conf=True)
+                    if cart_conf_vals is not None:
+                        solution_found = True
+                        cprint('Collision free! After {} ik, {} path failure over {} samples.'.format(
+                            ik_failures, path_failures, samples_cnt), 'green')
+                        break
+                    else:
+                        path_failures += 1
             else:
                 ik_failures += 1
             if solution_found:
@@ -306,8 +315,7 @@ def compute_linear_movement(client, robot, process, movement, options=None):
 
         # sometimes pybullet default IK is unhappy
         for _ in range(10):
-            with WorldSaver():
-                cart_conf_vals = plan_cartesian_motion(robot_uid, ik_joints[0], ik_tool_link, interp_poses, get_sub_conf=True)
+            cart_conf_vals = plan_cartesian_motion(robot_uid, ik_joints[0], ik_tool_link, interp_poses, get_sub_conf=True)
             if cart_conf_vals is not None:
                 solution_found = True
                 cprint('Collision free! After {} ik, {} path failure over {} samples.'.format(
@@ -352,13 +360,14 @@ def compute_free_movement(client, robot, process, movement, options=None):
     end_state = process.get_movement_end_state(movement)
     start_conf = start_state['robot'].kinematic_config
     end_conf = end_state['robot'].kinematic_config
+    # initial_conf = process.initial_state['robot'].kinematic_config
 
-    # print('end conf: ', end_conf)
-    # print('end conf joint_names: ', end_conf.joint_names)
+    # * set start state
+    set_state(client, robot, process, start_state)
 
-    initial_conf = process.initial_state['robot'].kinematic_config
     if start_conf is None or end_conf is None:
         cprint('At least one of robot start/end conf is NOT specified in {}, return None'.format(movement.short_summary), 'red')
+        cprint('Start {} | End {}'.format(start_conf, end_conf))
         return None
 
     # * custom limits
@@ -368,8 +377,7 @@ def compute_free_movement(client, robot, process, movement, options=None):
 
     goal_constraints = robot.constraints_from_configuration(end_conf, [0.01], [0.01], group=GANTRY_ARM_GROUP)
     with LockRenderer():
-        with WorldSaver():
-            traj = client.plan_motion(robot, goal_constraints, start_configuration=start_conf, group=GANTRY_ARM_GROUP, options=options)
+        traj = client.plan_motion(robot, goal_constraints, start_configuration=start_conf, group=GANTRY_ARM_GROUP, options=options)
     if traj is None:
         cprint('No free movement found for {}.'.format(movement.short_summary), 'red')
     else:

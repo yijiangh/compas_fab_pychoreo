@@ -49,6 +49,9 @@ class PyChoreoClient(PyBulletClient):
         # name -> ((robot_uid, touched_link_name), (body, None))
         # None means BASE_LINK
         self.extra_disabled_collision_links = defaultdict(set)
+        # PybulletClient keeps
+        #   self.collision_objects
+        #   self.attached_collision_objects
 
     def connect(self):
         with HideOutput(not self.verbose):
@@ -113,6 +116,7 @@ class PyChoreoClient(PyBulletClient):
 
         tool_attach_link = link_from_name(robot_uid, attached_collision_mesh.link_name)
         for body in attached_bodies:
+            # TODO let user choose to include the direct touch link collision or not
             # * update attachment collision links
             for touched_link_name in attached_collision_mesh.touch_links:
                 self.extra_disabled_collision_links[name].add(
@@ -123,8 +127,7 @@ class PyChoreoClient(PyBulletClient):
             attachment = create_attachment(robot_uid, tool_attach_link, body)
             attachment.assign()
             self.pychoreo_attachments[name].append(attachment)
-
-            # create fixed constraint to conform to PybulletClient
+            # create fixed constraint to conform to PybulletClient (we don't use it though)
             constraint_id = add_fixed_constraint(attachment.child, attachment.parent, attachment.parent_link)
             constraint_info = ConstraintInfo(constraint_id, attachment.child, attachment.parent)
             self.attached_collision_objects[name].append(constraint_info)
@@ -136,9 +139,11 @@ class PyChoreoClient(PyBulletClient):
         self.planner.remove_attached_collision_mesh(name, options=options)
         wildcard = options.get('wildcard') or '^{}$'.format(name)
         names = wildcard_keys(self.pychoreo_attachments, wildcard)
+        # TODO update extra_disabled_collision_links
         for name in names:
             del self.attached_collision_objects[name]
             del self.pychoreo_attachments[name]
+            del self.extra_disabled_collision_links[name]
 
     def detach_attached_collision_mesh(self, name, options=None):
         # detach attached collision mesh, and leave them in the world as collision objects
@@ -148,6 +153,7 @@ class PyChoreoClient(PyBulletClient):
             cprint('No attachment with name {} found.'.format(name), 'yellow')
             return None
         detached_attachments = []
+        # TODO update extra_disabled_collision_links
         for name in names:
             attachments = self.pychoreo_attachments[name]
             detached_attachments.extend(attachments)
@@ -157,6 +163,7 @@ class PyChoreoClient(PyBulletClient):
                 remove_constraint(constraint_info.constraint_id)
             del self.attached_collision_objects[name]
             del self.pychoreo_attachments[name]
+            del self.extra_disabled_collision_links[name]
         return detached_attachments
 
     ########################################

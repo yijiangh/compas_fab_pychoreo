@@ -32,7 +32,7 @@ R22_IDLE_CONF_VALS = convert_rfl_robot_conf_unit([-12237, -4915,
 # meter
 GANTRY_X_LIMIT = (18, 25) # (0, 37)
 GANTRY_Y_LIMIT = (-12.237, -5) # (-9, 0)
-GANTRY_Z_LIMIT = (-4.915, -3.5) # (-5, -1)
+GANTRY_Z_LIMIT = (-3.5, -2.5) # (-5, -1)
 
 ############################################
 

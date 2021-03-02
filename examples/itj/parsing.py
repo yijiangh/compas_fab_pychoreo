@@ -80,8 +80,21 @@ def parse_process(process_name):
     return process
 
 def save_process_and_movements(process_name, process, movements, overwrite=False, include_traj_in_process=False, indent=None):
+    process_file_path = get_process_path(process_name)
+    process_dir = os.path.dirname(process_file_path)
+    if not overwrite:
+        process_fname = os.path.basename(process_file_path)
+        time_stamp = get_date()
+        process_dir = os.path.join(process_dir, time_stamp)
+        # * make paths
+        os.makedirs(process_dir)
+        os.makedirs(os.path.join(process_dir, 'movements'))
+        process_file_path = os.path.join(process_dir, process_fname)
+        # process_fnames = os.path.basename(process_file_path).split('.json')
+        # process_file_path = os.path.join(process_dir, process_fnames[0] + ('' if overwrite else '_'+get_date()) + '.json')
+
     for m in movements:
-        m_file_path = os.path.abspath(os.path.join(DESIGN_DIR, m.filepath))
+        m_file_path = os.path.abspath(os.path.join(process_dir, m.filepath))
         with open(m_file_path, 'w') as f:
             json.dump(m, f, cls=DataEncoder, indent=indent, sort_keys=True)
     cprint('#{} movements written to {}'.format(len(movements), os.path.abspath(DESIGN_DIR)), 'green')
@@ -91,16 +104,9 @@ def save_process_and_movements(process_name, process, movements, overwrite=False
             if isinstance(m, RoboticMovement):
                 m.trajectory = None
 
-    process_file_path = get_process_path(process_name)
-    if not overwrite:
-        process_dir = os.path.dirname(process_file_path)
-        process_fnames = os.path.basename(process_file_path).split('.json')
-        process_file_path = os.path.join(process_dir, process_fnames[0] + ('' if overwrite else '_'+get_date()) + '.json')
-
     with open(process_file_path, 'w') as f:
         json.dump(process, f, cls=DataEncoder, indent=indent, sort_keys=True)
     cprint('Process written to {}'.format(process_file_path), 'green')
-
 
 
 ##########################################
