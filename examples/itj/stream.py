@@ -220,7 +220,7 @@ def compute_linear_movement(client, robot, process, movement, options=None):
 
     with WorldSaver():
         if start_conf is not None:
-            client.set_robot_configuration(robot, end_conf)
+            client.set_robot_configuration(robot, start_conf)
             start_tool_pose = get_link_pose(robot_uid, ik_tool_link)
             start_t0cf_frame_temp = frame_from_pose(start_tool_pose, scale=1e3)
             if not start_t0cf_frame_temp.__eq__(start_t0cf_frame, tol=1e-6):
@@ -299,10 +299,11 @@ def compute_linear_movement(client, robot, process, movement, options=None):
             cprint('Both start/end confs are pre-specified, problem might be too stiff to be solved.', 'yellow')
         if end_conf is not None:
             client.set_robot_configuration(robot, end_conf)
+            gantry_xyz_vals = end_conf.prismatic_values
         if start_conf is not None:
             client.set_robot_configuration(robot, start_conf)
+            gantry_xyz_vals = start_conf.prismatic_values
 
-        gantry_xyz_vals = end_conf.prismatic_values
         # sometimes pybullet default IK is unhappy
         for _ in range(10):
             with WorldSaver():
@@ -343,8 +344,6 @@ def compute_linear_movement(client, robot, process, movement, options=None):
 
 def compute_free_movement(client, robot, process, movement, options=None):
     assert isinstance(movement, RoboticFreeMovement)
-    # robot_uid = client.get_robot_pybullet_uid(robot)
-
     # * options
     # sampling attempts, needed only if start/end conf not specified
     debug = options.get('debug') or False
@@ -353,12 +352,34 @@ def compute_free_movement(client, robot, process, movement, options=None):
     end_state = process.get_movement_end_state(movement)
     start_conf = start_state['robot'].kinematic_config
     end_conf = end_state['robot'].kinematic_config
+
     # print('end conf: ', end_conf)
     # print('end conf joint_names: ', end_conf.joint_names)
+
     initial_conf = process.initial_state['robot'].kinematic_config
-    if start_conf is None and end_conf is None:
-        cprint('No robot start/end conf is specified in {}, return None'.format(movement.short_summary), 'yellow')
+    if start_conf is None or end_conf is None:
+        cprint('At least one of robot start/end conf is NOT specified in {}, return None'.format(movement.short_summary), 'red')
         return None
+
+    # * custom limits
+    custom_limits = get_gantry_custom_limits(MAIN_ROBOT_ID)
+    if 'custom_limits' not in options:
+        options.update({'custom_limits' : custom_limits})
+
+    goal_constraints = robot.constraints_from_configuration(end_conf, [0.01], [0.01], group=GANTRY_ARM_GROUP)
+    with LockRenderer():
+        with WorldSaver():
+            traj = client.plan_motion(robot, goal_constraints, start_configuration=start_conf, group=GANTRY_ARM_GROUP, options=options)
+    if traj is None:
+        cprint('No free movement found for {}.'.format(movement.short_summary), 'red')
+    else:
+        cprint('Free movement found for {}!'.format(movement.short_summary), 'green')
+    return traj
+
+
+##########################################
+# archived
+# auto sample IK for FreeMovements
         # * sample from t0cp if no conf is provided for the robot
         # cprint('No robot start/end conf is specified in {}, performing random IK solves.'.format(movement), 'yellow')
         # start_t0cf_frame = start_state['robot'].current_frame
@@ -384,23 +405,4 @@ def compute_free_movement(client, robot, process, movement, options=None):
         # if start_conf is None or end_conf is None:
         #     cprint('IK solves for start and end conf fails.', 'red')
         #     return None
-
-    # * custom limits
-    # gantry_arm_joint_names = robot.get_configurable_joint_names(group=GANTRY_ARM_GROUP)
-    # gantry_arm_joint_types = robot.get_joint_types_by_names(gantry_arm_joint_names)
-    # gantry_joint_names = list(set(gantry_arm_joint_names) - set(ik_joint_names))
-    custom_limits = get_gantry_custom_limits(MAIN_ROBOT_ID)
-    if 'custom_limits' not in options:
-        options.update({'custom_limits' : custom_limits})
-
-    # return client.plan_motion(robot, end_conf, start_configuration=start_conf, group=GANTRY_ARM_GROUP, options=options)
-    goal_constraints = robot.constraints_from_configuration(end_conf, [0.01], [0.01], group=GANTRY_ARM_GROUP)
-    with LockRenderer():
-        with WorldSaver():
-            traj = client.plan_motion(robot, goal_constraints, start_configuration=start_conf, group=GANTRY_ARM_GROUP, options=options)
-    if traj is None:
-        cprint('No free movement found for {}.'.format(movement.short_summary), 'red')
-    else:
-        cprint('Free movement found for {}!'.format(movement.short_summary), 'green')
-    return traj
 

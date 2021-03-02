@@ -5,6 +5,7 @@ import argparse
 import json
 import sys
 from os import path
+from pprint import pprint
 
 from math import radians as rad
 from termcolor import cprint
@@ -24,22 +25,25 @@ from .visualization import visualize_movement_trajectory
 
 from integral_timber_joints.process import RoboticFreeMovement, RoboticLinearMovement, RoboticMovement
 
-PREV_BEAM_COLOR = apply_alpha(RED, 1)
-CUR_BEAM_COLOR = apply_alpha(GREEN, 1)
+# * NOW!!
+# TODO gantry/joint value jump between cartesian movements
+# TODO in transit/transfer, gripper hits the ground
 
+# * Next steps
 # TODO add clamp collision geometry to transit/transfer planning
 # TODO use linkstatistics joint weight and resolutions
 
-print_title = lambda x: cprint(x, 'red', 'on_cyan', attrs=['bold'])
+def print_title(x):
+    print('\n\n')
+    cprint(x, 'yellow', 'on_cyan', attrs=['bold'])
 
 ###########################################
 
-#TODO make argparse options
 HERE = os.path.dirname(__file__)
 JSON_OUT_DIR = os.path.join(HERE, 'results')
 
 def compute_movement(client, robot, process, movement, options=None):
-    cprint(movement, 'cyan')
+    cprint(movement.short_summary, 'cyan')
     if not isinstance(movement, RoboticMovement):
         return None
 
@@ -64,6 +68,7 @@ def compute_movement(client, robot, process, movement, options=None):
         raise ValueError()
 
     if traj is not None:
+        # update start/end states
         movement.trajectory = traj
         start_state = process.get_movement_start_state(movement)
         start_state['robot'].kinematic_config = traj.points[0]
@@ -73,18 +78,18 @@ def compute_movement(client, robot, process, movement, options=None):
 
 def propagate_states(process, sub_movements, all_movements):
     for m in sub_movements:
-        if m.trajectory is None:
+        if not isinstance(m, RoboticMovement) or m.trajectory is None:
             continue
         m_id = all_movements.index(m)
         start_state = process.get_movement_start_state(m)
         end_state = process.get_movement_end_state(m)
         print('~~~')
-        print('Propagate states for ({}) : {}'.format(m_id, m))
+        print('Propagate states for ({}) : {}'.format(m_id, m.short_summary))
         # * backward fill all adjacent (-1) movements
         back_id = m_id-1
         while back_id > 0 and all_movements[back_id].planning_priority == -1:
             back_m = all_movements[back_id]
-            print('backward: ({}) {} - {}'.format(back_id, back_m, back_m.tag))
+            print('backward: ({}) {}'.format(back_id, back_m.short_summary))
             process.set_movement_end_state(back_m, start_state, deep_copy=True)
             back_id -= 1
 
@@ -92,9 +97,22 @@ def propagate_states(process, sub_movements, all_movements):
         forward_id = m_id+1
         while forward_id < len(all_movements) and all_movements[forward_id].planning_priority == -1:
             forward_m = all_movements[forward_id]
-            print('forward: ({}) {} - {}'.format(forward_id, forward_m, forward_m.tag))
+            print('forward: ({}) {}'.format(forward_id, forward_m.short_summary))
             process.set_movement_start_state(forward_m, end_state, deep_copy=True)
             forward_id += 1
+
+        # * update robot config since -1 movements don't alter robot config
+        for m in all_movements:
+            if m.planning_priority == -1:
+                has_start_conf = process.movement_has_start_robot_config(m)
+                has_end_conf = process.movement_has_end_robot_config(m)
+                if has_start_conf ^ has_end_conf:
+                    start_state = process.get_movement_start_state(m)
+                    end_state = process.get_movement_end_state(m)
+                    if has_start_conf and not has_end_conf:
+                        end_state['robot'].kinematic_config = start_state['robot'].kinematic_config
+                    if not has_start_conf and has_end_conf:
+                        start_state['robot'].kinematic_config = end_state['robot'].kinematic_config
         return all_movements
 
 #################################
@@ -163,7 +181,7 @@ def main():
         process.get_movement_summary_by_beam_id(beam_id)
 
         # * 2) propagate (priority 1) movement's start/end state to adjacent (prio -1) movements
-        print_title('2) propagate')
+        print_title('2) propagate for p1 movements')
         propagate_states(process, p1_movements, all_movements)
         process.get_movement_summary_by_beam_id(beam_id)
 
@@ -178,7 +196,7 @@ def main():
                 if has_start_conf and has_end_conf and not has_traj:
                     cprint('{} has both start, end conf specified, but no traj computer. This is BAD!!'.format(m), 'yellow')
                     wait_for_user()
-                if not has_traj and (has_traj ^ has_end_conf): # XOR
+                if not has_traj and (has_start_conf ^ has_end_conf): # XOR
                     print('-'*10)
                     m_id = all_movements.index(m)
                     print('{})'.format(m_id))
@@ -188,13 +206,36 @@ def main():
                     #         visualize_movement_trajectory(client, robot, process, m, step_sim=args.step_sim)
         process.get_movement_summary_by_beam_id(beam_id)
 
-        # * 4) propagate newly computed movement's start/end state to adjacent (prio -1) movements
-        print_title('4) Propagate')
-        propagate_states(process, p1_movements, all_movements)
+        # * 4) propagate to -1 movements
+        print_title('4) Propagate for half-spec p0 movements')
+        propagate_states(process, p0_movements, all_movements)
         process.get_movement_summary_by_beam_id(beam_id)
 
-        # * 5) compute all free movements, start and end should be both specified by now?
-        print_title('5) Compute free move')
+        # * 5) compute linear movements with neither start nor conf specified
+        print_title('5) compute linear movements with NO state specified')
+        p0_movements = process.get_movements_by_planning_priority(beam_id, 0)
+        for m in p0_movements:
+            if isinstance(m, RoboticLinearMovement):
+                has_start_conf = process.movement_has_start_robot_config(m)
+                has_end_conf = process.movement_has_end_robot_config(m)
+                has_traj = m.trajectory is not None
+                if has_start_conf and has_end_conf and not has_traj:
+                    cprint('{} has both start, end conf specified, but no traj computer. This is BAD!!'.format(m), 'yellow')
+                    wait_for_user()
+                if not has_traj and (not has_start_conf and not has_end_conf):
+                    print('-'*10)
+                    m_id = all_movements.index(m)
+                    print('{})'.format(m_id))
+                    all_movements[m_id] = compute_movement(client, robot, process, m, options)
+        process.get_movement_summary_by_beam_id(beam_id)
+
+        # * 6) propagate to -1 movements
+        print_title('6) Propagate for no-spec p0 movements')
+        propagate_states(process, p0_movements, all_movements)
+        process.get_movement_summary_by_beam_id(beam_id)
+
+        # * 6) compute all free movements, start and end should be both specified by now?
+        print_title('7) Compute free move')
         for m in p0_movements:
             if isinstance(m, RoboticFreeMovement):
                 print('-'*10)
