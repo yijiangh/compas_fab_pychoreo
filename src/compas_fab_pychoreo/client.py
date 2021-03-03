@@ -4,7 +4,7 @@ from itertools import combinations
 from termcolor import cprint
 
 from pybullet_planning import HideOutput, CLIENTS
-from pybullet_planning import BASE_LINK, RED, GREEN, GREY
+from pybullet_planning import BASE_LINK, RED, GREY, YELLOW, BLUE
 from pybullet_planning import get_link_pose, link_from_name, get_disabled_collisions
 from pybullet_planning import set_joint_positions
 from pybullet_planning import joints_from_names
@@ -71,7 +71,6 @@ class PyChoreoClient(PyBulletClient):
     ###########################################################
 
     def add_collision_mesh(self, collision_mesh, options=None):
-        # add color
         self.planner.add_collision_mesh(collision_mesh, options=options)
         color = options.get('color') or GREY
         name = collision_mesh.id
@@ -100,7 +99,7 @@ class PyChoreoClient(PyBulletClient):
         robot = options['robot']
         mass = options.get('mass') or STATIC_MASS
         options['mass'] = mass
-        color = options.get('color') or GREEN
+        color = options.get('color') or BLUE
 
         robot_uid = robot.attributes['pybullet_uid']
         name = attached_collision_mesh.collision_mesh.id
@@ -139,7 +138,6 @@ class PyChoreoClient(PyBulletClient):
         self.planner.remove_attached_collision_mesh(name, options=options)
         wildcard = options.get('wildcard') or '^{}$'.format(name)
         names = wildcard_keys(self.pychoreo_attachments, wildcard)
-        # TODO update extra_disabled_collision_links
         for name in names:
             del self.attached_collision_objects[name]
             del self.pychoreo_attachments[name]
@@ -153,7 +151,6 @@ class PyChoreoClient(PyBulletClient):
             cprint('No attachment with name {} found.'.format(name), 'yellow')
             return None
         detached_attachments = []
-        # TODO update extra_disabled_collision_links
         for name in names:
             attachments = self.pychoreo_attachments[name]
             detached_attachments.extend(attachments)
@@ -167,20 +164,31 @@ class PyChoreoClient(PyBulletClient):
         return detached_attachments
 
     ########################################
+    # Collision / Attached pybullet body managment
 
-    def set_object_frame(self, name, frame, options=None):
-        wildcard = options.get('wildcard') or '^{}$'.format(name)
-        status = self._get_body_statues(wildcard)
-        assert status != -1
-        contain_dict = self.collision_objects if status == 0 else self.pychoreo_attachments
-        names = wildcard_keys(contain_dict, wildcard)
-        # if len(names) == 0:
-        #     cprint('wildcard {} not found in {}'.format(wildcard, self.collision_objects.keys()), 'yellow')
-        for name in names:
-            for bdata in contain_dict[name]:
-                set_pose(bdata if status == 0 else bdata.child, pose_from_frame(frame))
+    def _get_collision_object_names(self, wildcard):
+        return wildcard_keys(self.collision_objects, wildcard)
 
-    def _get_body_statues(self, wildcard):
+    # TODO separation between attached and collision objects might cause problems in mode changes
+    def _get_collision_object_bodies(self, wildcard):
+        bodies = []
+        for n in self._get_collision_object_names(wildcard):
+            bodies.extend(self.collision_objects[n])
+        return bodies
+
+    def _get_attachment_names(self, wildcard):
+        return wildcard_keys(self.pychoreo_attachments, wildcard)
+
+    # TODO separation between attached and collision objects might cause problems in mode changes
+    def _get_attached_bodies(self, wildcard):
+        bodies = []
+        for n in self._get_attachment_names(wildcard):
+            bodies.extend([at.child for at in self.pychoreo_attachments[n]])
+        return bodies
+
+    def _get_body_status(self, wildcard):
+        # -1 if not attached and not collision object
+        # 0 if collision object, 1 if attached
         co_names = wildcard_keys(self.collision_objects, wildcard)
         at_names = wildcard_keys(self.pychoreo_attachments, wildcard)
         if len(co_names) == 0 and len(at_names) == 0:
@@ -193,16 +201,22 @@ class PyChoreoClient(PyBulletClient):
             raise ValueError('names {} should not appear at both collision objects ({}) and attached objects ({}) at the same time!'.format(
                 wildcard, co_names, at_names))
 
-    def _get_collision_object_names(self, wildcard):
-        return wildcard_keys(self.collision_objects, wildcard)
+    def _get_bodies(self, wildcard):
+        co_bodies = self._get_collision_object_bodies(wildcard)
+        attached_bodies = self._get_attached_bodies(wildcard)
+        return co_bodies + attached_bodies
 
-    # TODO separation between attached and collision objects might cause problems in mode changes
-    def _get_collision_object_bodies(self, wildcard):
-        # wildcard = wildcard or '^{}$'.format(name)
-        bodies = []
-        for n in self._get_collision_object_names(wildcard):
-            bodies.extend(self.collision_objects[n])
-        return bodies
+    def set_object_frame(self, name, frame, options=None):
+        wildcard = options.get('wildcard') or '^{}$'.format(name)
+        status = self._get_body_status(wildcard)
+        assert status != -1
+        contain_dict = self.collision_objects if status == 0 else self.pychoreo_attachments
+        names = wildcard_keys(contain_dict, wildcard)
+        # if len(names) == 0:
+        #     cprint('wildcard {} not found in {}'.format(wildcard, self.collision_objects.keys()), 'yellow')
+        for name in names:
+            for bdata in contain_dict[name]:
+                set_pose(bdata if status == 0 else bdata.child, pose_from_frame(frame))
 
     ########################################
 

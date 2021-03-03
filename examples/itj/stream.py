@@ -31,7 +31,7 @@ from .robot_setup import get_gantry_control_joint_names, get_cartesian_control_j
 
 def set_state(client, robot, process, state_from_object, initialize=False, scale=1e-3, options=None):
     options = options or {}
-    gantry_attempts = options.get('gantry_attempts') or 20
+    gantry_attempts = options.get('gantry_attempts') or 50
     debug = options.get('debug', False)
     include_env = options.get('include_env', True)
 
@@ -66,7 +66,7 @@ def set_state(client, robot, process, state_from_object, initialize=False, scale
         # * environment meshes
         if initialize and include_env:
             for name, m in process.environment_models.items():
-                cm = CollisionMesh(m, name)
+                cm = CollisionMesh(m, 'env_' + name)
                 cm.scale(scale)
                 client.add_collision_mesh(cm, {'color':GREY})
 
@@ -118,7 +118,7 @@ def set_state(client, robot, process, state_from_object, initialize=False, scale
             wildcard = '^{}'.format(object_id)
             # -1 if not attached and not collision object
             # 0 if collision object, 1 if attached
-            status = client._get_body_statues(wildcard)
+            status = client._get_body_status(wildcard)
             if not object_state.attached_to_robot:
                 # * demote attachedCM to collision_objects
                 if status == 1:
@@ -134,6 +134,7 @@ def set_state(client, robot, process, state_from_object, initialize=False, scale
                     flange_frame.point *= scale
                     object_frame.point *= scale
                     flange_pose = pose_from_frame(flange_frame, scale=scale)
+                    # TODO wrap this base sampling + 6-axis IK into inverse_kinematics for the client
                     # * sample from a ball near the pose
                     base_gen_fn = uniform_pose_generator(robot_uid, flange_pose, reachable_range=(0.2,1.5))
                     for _ in range(gantry_attempts):
@@ -144,7 +145,8 @@ def set_state(client, robot, process, state_from_object, initialize=False, scale
                         gantry_xyz_vals = [x,y,z]
                         client.set_robot_configuration(robot, Configuration(gantry_xyz_vals, gantry_arm_joint_types, sorted_gantry_joint_names))
 
-                        conf = client.inverse_kinematics(robot, flange_frame, group=GANTRY_ARM_GROUP, options={'avoid_collisions' : False})
+                        conf = client.inverse_kinematics(robot, flange_frame, group=GANTRY_ARM_GROUP,
+                            options={'avoid_collisions' : False})
                         if conf is not None:
                             break
                     else:
@@ -157,7 +159,8 @@ def set_state(client, robot, process, state_from_object, initialize=False, scale
                     wildcard = '^{}'.format(object_id)
                     names = client._get_collision_object_names(wildcard)
                     # ! ACM for attachments
-                    touched_links = ['{}_tool0'.format(MAIN_ROBOT_ID), '{}_link_6'.format(MAIN_ROBOT_ID)] if object_id.startswith('t') else []
+                    touched_links = ['{}_tool0'.format(MAIN_ROBOT_ID), '{}_link_6'.format(MAIN_ROBOT_ID)] \
+                        if object_id.startswith('t') else []
                     for name in names:
                         # a faked AttachedCM since we are not adding a new mesh, just promoting collision meshes to AttachedCMes
                         client.add_attached_collision_mesh(AttachedCollisionMesh(CollisionMesh(None, name),
@@ -191,8 +194,7 @@ def compute_linear_movement(client, robot, process, movement, options=None):
 
     # * options
     # sampling attempts
-    gantry_attempts = options.get('gantry_attempts') or 200
-    pose_step_size = options.get('pose_step_size') or 0.01 # meter
+    gantry_attempts = options.get('gantry_attempts') or 10
     reachable_range = options.get('reachable_range') or (0.2, 1.5)
     debug = options.get('debug') or False
 
@@ -223,16 +225,16 @@ def compute_linear_movement(client, robot, process, movement, options=None):
     # * set start state
     set_state(client, robot, process, start_state)
 
-    # TODO remove later, use client
-
     start_t0cf_frame = copy(start_state['robot'].current_frame)
+    start_t0cf_frame.point *= 1e-3
     end_t0cf_frame = copy(end_state['robot'].current_frame)
+    end_t0cf_frame.point *= 1e-3
 
     with WorldSaver():
         if start_conf is not None:
             client.set_robot_configuration(robot, start_conf)
             start_tool_pose = get_link_pose(robot_uid, ik_tool_link)
-            start_t0cf_frame_temp = frame_from_pose(start_tool_pose, scale=1e3)
+            start_t0cf_frame_temp = frame_from_pose(start_tool_pose, scale=1)
             if not start_t0cf_frame_temp.__eq__(start_t0cf_frame, tol=1e-6):
                 cprint('start conf FK inconsistent with given current frame in start state, overwriting with the FK one.', 'yellow')
             start_t0cf_frame = start_t0cf_frame_temp
@@ -240,29 +242,30 @@ def compute_linear_movement(client, robot, process, movement, options=None):
         if end_conf is not None:
             client.set_robot_configuration(robot, end_conf)
             end_tool_pose = get_link_pose(robot_uid, ik_tool_link)
-            end_t0cf_frame_temp = frame_from_pose(end_tool_pose, scale=1e3)
+            end_t0cf_frame_temp = frame_from_pose(end_tool_pose, scale=1)
             if not end_t0cf_frame_temp.__eq__(end_t0cf_frame, tol=1e-6):
                 cprint('end conf FK inconsistent with given current frame in end state, overwriting with the FK one.', 'yellow')
             end_t0cf_frame = end_t0cf_frame_temp
             end_state['robot'].current_frame = end_t0cf_frame_temp
 
-    end_tool_pose = pose_from_frame(end_t0cf_frame, scale=1e-3)
-    start_tool_pose = pose_from_frame(start_t0cf_frame, scale=1e-3)
-    interp_poses = list(interpolate_poses(start_tool_pose, end_tool_pose, pos_step_size=pose_step_size))
-    # if debug:
-    # for p in interp_poses:
-    #     draw_pose(p)
-    # wait_for_user('Viz cartesian poses')
+    # # TODO interp is done within client.plan_cartesian_motion, can get rid of this here
+    # interp_poses = [start_tool_pose, end_tool_pose]
+    interp_frames = [start_t0cf_frame, end_t0cf_frame]
 
     sorted_gantry_joint_names = get_gantry_control_joint_names(MAIN_ROBOT_ID)
     gantry_joints = joints_from_names(robot_uid, sorted_gantry_joint_names)
     gantry_z_joint = joint_from_name(robot_uid, sorted_gantry_joint_names[2])
     gantry_z_sample_fn = get_sample_fn(robot_uid, [gantry_z_joint], custom_limits={gantry_z_joint : GANTRY_Z_LIMIT})
     # * sample from a ball near the pose
-    base_gen_fn = uniform_pose_generator(robot_uid, start_tool_pose, reachable_range=reachable_range)
+    base_gen_fn = uniform_pose_generator(robot_uid, pose_from_frame(interp_frames[0], scale=1), reachable_range=reachable_range)
 
     solution_found = False
     samples_cnt = ik_failures = path_failures = 0
+
+    # TODO: ignore beam / env collision in the first pickup pose
+    # self.extra_disabled_collision_links[name].add(
+    #     ((robot_uid, touched_link_name), (body, None))
+    #     )
 
     if start_conf is None and end_conf is None:
         for _ in range(gantry_attempts):
@@ -271,25 +274,26 @@ def compute_linear_movement(client, robot, process, movement, options=None):
             y *= -1
             z, = gantry_z_sample_fn()
             gantry_xyz_vals = [x,y,z]
-            # print('gantry_xyz_vals: ({})'.format(gantry_xyz_vals))
-            # TODO swicth to client set_robot_configuration
-            set_joint_positions(robot_uid, gantry_joints, gantry_xyz_vals)
+            gantry_conf = Configuration(gantry_xyz_vals,
+                    gantry_arm_joint_types[:3], gantry_arm_joint_names[:3])
+            client.set_robot_configuration(robot, gantry_conf)
+            # set_joint_positions(robot_uid, gantry_joints, gantry_xyz_vals)
             samples_cnt += 1
 
-            arm_conf_vals = sample_ik_fn(start_tool_pose)
+            arm_conf_vals = sample_ik_fn(pose_from_frame(interp_frames[0], scale=1))
+            # iterate through all 6-axis IK solution
             for arm_conf_val in arm_conf_vals:
                 if arm_conf_val is None:
                     continue
                 gantry_arm_conf = Configuration(list(gantry_xyz_vals) + list(arm_conf_val),
                     gantry_arm_joint_types, gantry_arm_joint_names)
-                # print('extra_disabled_collision_links: ', client.extra_disabled_collision_links)
                 if not client.check_collisions(robot, gantry_arm_conf, options=options):
-                    # * set start pick conf
                     # * Cartesian planning, only for the six-axis arm (aka sub_conf)
-                    # TODO replace with client one
-                    # client.plan_cartesian_motion(robot, frames_WCF, start_configuration=None, group=None, options=None)
-                    cart_conf_vals = plan_cartesian_motion(robot_uid, ik_joints[0], ik_tool_link, interp_poses, get_sub_conf=True)
-                    if cart_conf_vals is not None:
+                    # cart_conf_vals = plan_cartesian_motion(robot_uid, ik_joints[0], ik_tool_link, interp_poses, get_sub_conf=True)
+                    cart_conf = client.plan_cartesian_motion(robot, interp_frames, start_configuration=gantry_arm_conf,
+                        group=BARE_ARM_GROUP, options=options)
+
+                    if cart_conf is not None:
                         solution_found = True
                         cprint('Collision free! After {} ik, {} path failure over {} samples.'.format(
                             ik_failures, path_failures, samples_cnt), 'green')
@@ -304,37 +308,38 @@ def compute_linear_movement(client, robot, process, movement, options=None):
             cprint('Cartesian Path planning failure after {} attempts | {} due to IK, {} due to Cart.'.format(
                 samples_cnt, ik_failures, path_failures), 'yellow')
     else:
+        # TODO make sure start/end conf coincides if provided
         if start_conf is not None and end_conf is not None:
             cprint('Both start/end confs are pre-specified, problem might be too stiff to be solved.', 'yellow')
-        if end_conf is not None:
-            client.set_robot_configuration(robot, end_conf)
-            gantry_xyz_vals = end_conf.prismatic_values
-        if start_conf is not None:
-            client.set_robot_configuration(robot, start_conf)
-            gantry_xyz_vals = start_conf.prismatic_values
+        gantry_arm_conf = start_conf if start_conf else end_conf
+        # client.set_robot_configuration(robot, gantry_arm_conf)
+        gantry_xyz_vals = gantry_arm_conf.prismatic_values
 
-        # sometimes pybullet default IK is unhappy
-        for _ in range(10):
-            cart_conf_vals = plan_cartesian_motion(robot_uid, ik_joints[0], ik_tool_link, interp_poses, get_sub_conf=True)
-            if cart_conf_vals is not None:
+        # TODO sometimes pybullet default IK is unhappy
+        samples_cnt = 0
+        for _ in range(5):
+            # cart_conf_vals = plan_cartesian_motion(robot_uid, ik_joints[0], ik_tool_link, interp_poses, get_sub_conf=True)
+            cart_conf = client.plan_cartesian_motion(robot, interp_frames, start_configuration=gantry_arm_conf,
+                group=BARE_ARM_GROUP, options=options)
+            samples_cnt += 1
+            if cart_conf is not None:
                 solution_found = True
-                cprint('Collision free! After {} ik, {} path failure over {} samples.'.format(
-                    ik_failures, path_failures, samples_cnt), 'green')
+                cprint('Collision free! After {} path failure over {} samples.'.format(
+                    path_failures, samples_cnt), 'green')
                 break
             else:
                 path_failures += 1
         else:
-            cprint('Cartesian Path planning failure after {} attempts | {} due to IK, {} due to Cart.'.format(
-                samples_cnt, ik_failures, path_failures), 'yellow')
-
-        # TODO check if start_conf or end_conf is specified
+            cprint('Cartesian Path planning (w/ prespecified st/end conf) failure after {} attempts.'.format(
+                samples_cnt), 'yellow')
+        # TODO check closeness if start_conf or end_conf is specified
 
     traj = None
     if solution_found:
         # * translate to compas_fab Trajectory
         jt_traj_pts = []
-        for i, arm_conf_val in enumerate(cart_conf_vals):
-            jt_traj_pt = JointTrajectoryPoint(values=list(gantry_xyz_vals) + list(arm_conf_val),
+        for i, arm_conf_val in enumerate(cart_conf.points):
+            jt_traj_pt = JointTrajectoryPoint(values=list(gantry_xyz_vals) + list(arm_conf_val.values),
                 types=gantry_arm_joint_types, time_from_start=Duration(i*1,0))
             jt_traj_pt.joint_names = gantry_arm_joint_names
             jt_traj_pts.append(jt_traj_pt)

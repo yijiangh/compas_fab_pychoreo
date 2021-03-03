@@ -1,5 +1,6 @@
 import time
 import math
+from termcolor import cprint
 from compas_fab.robots import Configuration, JointTrajectory, JointTrajectoryPoint, Duration
 from compas_fab.backends.interfaces import PlanCartesianMotion
 from compas_fab.backends.interfaces import InverseKinematics
@@ -75,7 +76,7 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
 
         # * parse options
         diagnosis = is_valid_option(options, 'diagnosis', False)
-        avoid_collisions = is_valid_option(options, 'avoid_collisions', True)
+        avoid_collisions = options.get('avoid_collisions', True)
         pos_step_size = is_valid_option(options, 'max_step', 0.01)
         jump_threshold = is_valid_option(options, 'jump_threshold', {jt : math.pi/2 for jt in ik_joints})
         planner_id = is_valid_option(options, 'planner_id', 'IterativeIK')
@@ -92,14 +93,20 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
         attachments = values_as_list(self.client.pychoreo_attachments)
         collision_fn = PyChoreoConfigurationCollisionChecker(self.client)._get_collision_fn(robot, joint_names, options=options)
 
+        # TODO separate attachment and robot body collision checking
+        # First check attachment & env (here we can give users fine-grained control)
+        # path planning
+        # check attachment and robot
+
         with WorldSaver():
             # set to start conf
             if start_configuration is not None:
-                start_conf_vals = start_configuration.values
-                set_joint_positions(robot_uid, ik_joints, start_conf_vals)
+                # start_conf_vals = start_configuration.values
+                # set_joint_positions(robot_uid, ik_joints, start_conf_vals)
+                self.client.set_robot_configuration(robot, start_configuration)
 
             if planner_id == 'IterativeIK':
-                path = plan_cartesian_motion(robot_uid, base_link, tool_link, ee_poses)
+                path = plan_cartesian_motion(robot_uid, base_link, tool_link, ee_poses, get_sub_conf=True)
                 # collision checking is not included in the default Cartesian planning
                 if path is not None and avoid_collisions:
                     for conf_val in path:
@@ -133,7 +140,7 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
                 raise ValueError('Cartesian planner {} not implemented!', planner_id)
 
         if path is None:
-            print('No Cartesian motion found!')
+            cprint('No Cartesian motion found!', 'yellow')
             return None
         else:
             jt_traj_pts = []
@@ -143,5 +150,5 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
                 jt_traj_pt.joint_names = joint_names
                 jt_traj_pts.append(jt_traj_pt)
             trajectory = JointTrajectory(trajectory_points=jt_traj_pts,
-                joint_names=joint_names, start_configuration=start_configuration, fraction=1.0)
+                joint_names=joint_names, start_configuration=jt_traj_pts[0], fraction=1.0)
             return trajectory

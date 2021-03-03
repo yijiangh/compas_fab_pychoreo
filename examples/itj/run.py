@@ -45,11 +45,13 @@ JSON_OUT_DIR = os.path.join(HERE, 'results')
 def compute_movement(client, robot, process, movement, options=None):
     if not isinstance(movement, RoboticMovement):
         return None
-
     cprint(movement.short_summary, 'cyan')
+    options = options or {}
     traj = None
     if isinstance(movement, RoboticLinearMovement):
         # * linear movement has built-in kinematics sampler
+        # interpolation step size, in meter
+        options.update({'max_step' : 0.01})
         traj = compute_linear_movement(client, robot, process, movement, options)
     elif isinstance(movement, RoboticFreeMovement):
         # * free movement needs exterior samplers for start/end configurations
@@ -83,7 +85,9 @@ def propagate_states(process, sub_movements, all_movements):
         while back_id > 0 and all_movements[back_id].planning_priority == -1:
             back_m = all_movements[back_id]
             print('backward: ({}) {}'.format(back_id, back_m.short_summary))
-            process.set_movement_end_state(back_m, start_state, deep_copy=True)
+            # TODO
+            # process.set_movement_end_state(back_m, start_state, deep_copy=True)
+            end_state['robot'].kinematic_config = start_state['robot'].kinematic_config
             back_id -= 1
 
         # * forward fill all adjacent (-1) movements
@@ -119,7 +123,8 @@ def main():
     parser.add_argument('--write', action='store_true', help='Write output json.')
     parser.add_argument('--watch', action='store_true', help='Watch computed trajectories in the pybullet GUI.')
     parser.add_argument('--debug', action='store_true', help='Debug mode')
-    parser.add_argument('--step_sim', action='store_true', help='Parse after each')
+    parser.add_argument('--diagnosis', action='store_true', help='Diagnosis mode')
+    parser.add_argument('--step_sim', action='store_true', help='Pause after each conf viz.')
     parser.add_argument('--disable_env', action='store_true', help='Disable environment collision geometry.')
     # parser.add_argument('-ptm', '--parse_transfer_motion', action='store_true', help='Parse saved transfer motion.')
     args = parser.parse_args()
@@ -128,7 +133,7 @@ def main():
 
     # * Connect to path planning backend and initialize robot parameters
     seq_i = int(args.seq_i)
-    client, robot, _ = load_RFL_world(viewer=args.viewer)
+    client, robot, _ = load_RFL_world(viewer=args.viewer or args.diagnosis)
 
     process = parse_process(args.problem)
     assembly = process.assembly
@@ -139,8 +144,7 @@ def main():
     # set all other unused robot
     full_start_conf = to_rlf_robot_full_conf(R11_INTER_CONF_VALS, R12_INTER_CONF_VALS)
     client.set_robot_configuration(robot, full_start_conf)
-    # if args.debug:
-    #     wait_if_gui('Pre Initial state.')
+    # wait_if_gui('Pre Initial state.')
 
     process.initial_state['robot'].kinematic_config = process.robot_initial_config
     set_state(client, robot, process, process.initial_state, initialize=True,
@@ -151,7 +155,7 @@ def main():
 
     options = {
         'debug' : args.debug,
-        'diagnosis' : False,
+        'diagnosis' : args.diagnosis,
     }
 
     all_movements = process.get_movements_by_beam_id(beam_id)
@@ -227,7 +231,7 @@ def main():
         propagate_states(process, p0_movements, all_movements)
         process.get_movement_summary_by_beam_id(beam_id)
 
-        # * 6) compute all free movements, start and end should be both specified by now?
+        # * 7) compute all free movements, start and end should be both specified by now?
         print_title('7) Compute free move')
         for m in p0_movements:
             if isinstance(m, RoboticFreeMovement):
