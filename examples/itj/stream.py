@@ -2,6 +2,7 @@ import sys
 import pybullet
 from termcolor import cprint
 from copy import copy
+from itertools import product
 
 from compas.geometry import Frame, distance_point_point
 from compas_fab.robots import Configuration, JointTrajectoryPoint, JointTrajectory
@@ -26,6 +27,9 @@ from compas_fab_pychoreo.utils import wildcard_keys
 from .visualization import BEAM_COLOR, GRIPPER_COLOR, CLAMP_COLOR, TOOL_CHANGER_COLOR
 from .robot_setup import R11_INTER_CONF_VALS, MAIN_ROBOT_ID, BARE_ARM_GROUP, GANTRY_ARM_GROUP, GANTRY_Z_LIMIT
 from .robot_setup import get_gantry_control_joint_names, get_cartesian_control_joint_names, get_gantry_custom_limits
+
+# in meter
+FRAME_TOL = 1e-4
 
 ##############################
 
@@ -55,7 +59,7 @@ def set_state(client, robot, process, state_from_object, initialize=False, scale
             if robot_state.current_frame is None:
                 robot_state.current_frame = FK_tool_frame
             else:
-                if not robot_state.current_frame.__eq__(FK_tool_frame, tol=1e-4):
+                if not robot_state.current_frame.__eq__(FK_tool_frame, tol=FRAME_TOL*1e3):
                   msg = 'Robot FK tool pose and current frame diverge: {:.3f} (mm)'.format(distance_point_point(robot_state.current_frame.point, FK_tool_frame.point))
                   cprint(msg, 'yellow')
             if initialize:
@@ -144,7 +148,6 @@ def set_state(client, robot, process, state_from_object, initialize=False, scale
                         z, = gantry_z_sample_fn()
                         gantry_xyz_vals = [x,y,z]
                         client.set_robot_configuration(robot, Configuration(gantry_xyz_vals, gantry_arm_joint_types, sorted_gantry_joint_names))
-
                         conf = client.inverse_kinematics(robot, flange_frame, group=GANTRY_ARM_GROUP,
                             options={'avoid_collisions' : False})
                         if conf is not None:
@@ -158,13 +161,33 @@ def set_state(client, robot, process, state_from_object, initialize=False, scale
                     # * create attachments
                     wildcard = '^{}'.format(object_id)
                     names = client._get_collision_object_names(wildcard)
-                    # ! ACM for attachments
+                    # touched_links is only for the adjacent Robot links
                     touched_links = ['{}_tool0'.format(MAIN_ROBOT_ID), '{}_link_6'.format(MAIN_ROBOT_ID)] \
                         if object_id.startswith('t') else []
                     for name in names:
                         # a faked AttachedCM since we are not adding a new mesh, just promoting collision meshes to AttachedCMes
                         client.add_attached_collision_mesh(AttachedCollisionMesh(CollisionMesh(None, name),
                             flange_link_name, touch_links=touched_links), options={'robot' : robot})
+
+                    extra_disabled_bodies = []
+                    if object_id.startswith('b'):
+                        g_id = None
+                        for o_id, o_st in state_from_object.items():
+                            if o_id.startswith('g') and o_st.attached_to_robot:
+                                g_id = o_id
+                                break
+                        assert g_id is not None, 'At least one gripper should be attached to the robot when the beam is attached.'
+                        extra_disabled_bodies = client._get_bodies('^{}'.format(g_id))
+                    elif object_id.startswith('c') or object_id.startswith('g'):
+                        extra_disabled_bodies = client._get_bodies('^{}'.format('tool_changer'))
+                    for name in names:
+                        at_bodies = client._get_attached_bodies('^{}$'.format(name))
+                        assert len(at_bodies) > 0
+                        for parent_body, child_body in product(extra_disabled_bodies, at_bodies):
+                            client.extra_disabled_collision_links[name].add(
+                                ((parent_body, None), (child_body, None))
+                                )
+
             # end if attached_to_robot
 
 ##############################
@@ -230,21 +253,34 @@ def compute_linear_movement(client, robot, process, movement, options=None):
     end_t0cf_frame = copy(end_state['robot'].current_frame)
     end_t0cf_frame.point *= 1e-3
 
+    # TODO: ignore beam / env collision in the first pickup pose
+    temp_name = '_tmp'
+    for o1_name, o2_name in movement.allowed_collision_matrix:
+        o1_bodies = client._get_bodies('^{}'.format(o1_name))
+        o2_bodies = client._get_bodies('^{}'.format(o2_name))
+        for parent_body, child_body in product(o1_bodies, o2_bodies):
+            client.extra_disabled_collision_links[temp_name].add(
+                ((parent_body, None), (child_body, None))
+                )
+    print('tmp ignored: ', client.extra_disabled_collision_links[temp_name])
+
     with WorldSaver():
         if start_conf is not None:
             client.set_robot_configuration(robot, start_conf)
             start_tool_pose = get_link_pose(robot_uid, ik_tool_link)
             start_t0cf_frame_temp = frame_from_pose(start_tool_pose, scale=1)
-            if not start_t0cf_frame_temp.__eq__(start_t0cf_frame, tol=1e-6):
-                cprint('start conf FK inconsistent with given current frame in start state, overwriting with the FK one.', 'yellow')
+            if not start_t0cf_frame_temp.__eq__(start_t0cf_frame, tol=FRAME_TOL):
+                cprint('start conf FK inconsistent ({:.5f} m) with given current frame in start state, overwriting with the FK one.'.format(
+                    distance_point_point(start_t0cf_frame_temp.point, start_t0cf_frame.point)), 'yellow')
             start_t0cf_frame = start_t0cf_frame_temp
             start_state['robot'].current_frame = start_t0cf_frame_temp
         if end_conf is not None:
             client.set_robot_configuration(robot, end_conf)
             end_tool_pose = get_link_pose(robot_uid, ik_tool_link)
             end_t0cf_frame_temp = frame_from_pose(end_tool_pose, scale=1)
-            if not end_t0cf_frame_temp.__eq__(end_t0cf_frame, tol=1e-6):
-                cprint('end conf FK inconsistent with given current frame in end state, overwriting with the FK one.', 'yellow')
+            if not end_t0cf_frame_temp.__eq__(end_t0cf_frame, tol=FRAME_TOL):
+                cprint('end conf FK inconsistent ({:.5f} m) with given current frame in end state, overwriting with the FK one.'.format(
+                    distance_point_point(end_t0cf_frame_temp.point, end_t0cf_frame.point)), 'yellow')
             end_t0cf_frame = end_t0cf_frame_temp
             end_state['robot'].current_frame = end_t0cf_frame_temp
 
@@ -261,11 +297,6 @@ def compute_linear_movement(client, robot, process, movement, options=None):
 
     solution_found = False
     samples_cnt = ik_failures = path_failures = 0
-
-    # TODO: ignore beam / env collision in the first pickup pose
-    # self.extra_disabled_collision_links[name].add(
-    #     ((robot_uid, touched_link_name), (body, None))
-    #     )
 
     if start_conf is None and end_conf is None:
         for _ in range(gantry_attempts):
@@ -333,6 +364,9 @@ def compute_linear_movement(client, robot, process, movement, options=None):
             cprint('Cartesian Path planning (w/ prespecified st/end conf) failure after {} attempts.'.format(
                 samples_cnt), 'yellow')
         # TODO check closeness if start_conf or end_conf is specified
+
+    if temp_name in client.extra_disabled_collision_links:
+        del client.extra_disabled_collision_links[temp_name]
 
     traj = None
     if solution_found:

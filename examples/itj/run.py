@@ -85,9 +85,8 @@ def propagate_states(process, sub_movements, all_movements):
         while back_id > 0 and all_movements[back_id].planning_priority == -1:
             back_m = all_movements[back_id]
             print('backward: ({}) {}'.format(back_id, back_m.short_summary))
-            # TODO
-            # process.set_movement_end_state(back_m, start_state, deep_copy=True)
-            end_state['robot'].kinematic_config = start_state['robot'].kinematic_config
+            back_end_state = process.get_movement_end_state(m)
+            back_end_state['robot'].kinematic_config = start_state['robot'].kinematic_config
             back_id -= 1
 
         # * forward fill all adjacent (-1) movements
@@ -95,7 +94,9 @@ def propagate_states(process, sub_movements, all_movements):
         while forward_id < len(all_movements) and all_movements[forward_id].planning_priority == -1:
             forward_m = all_movements[forward_id]
             print('forward: ({}) {}'.format(forward_id, forward_m.short_summary))
-            process.set_movement_start_state(forward_m, end_state, deep_copy=True)
+            # process.set_movement_start_state(forward_m, end_state, deep_copy=True)
+            forward_start_state = process.get_movement_start_state(m)
+            forward_start_state['robot'].kinematic_config = end_state['robot'].kinematic_config
             forward_id += 1
 
         # * update robot config since -1 movements don't alter robot config

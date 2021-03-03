@@ -104,6 +104,10 @@ class PyChoreoClient(PyBulletClient):
         robot_uid = robot.attributes['pybullet_uid']
         name = attached_collision_mesh.collision_mesh.id
         attached_bodies = []
+        # ! mimic ROS' behavior: collision object with same name is replaced
+        if name in self.attached_collision_objects:
+            cprint('Replacing existing attached collision mesh {}'.format(name), 'yellow')
+            self.remove_attached_collision_mesh(name)
         if name not in self.collision_objects:
             # ! I don't want to add another copy of the objects
             # self.planner.add_attached_collision_mesh(attached_collision_mesh, options=options)
