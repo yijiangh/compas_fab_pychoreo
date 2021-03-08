@@ -34,6 +34,12 @@ def visualize_movement_trajectory(client, robot, process, m, step_sim=True):
         cprint(m.short_summary, 'green')
         for jt_traj_pt in m.trajectory.points:
             client.set_robot_configuration(robot, jt_traj_pt)
+
+            # for name, attachments in client.pychoreo_attachments.items():
+            #     print('attached name: ', name)
+            #     for attachment in attachments:
+            #         print('Grasp pose: {}'.format(attachment.grasp_pose))
+
             if step_sim:
                 wait_if_gui('Step conf.')
             else:
@@ -43,4 +49,8 @@ def visualize_movement_trajectory(client, robot, process, m, step_sim=True):
         has_end_conf = process.movement_has_end_robot_config(m)
         cprint('No traj found for {}\n -- has_start_conf {}, has_end_conf {}'.format(m.short_summary,
             has_start_conf, has_end_conf), 'yellow')
+    end_state = process.get_movement_end_state(m)
+    set_state(client, robot, process, end_state)
+    if step_sim:
+        wait_if_gui('End state.')
 
