@@ -350,16 +350,18 @@ def compute_linear_movement(client, robot, process, movement, options=None):
                 if not client.check_collisions(robot, gantry_arm_conf, options=options):
                     # * Cartesian planning, only for the six-axis arm (aka sub_conf)
                     # cart_conf_vals = plan_cartesian_motion(robot_uid, ik_joints[0], ik_tool_link, interp_poses, get_sub_conf=True)
-                    cart_conf = client.plan_cartesian_motion(robot, interp_frames, start_configuration=gantry_arm_conf,
-                        group=GANTRY_ARM_GROUP, options=options)
-
-                    if cart_conf is not None:
-                        solution_found = True
-                        cprint('Collision free! After {} ik, {} path failure over {} samples.'.format(
-                            ik_failures, path_failures, samples_cnt), 'green')
-                        break
-                    else:
-                        path_failures += 1
+                    for _ in range(5):
+                        cart_conf = client.plan_cartesian_motion(robot, interp_frames, start_configuration=gantry_arm_conf,
+                            group=GANTRY_ARM_GROUP, options=options)
+                        if cart_conf is not None:
+                            solution_found = True
+                            cprint('Collision free! After {} ik, {} path failure over {} samples.'.format(
+                                ik_failures, path_failures, samples_cnt), 'green')
+                            break
+                        else:
+                            path_failures += 1
+                if solution_found:
+                    break
             else:
                 ik_failures += 1
             if solution_found:

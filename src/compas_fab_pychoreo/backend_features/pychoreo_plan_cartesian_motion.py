@@ -2,6 +2,7 @@ import time
 import math
 from termcolor import cprint
 from compas_fab.robots import Configuration, JointTrajectory, JointTrajectoryPoint, Duration
+from compas.robots import Joint
 from compas_fab.backends.interfaces import PlanCartesianMotion
 from compas_fab.backends.interfaces import InverseKinematics
 
@@ -78,7 +79,8 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
         diagnosis = is_valid_option(options, 'diagnosis', False)
         avoid_collisions = options.get('avoid_collisions', True)
         pos_step_size = is_valid_option(options, 'max_step', 0.01)
-        jump_threshold = is_valid_option(options, 'jump_threshold', {jt : math.pi/2 for jt in ik_joints})
+        jump_threshold = is_valid_option(options, 'jump_threshold', {jt : math.pi/3 if jt_type == Joint.REVOLUTE else 0.1 \
+            for jt, jt_type in zip(ik_joints, joint_types)})
         planner_id = is_valid_option(options, 'planner_id', 'IterativeIK')
         frame_variant_gen = is_valid_option(options, 'frame_variant_generator', None)
 
@@ -115,6 +117,7 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
                             path = None
                             break
                         path[i] = pruned_conf_val
+
                 # TODO check joint threshold
             elif planner_id == 'LadderGraph':
                 # get ik fn from client
@@ -140,7 +143,7 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
                 raise ValueError('Cartesian planner {} not implemented!', planner_id)
 
         if path is None:
-            cprint('No Cartesian motion found!', 'yellow')
+            cprint('No Cartesian motion found!', 'red')
             return None
         else:
             jt_traj_pts = []
@@ -149,6 +152,11 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
                 jt_traj_pt = JointTrajectoryPoint(values=conf, types=joint_types, time_from_start=Duration(i*1,0))
                 jt_traj_pt.joint_names = joint_names
                 jt_traj_pts.append(jt_traj_pt)
+            if start_configuration is not None and not start_configuration.close_to(jt_traj_pts[0]):
+                cprint('No plan found due to joint jump from start conf, max diff {} | start conf {}, traj 0 {}'.format(
+                    start_configuration.max_difference(jt_traj_pts[0]), start_configuration, jt_traj_pts[0]), 'red')
+                return None
+            # TODO check intermediate joint jump
             trajectory = JointTrajectory(trajectory_points=jt_traj_pts,
                 joint_names=joint_names, start_configuration=jt_traj_pts[0], fraction=1.0)
             return trajectory

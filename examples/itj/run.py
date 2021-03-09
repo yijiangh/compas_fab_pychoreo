@@ -179,10 +179,10 @@ def main():
             wait_if_gui('End state')
         wait_for_user('Enter to exit.')
 
-    print_title('0) Before planning')
-    process.get_movement_summary_by_beam_id(beam_id)
-    if args.debug:
-        wait_for_user()
+    # print_title('0) Before planning')
+    # process.get_movement_summary_by_beam_id(beam_id)
+    # if args.debug:
+    #     wait_for_user()
 
     with LockRenderer(not (args.debug or args.diagnosis)):
         # * 1) compute Linear movements (priority 1)
@@ -196,10 +196,7 @@ def main():
             if args.debug:
                 with WorldSaver():
                     visualize_movement_trajectory(client, robot, process, m, step_sim=args.step_sim)
-        process.get_movement_summary_by_beam_id(beam_id)
-
         # * 2) propagate (priority 1) movement's start/end state to adjacent (prio -1) movements
-        print_title('2) propagate for p1 movements')
         propagate_states(process, p1_movements, all_movements)
         process.get_movement_summary_by_beam_id(beam_id)
 
@@ -224,12 +221,6 @@ def main():
                     if args.debug:
                         with WorldSaver():
                             visualize_movement_trajectory(client, robot, process, m, step_sim=args.step_sim)
-        process.get_movement_summary_by_beam_id(beam_id)
-        if args.debug:
-            wait_for_user()
-
-        # * 4) propagate to -1 movements
-        print_title('4) Propagate for half-spec p0 movements')
         propagate_states(process, altered_movements, all_movements)
         process.get_movement_summary_by_beam_id(beam_id)
         if args.debug:
@@ -256,12 +247,34 @@ def main():
                     if args.debug:
                         with WorldSaver():
                             visualize_movement_trajectory(client, robot, process, m, step_sim=args.step_sim)
+                    # * 6) propagate to -1 movements
+                    print_title('6) Propagate for no-spec: ({}) {}'.format(m_id, m.short_summary))
+                    propagate_states(process, [m], all_movements)
         process.get_movement_summary_by_beam_id(beam_id)
         if args.debug:
             wait_for_user()
 
-        # * 6) propagate to -1 movements
-        print_title('6) Propagate for no-spec p0 movements')
+        # * 6) compute linear movements with one state (start OR end) specified
+        print_title('6) compute linear movements with one state (start OR end) specified')
+        p0_movements = process.get_movements_by_planning_priority(beam_id, 0)
+        altered_movements = []
+        for m in p0_movements:
+            if isinstance(m, RoboticLinearMovement):
+                has_start_conf = process.movement_has_start_robot_config(m)
+                has_end_conf = process.movement_has_end_robot_config(m)
+                has_traj = m.trajectory is not None
+                if has_start_conf and has_end_conf and not has_traj:
+                    cprint('{} has both start, end conf specified, but no traj computer. This is BAD!!'.format(m), 'yellow')
+                    wait_for_user()
+                if not has_traj and (has_start_conf ^ has_end_conf): # XOR
+                    print('-'*10)
+                    m_id = all_movements.index(m)
+                    print('{})'.format(m_id))
+                    all_movements[m_id] = compute_movement(client, robot, process, m, options)
+                    altered_movements.append(all_movements[m_id])
+                    if args.debug:
+                        with WorldSaver():
+                            visualize_movement_trajectory(client, robot, process, m, step_sim=args.step_sim)
         propagate_states(process, altered_movements, all_movements)
         process.get_movement_summary_by_beam_id(beam_id)
         if args.debug:
