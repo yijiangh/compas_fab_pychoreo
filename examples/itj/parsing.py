@@ -14,6 +14,7 @@ from pybullet_planning import get_date
 from integral_timber_joints.process import RoboticFreeMovement, RoboticLinearMovement, RoboticMovement
 
 HERE = os.path.dirname(__file__)
+DATA_DIR = os.path.join(HERE, "data")
 
 #######################################
 

@@ -57,7 +57,7 @@ class PyChoreoPlanMotion(PlanMotion):
         robot_uid = robot.attributes['pybullet_uid']
 
         # * parse options
-        diagnosis = options.get('diagnosis') or False
+        diagnosis = options.get('diagnosis', False)
         custom_limits = options.get('custom_limits') or {}
         resolutions = options.get('resolutions') or 0.1
         weights = options.get('weights') or None
@@ -71,10 +71,9 @@ class PyChoreoPlanMotion(PlanMotion):
             custom_limits={joint_from_name(robot_uid, jn) : lims for jn, lims in custom_limits.items()})
 
         with WorldSaver():
-            # set to start conf
             if start_configuration is not None:
-                start_conf_vals = start_configuration.values
-                set_joint_positions(robot_uid, ik_joints, start_conf_vals)
+                # * set to start conf
+                self.client.set_robot_configuration(robot, start_configuration)
             sample_fn = get_sample_fn(robot_uid, ik_joints, custom_limits=pb_custom_limits)
             distance_fn = get_distance_fn(robot_uid, ik_joints, weights=weights)
             extend_fn = get_extend_fn(robot_uid, ik_joints, resolutions=resolutions)

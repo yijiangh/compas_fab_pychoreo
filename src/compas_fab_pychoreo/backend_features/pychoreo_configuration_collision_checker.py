@@ -46,6 +46,7 @@ class PyChoreoConfigurationCollisionChecker(ConfigurationCollisionChecker):
         self_collisions = options.get('self_collisions') or True
         custom_limits = options.get('custom_limits') or {}
         avoid_collisions = options.get('avoid_collisions', True)
+        distance_threshold = options.get('distance_threshold', 0.0)
 
         if avoid_collisions:
             wildcards = options.get('collision_object_wildcards') or None
@@ -90,5 +91,7 @@ class PyChoreoConfigurationCollisionChecker(ConfigurationCollisionChecker):
                                         attachments=attachments, self_collisions=self_collisions,
                                         disabled_collisions=self.client.get_self_collision_link_ids(robot), # get disabled self-collision links (srdf)
                                         extra_disabled_collisions=extra_disabled_collisions,
-                                        custom_limits=pb_custom_limits)
+                                        custom_limits=pb_custom_limits,
+                                        body_name_from_id=self.client._name_from_body_id,
+                                        distance_threshold=distance_threshold)
         return collision_fn

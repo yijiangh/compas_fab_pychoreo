@@ -1,3 +1,4 @@
+from compas_fab.robots.configuration import Configuration
 import pybullet
 from collections import defaultdict
 from itertools import combinations
@@ -7,7 +8,7 @@ from pybullet_planning import HideOutput, CLIENTS
 from pybullet_planning import BASE_LINK, RED, GREY, YELLOW, BLUE
 from pybullet_planning import get_link_pose, link_from_name, get_disabled_collisions
 from pybullet_planning import set_joint_positions
-from pybullet_planning import joints_from_names
+from pybullet_planning import joints_from_names, get_joint_positions
 from pybullet_planning import inverse_kinematics
 from pybullet_planning import get_movable_joints  # from pybullet_planning.interfaces.robots.joint
 from pybullet_planning import get_joint_names  # from pybullet_planning.interfaces.robots.joint
@@ -97,13 +98,18 @@ class PyChoreoClient(PyBulletClient):
         options = options or {}
         assert 'robot' in options, 'The robot option must be specified!'
         robot = options['robot']
-        mass = options.get('mass') or STATIC_MASS
+        mass = options.get('mass', STATIC_MASS)
         options['mass'] = mass
-        color = options.get('color') or BLUE
+        color = options.get('color', BLUE)
+        attached_child_link_name = options.get('attached_child_link_name', None)
 
         robot_uid = robot.attributes['pybullet_uid']
         name = attached_collision_mesh.collision_mesh.id
         attached_bodies = []
+        # ! mimic ROS' behavior: collision object with same name is replaced
+        if name in self.attached_collision_objects:
+            cprint('Replacing existing attached collision mesh {}'.format(name), 'yellow')
+            self.remove_attached_collision_mesh(name)
         if name not in self.collision_objects:
             # ! I don't want to add another copy of the objects
             # self.planner.add_attached_collision_mesh(attached_collision_mesh, options=options)
@@ -123,7 +129,8 @@ class PyChoreoClient(PyBulletClient):
                     )
             set_color(body, color)
             # create attachment based on their *current* pose
-            attachment = create_attachment(robot_uid, tool_attach_link, body)
+            attach_child_link = BASE_LINK if not attached_child_link_name else link_from_name(body, attached_child_link_name)
+            attachment = create_attachment(robot_uid, tool_attach_link, body, attach_child_link)
             attachment.assign()
             self.pychoreo_attachments[name].append(attachment)
             # create fixed constraint to conform to PybulletClient (we don't use it though)
@@ -206,17 +213,25 @@ class PyChoreoClient(PyBulletClient):
         attached_bodies = self._get_attached_bodies(wildcard)
         return co_bodies + attached_bodies
 
-    def set_object_frame(self, name, frame, options=None):
-        wildcard = options.get('wildcard') or '^{}$'.format(name)
-        status = self._get_body_status(wildcard)
-        assert status != -1
-        contain_dict = self.collision_objects if status == 0 else self.pychoreo_attachments
-        names = wildcard_keys(contain_dict, wildcard)
-        # if len(names) == 0:
-        #     cprint('wildcard {} not found in {}'.format(wildcard, self.collision_objects.keys()), 'yellow')
-        for name in names:
-            for bdata in contain_dict[name]:
-                set_pose(bdata if status == 0 else bdata.child, pose_from_frame(frame))
+    @property
+    def _name_from_body_id(self):
+        name_from_body_id = {}
+        for name, bodies in self.collision_objects.items():
+            for body in bodies:
+                name_from_body_id[body] = name
+        for name, attachments in self.pychoreo_attachments.items():
+            for attach in attachments:
+                name_from_body_id[attach.child] = name
+        return name_from_body_id
+
+    def _get_name_from_body_id(self, body_id):
+        name_from_body_id = self.name_from_body_id
+        return None if body_id not in name_from_body_id else name_from_body_id[body_id]
+
+    def set_object_frame(self, wildcard, frame, options=None):
+        bodies = self._get_bodies(wildcard)
+        for body in bodies:
+            set_pose(body, pose_from_frame(frame))
 
     ########################################
 
@@ -229,11 +244,22 @@ class PyChoreoClient(PyBulletClient):
         robot_uid = robot.attributes['pybullet_uid']
         # TODO if joint_names are specified within configuration, take intersection
         # group_joint_names = robot.get_configurable_joint_names(group=group)
-        joints = joints_from_names(robot_uid, configuration.joint_names)
-        set_joint_positions(robot_uid, joints, configuration.values)
+        self._set_body_configuration(robot_uid, configuration)
         for attachments in self.pychoreo_attachments.values():
             for attachment in attachments:
                 attachment.assign()
+
+    def _set_body_configuration(self, body_id, configuration):
+        joints = joints_from_names(body_id, configuration.joint_names)
+        set_joint_positions(body_id, joints, configuration.values)
+
+    def get_robot_configuration(self, robot, group):
+        robot_uid = robot.attributes['pybullet_uid']
+        joint_names = robot.get_configurable_joint_names(group=group)
+        joints = joints_from_names(robot_uid, joint_names)
+        joint_types = robot.get_joint_types_by_names(joint_names)
+        joint_values = get_joint_positions(robot_uid, joints)
+        return Configuration(values=joint_values, types=joint_types, joint_names=joint_names)
 
     # def configuration_in_collision(self, *args, **kwargs):
     def check_collisions(self, *args, **kwargs):
