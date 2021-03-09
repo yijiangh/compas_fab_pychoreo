@@ -1,4 +1,5 @@
 import time
+from termcolor import cprint
 from compas_fab.backends.interfaces import PlanMotion
 from compas_fab.backends.interfaces import InverseKinematics
 from compas_fab.robots import JointTrajectory, Duration, JointTrajectoryPoint, Configuration
@@ -61,7 +62,9 @@ class PyChoreoPlanMotion(PlanMotion):
         custom_limits = options.get('custom_limits') or {}
         resolutions = options.get('resolutions') or 0.1
         weights = options.get('weights') or None
+        rrt_restarts = options.get('rrt_restarts', 10)
         # TODO: auto compute joint weight
+        print('plan motion options: ', options)
 
         # * convert link/joint names to pybullet indices
         joint_names = robot.get_configurable_joint_names(group=group)
@@ -69,6 +72,7 @@ class PyChoreoPlanMotion(PlanMotion):
         joint_types = robot.get_joint_types_by_names(joint_names)
         pb_custom_limits = get_custom_limits(robot_uid, ik_joints,
             custom_limits={joint_from_name(robot_uid, jn) : lims for jn, lims in custom_limits.items()})
+        print('pb custom limits: ', list(pb_custom_limits))
 
         with WorldSaver():
             if start_configuration is not None:
@@ -78,7 +82,9 @@ class PyChoreoPlanMotion(PlanMotion):
             distance_fn = get_distance_fn(robot_uid, ik_joints, weights=weights)
             extend_fn = get_extend_fn(robot_uid, ik_joints, resolutions=resolutions)
             options['robot'] = robot
+            options['debug'] = False
             collision_fn = PyChoreoConfigurationCollisionChecker(self.client)._get_collision_fn(robot, joint_names, options=options)
+            del options['debug']
 
             start_conf = get_joint_positions(robot_uid, ik_joints)
             end_conf = self._joint_values_from_joint_constraints(joint_names, goal_constraints)
@@ -86,12 +92,12 @@ class PyChoreoPlanMotion(PlanMotion):
 
             if not check_initial_end(start_conf, end_conf, collision_fn, diagnosis=diagnosis):
                 return None
-            path = birrt(start_conf, end_conf, distance_fn, sample_fn, extend_fn, collision_fn)
+            path = birrt(start_conf, end_conf, distance_fn, sample_fn, extend_fn, collision_fn, restarts=rrt_restarts)
             #return plan_lazy_prm(start_conf, end_conf, sample_fn, extend_fn, collision_fn)
 
         if path is None:
             # TODO use LOG
-            print('No free motion found!')
+            cprint('No free motion found!', 'red')
             return None
         else:
             jt_traj_pts = []

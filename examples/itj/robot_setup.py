@@ -79,12 +79,19 @@ def to_rlf_robot_full_conf(robot11_confval, robot12_confval):
 def get_gantry_control_joint_names(robot_id='robot11'):
     return rfl_robot_joint_names(robot_id, True)[:3]
 
-def get_gantry_custom_limits(robot_id='robot11'):
-    joint_names = get_gantry_control_joint_names(robot_id)
+# rm_limits = [(-175, 175), (-85, 145), (-175, 70), (-181, 181), (-120, 120), (-181, 181)]
+def get_gantry_robot_custom_limits(robot_id='robot11'):
+    joint_names = rfl_robot_joint_names(robot_id, True)
     return {
         joint_names[0] : GANTRY_X_LIMIT,
         joint_names[1] : GANTRY_Y_LIMIT,
         joint_names[2] : GANTRY_Z_LIMIT,
+        joint_names[3] : (-3.054326, 3.05432),
+        joint_names[4] : (-1.483529, 2.53072),
+        joint_names[5] : (-3.054326, 1.22173),
+        joint_names[6] : (-3.159045, 3.15904),
+        joint_names[7] : (-2.094395, 2.09439),
+        joint_names[8] : (-3.159045, 3.15904),
     }
 
 def get_cartesian_control_joint_names(robot_id='robot11'):

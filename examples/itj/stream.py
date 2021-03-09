@@ -26,7 +26,7 @@ from compas_fab_pychoreo.utils import wildcard_keys
 
 from .visualization import BEAM_COLOR, GRIPPER_COLOR, CLAMP_COLOR, TOOL_CHANGER_COLOR
 from .robot_setup import R11_INTER_CONF_VALS, MAIN_ROBOT_ID, BARE_ARM_GROUP, GANTRY_ARM_GROUP, GANTRY_Z_LIMIT
-from .robot_setup import get_gantry_control_joint_names, get_cartesian_control_joint_names, get_gantry_custom_limits
+from .robot_setup import get_gantry_control_joint_names, get_cartesian_control_joint_names, get_gantry_robot_custom_limits
 from .parsing import DATA_DIR
 from .utils import reverse_trajectory
 
@@ -326,6 +326,8 @@ def compute_linear_movement(client, robot, process, movement, options=None):
     solution_found = False
     samples_cnt = ik_failures = path_failures = 0
 
+    # TODO custom limits
+
     if start_conf is None and end_conf is None:
         # * sample from a ball near the pose
         base_gen_fn = uniform_pose_generator(robot_uid, pose_from_frame(interp_frames[0], scale=1), reachable_range=reachable_range)
@@ -404,14 +406,6 @@ def compute_linear_movement(client, robot, process, movement, options=None):
 
     traj = None
     if solution_found:
-        # jt_traj_pts = []
-        # for i, gantry_conf_val in enumerate(cart_conf.points):
-        #     jt_traj_pt = JointTrajectoryPoint(values=gantry_conf_val.values,
-        #         types=gantry_arm_joint_types.types, time_from_start=Duration(i*1,0))
-        #     jt_traj_pt.joint_names = gantry_arm_joint_types.joint_names
-        #     jt_traj_pts.append(jt_traj_pt)
-        # traj = JointTrajectory(trajectory_points=jt_traj_pts, \
-        #     joint_names=gantry_arm_joint_names, start_configuration=jt_traj_pts[0], fraction=1.0)
         traj = cart_conf
         if start_conf is not None and not start_conf.close_to(traj.points[0], tol=1e-3):
             cprint('Start conf not coincided - max diff {:.5f}'.format(start_conf.max_difference(traj.points[0])), 'red')
@@ -427,6 +421,7 @@ def compute_linear_movement(client, robot, process, movement, options=None):
 
 def compute_free_movement(client, robot, process, movement, options=None):
     assert isinstance(movement, RoboticFreeMovement)
+    options = options or {}
     # * options
     # sampling attempts, needed only if start/end conf not specified
     debug = options.get('debug', False)
@@ -435,18 +430,19 @@ def compute_free_movement(client, robot, process, movement, options=None):
     end_state = process.get_movement_end_state(movement)
     start_conf = start_state['robot'].kinematic_config
     end_conf = end_state['robot'].kinematic_config
-    # initial_conf = process.initial_state['robot'].kinematic_config
 
     # * set start state
     set_state(client, robot, process, start_state)
+    client._print_object_summary()
 
     if start_conf is None or end_conf is None:
         cprint('At least one of robot start/end conf is NOT specified in {}, return None'.format(movement.short_summary), 'red')
-        cprint('Start {} | End {}'.format(start_conf, end_conf))
+        cprint('Start {} | End {}'.format(start_conf, end_conf), 'red')
+        wait_for_user()
         return None
 
     # * custom limits
-    custom_limits = get_gantry_custom_limits(MAIN_ROBOT_ID)
+    custom_limits = get_gantry_robot_custom_limits(MAIN_ROBOT_ID)
     if 'custom_limits' not in options:
         options.update({'custom_limits' : custom_limits})
 

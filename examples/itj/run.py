@@ -47,8 +47,8 @@ def compute_movement(client, robot, process, movement, options=None):
         # * linear movement has built-in kinematics sampler
         # interpolation step size, in meter
         lm_options = options.copy()
-        options.update({'max_step' : 0.01, 'distance_threshold':0.0013})
-        traj = compute_linear_movement(client, robot, process, movement, options)
+        lm_options.update({'max_step' : 0.01, 'distance_threshold':0.0013})
+        traj = compute_linear_movement(client, robot, process, movement, lm_options)
     elif isinstance(movement, RoboticFreeMovement):
         # * free movement needs exterior samplers for start/end configurations
         traj = compute_free_movement(client, robot, process, movement, options)
@@ -295,13 +295,6 @@ def main():
         if args.debug:
             wait_for_user()
 
-    # * export computed movements
-    if args.write:
-        save_process_and_movements(args.problem, process, all_movements, overwrite=False, include_traj_in_process=False)
-
-    # # * planning ends
-    # client.disconnect()
-
     # * final visualization
     if args.watch:
         print('='*20)
@@ -314,6 +307,10 @@ def main():
         for m in all_movements:
             visualize_movement_trajectory(client, robot, process, m, step_sim=args.step_sim)
         # client.disconnect()
+
+    # * export computed movements
+    if args.write:
+        save_process_and_movements(args.problem, process, all_movements, overwrite=False, include_traj_in_process=False)
 
     client.disconnect()
 

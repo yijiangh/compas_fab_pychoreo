@@ -43,10 +43,11 @@ class PyChoreoConfigurationCollisionChecker(ConfigurationCollisionChecker):
         """Returns a `pybullet_planning` collision_fn
         """
         robot_uid = robot.attributes['pybullet_uid']
-        self_collisions = options.get('self_collisions') or True
-        custom_limits = options.get('custom_limits') or {}
+        self_collisions = options.get('self_collisions', True)
+        custom_limits = options.get('custom_limits', {})
         avoid_collisions = options.get('avoid_collisions', True)
         distance_threshold = options.get('distance_threshold', 0.0)
+        debug = options.get('debug', False)
 
         if avoid_collisions:
             wildcards = options.get('collision_object_wildcards') or None
@@ -93,5 +94,6 @@ class PyChoreoConfigurationCollisionChecker(ConfigurationCollisionChecker):
                                         extra_disabled_collisions=extra_disabled_collisions,
                                         custom_limits=pb_custom_limits,
                                         body_name_from_id=self.client._name_from_body_id,
-                                        distance_threshold=distance_threshold)
+                                        distance_threshold=distance_threshold,
+                                        debug=debug)
         return collision_fn

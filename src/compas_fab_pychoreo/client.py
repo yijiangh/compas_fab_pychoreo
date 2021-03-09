@@ -12,7 +12,7 @@ from pybullet_planning import joints_from_names, get_joint_positions
 from pybullet_planning import inverse_kinematics
 from pybullet_planning import get_movable_joints  # from pybullet_planning.interfaces.robots.joint
 from pybullet_planning import get_joint_names  # from pybullet_planning.interfaces.robots.joint
-from pybullet_planning import set_pose, get_bodies, remove_body, create_attachment, set_color
+from pybullet_planning import set_pose, get_bodies, remove_body, create_attachment, set_color, get_link_name, get_name
 from pybullet_planning import add_fixed_constraint, remove_constraint
 from pybullet_planning import draw_pose, get_body_body_disabled_collisions
 
@@ -232,6 +232,24 @@ class PyChoreoClient(PyBulletClient):
         bodies = self._get_bodies(wildcard)
         for body in bodies:
             set_pose(body, pose_from_frame(frame))
+
+    def _print_object_summary(self):
+        print('^'*10)
+        print('PychoreoClient scene summary:')
+        body_name_from_id = self._name_from_body_id
+        print('Collision Objects:')
+        for name, bodies in self.collision_objects.items():
+            print('\t{}: {}'.format(name, bodies))
+        print('Attachments:')
+        for name, attachments in self.pychoreo_attachments.items():
+            print('\t{}: {}'.format(name, [at.child for at in attachments]))
+        print('Extra disabled collision links:')
+        for name, blink_pairs in self.extra_disabled_collision_links.items():
+            print('\t{}:'.format(name))
+            for (b1,l1_name), (b2,l2_name) in blink_pairs:
+                b1_name = body_name_from_id[b1] if b1 in body_name_from_id else get_name(b1)
+                b2_name = body_name_from_id[b2] if b2 in body_name_from_id else get_name(b2)
+                print('\t\t({}-{}), ({}-{})'.format(b1_name,l1_name,b2_name,l2_name))
 
     ########################################
 
