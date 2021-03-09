@@ -8,9 +8,9 @@ from compas_fab.backends.interfaces import InverseKinematics
 from compas_fab_pychoreo.conversions import pose_from_frame, frame_from_pose
 from compas_fab_pychoreo.utils import is_valid_option, values_as_list
 from compas_fab_pychoreo.backend_features.pychoreo_configuration_collision_checker import PyChoreoConfigurationCollisionChecker
-from pybullet_planning import is_connected, get_bodies, WorldSaver, get_collision_fn, joints_from_names, plan_cartesian_motion, \
-    link_from_name, interpolate_poses, get_link_pose, get_sample_fn, set_joint_positions, elapsed_time, plan_cartesian_motion_lg
-
+from pybullet_planning import WorldSaver, joints_from_names, plan_cartesian_motion, \
+    link_from_name, interpolate_poses, plan_cartesian_motion_lg, get_labeled_configuration
+from pybullet_planning import wait_for_user
 
 class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
     def __init__(self, client):
@@ -101,20 +101,20 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
         with WorldSaver():
             # set to start conf
             if start_configuration is not None:
-                # start_conf_vals = start_configuration.values
-                # set_joint_positions(robot_uid, ik_joints, start_conf_vals)
                 self.client.set_robot_configuration(robot, start_configuration)
 
             if planner_id == 'IterativeIK':
                 path = plan_cartesian_motion(robot_uid, base_link, tool_link, ee_poses, get_sub_conf=True)
                 # collision checking is not included in the default Cartesian planning
                 if path is not None and avoid_collisions:
-                    for conf_val in path:
+                    for i, conf_val in enumerate(path):
+                        pruned_conf_val = self._prune_configuration(robot_uid, conf_val, joint_names)
                         for attachment in attachments:
                             attachment.assign()
-                        if collision_fn(conf_val, diagnosis=diagnosis):
+                        if collision_fn(pruned_conf_val, diagnosis=diagnosis):
                             path = None
                             break
+                        path[i] = pruned_conf_val
                 # TODO check joint threshold
             elif planner_id == 'LadderGraph':
                 # get ik fn from client
@@ -152,3 +152,11 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
             trajectory = JointTrajectory(trajectory_points=jt_traj_pts,
                 joint_names=joint_names, start_configuration=jt_traj_pts[0], fraction=1.0)
             return trajectory
+
+    def _prune_configuration(self, robot_uid, conf_val, joint_names):
+        conf_val_from_joint_name = get_labeled_configuration(robot_uid)
+        pruned_conf = []
+        for joint_name, joint_value in zip(conf_val_from_joint_name, conf_val):
+            if joint_name in joint_names or joint_name.decode('UTF-8') in joint_names:
+                pruned_conf.append(joint_value)
+        return pruned_conf

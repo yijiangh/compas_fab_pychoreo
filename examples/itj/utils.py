@@ -1,6 +1,8 @@
 from numpy import deg2rad, rad2deg
 from termcolor import cprint
 
+from compas_fab.robots import Configuration, JointTrajectory, JointTrajectoryPoint, Duration
+
 # unit conversion
 MIL2M = 1e-3
 
@@ -22,6 +24,18 @@ def convert_rfl_robot_conf_unit(conf_vals, length_scale=MIL2M, angle_unit='rad')
     prismatic_id_until = 1 if len(conf_vals) == 8 else 2
     return convert_robot_conf_unit(conf_vals, length_scale, angle_unit,
         prismatic_ids=range(0, prismatic_id_until+1), revoluted_ids=range(prismatic_id_until+1, len(conf_vals)))
+
+##########################################
+
+def reverse_trajectory(traj):
+    jt_traj_pts = []
+    joint_names = traj.points[0].joint_names
+    for i, conf in enumerate(traj.points[::-1]):
+        jt_traj_pt = JointTrajectoryPoint(values=conf.values, types=conf.types, time_from_start=Duration(i*1,0))
+        jt_traj_pt.joint_names = conf.joint_names
+        jt_traj_pts.append(jt_traj_pt)
+    return JointTrajectory(trajectory_points=jt_traj_pts, joint_names=joint_names,
+        start_configuration=jt_traj_pts[0], fraction=1.0)
 
 ##########################################
 

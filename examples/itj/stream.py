@@ -28,6 +28,7 @@ from .visualization import BEAM_COLOR, GRIPPER_COLOR, CLAMP_COLOR, TOOL_CHANGER_
 from .robot_setup import R11_INTER_CONF_VALS, MAIN_ROBOT_ID, BARE_ARM_GROUP, GANTRY_ARM_GROUP, GANTRY_Z_LIMIT
 from .robot_setup import get_gantry_control_joint_names, get_cartesian_control_joint_names, get_gantry_custom_limits
 from .parsing import DATA_DIR
+from .utils import reverse_trajectory
 
 # in meter
 FRAME_TOL = 1e-4
@@ -299,7 +300,7 @@ def compute_linear_movement(client, robot, process, movement, options=None):
             start_tool_pose = get_link_pose(robot_uid, ik_tool_link)
             start_t0cf_frame_temp = frame_from_pose(start_tool_pose, scale=1)
             if not start_t0cf_frame_temp.__eq__(start_t0cf_frame, tol=FRAME_TOL):
-                cprint('start conf FK inconsistent ({:.5f} m) with given current frame in start state'.format(
+                cprint('start conf FK inconsistent ({:.5f} m) with given current frame in start state.'.format(
                     distance_point_point(start_t0cf_frame_temp.point, start_t0cf_frame.point)), 'yellow')
             # start_t0cf_frame = start_t0cf_frame_temp
             # , overwriting with the FK one.
@@ -315,21 +316,19 @@ def compute_linear_movement(client, robot, process, movement, options=None):
             # , overwriting with the FK one
             # end_state['robot'].current_frame = end_t0cf_frame_temp
 
-    # # TODO interp is done within client.plan_cartesian_motion, can get rid of this here
-    # interp_poses = [start_tool_pose, end_tool_pose]
     interp_frames = [start_t0cf_frame, end_t0cf_frame]
 
     sorted_gantry_joint_names = get_gantry_control_joint_names(MAIN_ROBOT_ID)
     gantry_joints = joints_from_names(robot_uid, sorted_gantry_joint_names)
     gantry_z_joint = joint_from_name(robot_uid, sorted_gantry_joint_names[2])
     gantry_z_sample_fn = get_sample_fn(robot_uid, [gantry_z_joint], custom_limits={gantry_z_joint : GANTRY_Z_LIMIT})
-    # * sample from a ball near the pose
-    base_gen_fn = uniform_pose_generator(robot_uid, pose_from_frame(interp_frames[0], scale=1), reachable_range=reachable_range)
 
     solution_found = False
     samples_cnt = ik_failures = path_failures = 0
 
     if start_conf is None and end_conf is None:
+        # * sample from a ball near the pose
+        base_gen_fn = uniform_pose_generator(robot_uid, pose_from_frame(interp_frames[0], scale=1), reachable_range=reachable_range)
         for _ in range(gantry_attempts):
             x, y, yaw = next(base_gen_fn)
             # TODO a more formal gantry_base_from_world_base
@@ -339,7 +338,6 @@ def compute_linear_movement(client, robot, process, movement, options=None):
             gantry_conf = Configuration(gantry_xyz_vals,
                     gantry_arm_joint_types[:3], gantry_arm_joint_names[:3])
             client.set_robot_configuration(robot, gantry_conf)
-            # set_joint_positions(robot_uid, gantry_joints, gantry_xyz_vals)
             samples_cnt += 1
 
             arm_conf_vals = sample_ik_fn(pose_from_frame(interp_frames[0], scale=1))
@@ -353,7 +351,7 @@ def compute_linear_movement(client, robot, process, movement, options=None):
                     # * Cartesian planning, only for the six-axis arm (aka sub_conf)
                     # cart_conf_vals = plan_cartesian_motion(robot_uid, ik_joints[0], ik_tool_link, interp_poses, get_sub_conf=True)
                     cart_conf = client.plan_cartesian_motion(robot, interp_frames, start_configuration=gantry_arm_conf,
-                        group=BARE_ARM_GROUP, options=options)
+                        group=GANTRY_ARM_GROUP, options=options)
 
                     if cart_conf is not None:
                         solution_found = True
@@ -373,43 +371,46 @@ def compute_linear_movement(client, robot, process, movement, options=None):
         # TODO make sure start/end conf coincides if provided
         if start_conf is not None and end_conf is not None:
             cprint('Both start/end confs are pre-specified, problem might be too stiff to be solved.', 'yellow')
-        gantry_arm_conf = start_conf if start_conf else end_conf
-        # client.set_robot_configuration(robot, gantry_arm_conf)
-        gantry_xyz_vals = gantry_arm_conf.prismatic_values
+        if start_conf:
+            forward = True
+            gantry_arm_conf = start_conf
+        else:
+            forward = False
+            gantry_arm_conf = end_conf
+            interp_frames = interp_frames[::-1]
 
-        # TODO sometimes pybullet default IK is unhappy
         samples_cnt = 0
         for _ in range(5):
-            # cart_conf_vals = plan_cartesian_motion(robot_uid, ik_joints[0], ik_tool_link, interp_poses, get_sub_conf=True)
             cart_conf = client.plan_cartesian_motion(robot, interp_frames, start_configuration=gantry_arm_conf,
-                group=BARE_ARM_GROUP, options=options)
+                group=GANTRY_ARM_GROUP, options=options)
             samples_cnt += 1
             if cart_conf is not None:
                 solution_found = True
                 cprint('Collision free! After {} path failure over {} samples.'.format(
                     path_failures, samples_cnt), 'green')
+                if not forward:
+                    cart_conf = reverse_trajectory(cart_conf)
                 break
             else:
                 path_failures += 1
         else:
             cprint('Cartesian Path planning (w/ prespecified st/end conf) failure after {} attempts.'.format(
                 samples_cnt), 'yellow')
-        # TODO check closeness if start_conf or end_conf is specified
 
     if temp_name in client.extra_disabled_collision_links:
         del client.extra_disabled_collision_links[temp_name]
 
     traj = None
     if solution_found:
-        # * translate to compas_fab Trajectory
-        jt_traj_pts = []
-        for i, arm_conf_val in enumerate(cart_conf.points):
-            jt_traj_pt = JointTrajectoryPoint(values=list(gantry_xyz_vals) + list(arm_conf_val.values),
-                types=gantry_arm_joint_types, time_from_start=Duration(i*1,0))
-            jt_traj_pt.joint_names = gantry_arm_joint_names
-            jt_traj_pts.append(jt_traj_pt)
-        traj = JointTrajectory(trajectory_points=jt_traj_pts, \
-            joint_names=gantry_arm_joint_names, start_configuration=jt_traj_pts[0], fraction=1.0)
+        # jt_traj_pts = []
+        # for i, gantry_conf_val in enumerate(cart_conf.points):
+        #     jt_traj_pt = JointTrajectoryPoint(values=gantry_conf_val.values,
+        #         types=gantry_arm_joint_types.types, time_from_start=Duration(i*1,0))
+        #     jt_traj_pt.joint_names = gantry_arm_joint_types.joint_names
+        #     jt_traj_pts.append(jt_traj_pt)
+        # traj = JointTrajectory(trajectory_points=jt_traj_pts, \
+        #     joint_names=gantry_arm_joint_names, start_configuration=jt_traj_pts[0], fraction=1.0)
+        traj = cart_conf
         if start_conf is not None and not start_conf.close_to(traj.points[0], tol=1e-3):
             cprint('Start conf not coincided - max diff {:.5f}'.format(start_conf.max_difference(traj.points[0])), 'red')
             wait_for_user()
