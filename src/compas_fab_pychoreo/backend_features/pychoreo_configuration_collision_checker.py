@@ -94,6 +94,6 @@ class PyChoreoConfigurationCollisionChecker(ConfigurationCollisionChecker):
                                         extra_disabled_collisions=extra_disabled_collisions,
                                         custom_limits=pb_custom_limits,
                                         body_name_from_id=self.client._name_from_body_id,
-                                        distance_threshold=distance_threshold,
-                                        debug=debug)
+                                        distance_threshold=distance_threshold)
+                                        # debug=debug
         return collision_fn
