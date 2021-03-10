@@ -236,7 +236,7 @@ def main():
                 has_end_conf = process.movement_has_end_robot_config(m)
                 has_traj = m.trajectory is not None
                 if has_start_conf and has_end_conf and not has_traj:
-                    cprint('{} has both start, end conf specified, but no traj computer. This is BAD!!'.format(m), 'yellow')
+                    cprint('{} has both start, end conf specified, but no traj computed. This is BAD!!'.format(m), 'yellow')
                     wait_for_user()
                 if not has_traj and (not has_start_conf and not has_end_conf):
                     print('-'*10)

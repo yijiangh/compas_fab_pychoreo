@@ -4,9 +4,9 @@ from collections import defaultdict
 from itertools import combinations
 from termcolor import cprint
 
-from pybullet_planning import HideOutput, CLIENTS
+from pybullet_planning import HideOutput, CLIENTS, load_pybullet
 from pybullet_planning import BASE_LINK, RED, GREY, YELLOW, BLUE
-from pybullet_planning import get_link_pose, link_from_name, get_disabled_collisions
+from pybullet_planning import get_link_pose, link_from_name, get_disabled_collisions, get_all_links
 from pybullet_planning import set_joint_positions
 from pybullet_planning import joints_from_names, get_joint_positions
 from pybullet_planning import inverse_kinematics
@@ -27,7 +27,6 @@ from .exceptions import CollisionError
 from .exceptions import InverseKinematicsError
 from .conversions import frame_from_pose
 from .conversions import pose_from_frame
-from .conversions import convert_mesh_to_body
 
 class PyChoreoClient(PyBulletClient):
     """Interface to use pybullet as backend via the **pybullet_plannning**.
@@ -72,11 +71,19 @@ class PyChoreoClient(PyBulletClient):
     ###########################################################
 
     def add_collision_mesh(self, collision_mesh, options=None):
+        options = options or {}
         self.planner.add_collision_mesh(collision_mesh, options=options)
-        color = options.get('color') or GREY
+        color = options.get('color', GREY)
         name = collision_mesh.id
         for body in self.collision_objects[name]:
             set_color(body, color)
+
+    def add_tool_from_urdf(self, tool_name, urdf_file):
+        # TODO return compas_fab Tool class
+        # TODO we might need to keep track of tools as robots too
+        with HideOutput(not self.verbose):
+            tool_robot = load_pybullet(urdf_file, fixed_base=False)
+        self.collision_objects[tool_name] = [tool_robot]
 
     def add_attached_collision_mesh(self, attached_collision_mesh, options=None):
         """Adds an attached collision object to the planning scene, the grasp pose is set according to the
@@ -127,7 +134,9 @@ class PyChoreoClient(PyBulletClient):
                 self.extra_disabled_collision_links[name].add(
                     ((robot_uid, touched_link_name), (body, None))
                     )
-            set_color(body, color)
+            links = get_all_links(body)
+            for link in links:
+                set_color(body, color, link=link)
             # create attachment based on their *current* pose
             attach_child_link = BASE_LINK if not attached_child_link_name else link_from_name(body, attached_child_link_name)
             attachment = create_attachment(robot_uid, tool_attach_link, body, attach_child_link)
@@ -233,6 +242,9 @@ class PyChoreoClient(PyBulletClient):
         for body in bodies:
             set_pose(body, pose_from_frame(frame))
 
+    # TODO
+    # def set_object_frame(self, wildcard):
+
     def _print_object_summary(self):
         print('^'*10)
         print('PychoreoClient scene summary:')
@@ -282,6 +294,10 @@ class PyChoreoClient(PyBulletClient):
     # def configuration_in_collision(self, *args, **kwargs):
     def check_collisions(self, *args, **kwargs):
         return self.planner.check_collisions(*args, **kwargs)
+
+    def get_link_frame_from_name(self, robot, link_name):
+        robot_uid = robot.attributes['pybullet_uid']
+        return frame_from_pose(get_link_pose(robot_uid, link_from_name(robot_uid, link_name)))
 
     ########################################
     # ignored collision info (similar to ROS's Allowed Collision Matrix)

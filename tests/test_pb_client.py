@@ -11,13 +11,15 @@ import cProfile
 import pstats
 
 from compas.datastructures import Mesh
+from compas.geometry import Frame, Transformation
+from compas.robots import Joint
 from compas_fab.robots import Configuration, AttachedCollisionMesh, CollisionMesh, JointConstraint
 
 from pybullet_planning import link_from_name, get_link_pose, draw_pose, get_bodies, multiply, Pose, Euler, set_joint_positions, \
     joints_from_names, quat_angle_between, get_collision_fn, create_obj, unit_pose
 from pybullet_planning import wait_if_gui, wait_for_duration, remove_all_debug
 from pybullet_planning import plan_cartesian_motion, plan_cartesian_motion_lg
-from pybullet_planning import randomize, elapsed_time, BLUE, GREEN, RED
+from pybullet_planning import randomize, elapsed_time, BLUE, GREEN, RED, LockRenderer
 
 import ikfast_abb_irb4600_40_255
 
@@ -56,33 +58,73 @@ def compute_trajectory_cost(trajectory, init_conf_val=np.zeros(6)):
 #####################################
 
 @pytest.mark.collision_check_abb
-def test_collision_checker(abb_irb4600_40_255_setup, itj_TC_PG500_cms, itj_beam_cm, column_obstacle_cm, base_plate_cm, viewer, diagnosis):
+@pytest.mark.parametrize("tool_type", [
+    ('static'),
+    ('actuated'),
+    ])
+def test_collision_checker(abb_irb4600_40_255_setup, itj_TC_g1_cms, itj_beam_cm, column_obstacle_cm, base_plate_cm,
+    itj_tool_changer_grasp_transf, itj_gripper_grasp_transf, itj_beam_grasp_transf, tool_type,
+    itj_tool_changer_urdf_path, itj_g1_urdf_path,
+    viewer, diagnosis):
     # modified from https://github.com/yijiangh/pybullet_planning/blob/dev/tests/test_collisions.py
     urdf_filename, semantics = abb_irb4600_40_255_setup
 
     move_group = 'bare_arm'
-    ee_touched_link_names = ['link_5', 'link_6']
+    ee_touched_link_names = ['link_6']
 
     with PyChoreoClient(viewer=viewer) as client:
-        robot = client.load_robot(urdf_filename)
-        robot.semantics = semantics
-        client.disabled_collisions = robot.semantics.disabled_collisions
+        with LockRenderer():
+            robot = client.load_robot(urdf_filename)
+            robot.semantics = semantics
+            client.disabled_collisions = robot.semantics.disabled_collisions
+
+            if tool_type == 'static':
+                for _, ee_cm in itj_TC_g1_cms.items():
+                    client.add_collision_mesh(ee_cm)
+            else:
+                client.add_tool_from_urdf('TC', itj_tool_changer_urdf_path)
+                client.add_tool_from_urdf('g1', itj_g1_urdf_path)
+
+            # * add static obstacles
+            client.add_collision_mesh(base_plate_cm)
+            client.add_collision_mesh(column_obstacle_cm)
 
         ik_joint_names = robot.get_configurable_joint_names(group=move_group)
         ik_joint_types = robot.get_joint_types_by_names(ik_joint_names)
         flange_link_name = robot.get_end_effector_link_name(group=move_group)
 
-        ee_acms = [AttachedCollisionMesh(ee_cm, flange_link_name, ee_touched_link_names) for ee_cm in itj_TC_PG500_cms]
-        beam_acm = AttachedCollisionMesh(itj_beam_cm, flange_link_name, ee_touched_link_names)
+        tool0_tf = Transformation.from_frame(client.get_link_frame_from_name(robot, flange_link_name))
+        tool0_from_tool_changer_base = itj_tool_changer_grasp_transf
+        tool0_from_gripper_base = itj_gripper_grasp_transf
+        client.set_object_frame('^{}'.format('TC'), Frame.from_transformation(tool0_tf*tool0_from_tool_changer_base))
+        client.set_object_frame('^{}'.format('g1'), Frame.from_transformation(tool0_tf*tool0_from_gripper_base))
 
-        # * add static obstacles
-        client.add_collision_mesh(base_plate_cm, {})
-        client.add_collision_mesh(column_obstacle_cm, {})
+        names = client._get_collision_object_names('^{}'.format('g1')) + \
+            client._get_collision_object_names('^{}'.format('TC'))
+        for ee_name in names:
+            attach_options = {'robot' : robot}
+            if tool_type == 'actuated':
+                attached_child_link_name = 'toolchanger_base' if 'TC' in ee_name else 'gripper_base'
+                attach_options.update({'attached_child_link_name' : attached_child_link_name})
+            client.add_attached_collision_mesh(AttachedCollisionMesh(CollisionMesh(None, ee_name),
+                flange_link_name, touch_links=ee_touched_link_names), options=attach_options)
+        # client._print_object_summary()
+        # wait_if_gui('EE attached.')
 
-        # * add attachment
-        for ee_acm in ee_acms:
-            client.add_attached_collision_mesh(ee_acm, {'robot': robot, 'mass': 1})
-        client.add_attached_collision_mesh(beam_acm, {'robot': robot, 'mass': 1})
+        # if tool_type == 'actuated':
+        #     # lower 0.0008 upper 0.01
+        #     tool_bodies = client._get_bodies('^{}'.format('itj_PG500'))
+        #     tool_conf = Configuration(values=[0.01, 0.01], types=[Joint.PRISMATIC, Joint.PRISMATIC],
+        #         joint_names=['joint_gripper_jaw_l', 'joint_gripper_jaw_r'])
+        #     for b in tool_bodies:
+        #         client._set_body_configuration(b, tool_conf)
+        #     wait_if_gui('Open')
+
+        #     tool_conf = Configuration(values=[0.0008, 0.0008], types=[Joint.PRISMATIC, Joint.PRISMATIC],
+        #         joint_names=['joint_gripper_jaw_l', 'joint_gripper_jaw_r'])
+        #     for b in tool_bodies:
+        #         client._set_body_configuration(b, tool_conf)
+        #     wait_if_gui('Close')
 
         cprint('safe start conf', 'green')
         conf = Configuration(values=[0.]*6, types=ik_joint_types, joint_names=ik_joint_names)
@@ -91,6 +133,22 @@ def test_collision_checker(abb_irb4600_40_255_setup, itj_TC_PG500_cms, itj_beam_
         cprint('joint over limit', 'cyan')
         conf = Configuration(values=[0., 0., 1.5, 0, 0, 0], types=ik_joint_types, joint_names=ik_joint_names)
         assert client.check_collisions(robot, conf, options={'diagnosis':diagnosis})
+
+        cprint('attached gripper-obstacle collision - column', 'cyan')
+        vals = [-0.33161255787892263, -0.43633231299858238, 0.43633231299858238, -1.0471975511965976, 0.087266462599716474, 0.0]
+        # conf = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
+        # client.set_robot_configuration(robot, conf)
+        # wait_if_gui()
+        assert client.check_collisions(robot, conf, options={'diagnosis':diagnosis})
+
+        #* attach beam
+        client.add_collision_mesh(itj_beam_cm)
+        tool0_tf = Transformation.from_frame(client.get_link_frame_from_name(robot, flange_link_name))
+        tool0_from_beam_base = itj_beam_grasp_transf
+        client.set_object_frame('^{}$'.format('itj_beam_b2'), Frame.from_transformation(tool0_tf*tool0_from_beam_base))
+        client.add_attached_collision_mesh(AttachedCollisionMesh(CollisionMesh(None, 'itj_beam_b2'),
+            flange_link_name, touch_links=[]), options={'robot' : robot})
+        # wait_if_gui('beam attached.')
 
         cprint('attached beam-robot body self collision', 'cyan')
         vals = [0.73303828583761843, -0.59341194567807209, 0.54105206811824214, -0.17453292519943295, 1.064650843716541, 1.7278759594743862]
@@ -241,41 +299,73 @@ def test_circle_cartesian(fixed_waam_setup, viewer, planner_ik_conf):
 
 #####################################
 @pytest.mark.plan_motion
-def test_plan_motion(abb_irb4600_40_255_setup, itj_TC_PG500_cms, itj_beam_cm, column_obstacle_cm, base_plate_cm, viewer, diagnosis):
+@pytest.mark.parametrize("tool_type", [
+    ('static'),
+    ('actuated'),
+    ])
+def test_plan_motion(abb_irb4600_40_255_setup, itj_TC_g1_cms, itj_beam_cm, column_obstacle_cm, base_plate_cm,
+    itj_tool_changer_grasp_transf, itj_gripper_grasp_transf, itj_beam_grasp_transf, tool_type,
+    itj_tool_changer_urdf_path, itj_g1_urdf_path,
+    viewer, diagnosis):
     # modified from https://github.com/yijiangh/pybullet_planning/blob/dev/tests/test_collisions.py
     urdf_filename, semantics = abb_irb4600_40_255_setup
 
     move_group = 'bare_arm'
-    ee_touched_link_names = ['link_5', 'link_6']
+    ee_touched_link_names = ['link_6']
 
     with PyChoreoClient(viewer=viewer) as client:
-    # with PyBulletClient(connection_type='gui' if viewer else 'direct') as client:
-        robot = client.load_robot(urdf_filename)
-        robot.semantics = semantics
-        # client.disabled_collisions = robot.semantics.disabled_collisions
+        with LockRenderer():
+            robot = client.load_robot(urdf_filename)
+            robot.semantics = semantics
+            client.disabled_collisions = robot.semantics.disabled_collisions
+
+            if tool_type == 'static':
+                for _, ee_cm in itj_TC_g1_cms.items():
+                    client.add_collision_mesh(ee_cm)
+            else:
+                client.add_tool_from_urdf('TC', itj_tool_changer_urdf_path)
+                client.add_tool_from_urdf('g1', itj_g1_urdf_path)
+
+            # * add static obstacles
+            client.add_collision_mesh(base_plate_cm)
+            client.add_collision_mesh(column_obstacle_cm)
 
         ik_joint_names = robot.get_configurable_joint_names(group=move_group)
         ik_joint_types = robot.get_joint_types_by_names(ik_joint_names)
         flange_link_name = robot.get_end_effector_link_name(group=move_group)
 
-        ee_acms = [AttachedCollisionMesh(ee_cm, flange_link_name, ee_touched_link_names) for ee_cm in itj_TC_PG500_cms]
-        beam_acm = AttachedCollisionMesh(itj_beam_cm, flange_link_name, ee_touched_link_names)
+        tool0_tf = Transformation.from_frame(client.get_link_frame_from_name(robot, flange_link_name))
+        tool0_from_tool_changer_base = itj_tool_changer_grasp_transf
+        tool0_from_gripper_base = itj_gripper_grasp_transf
+        client.set_object_frame('^{}'.format('TC'), Frame.from_transformation(tool0_tf*tool0_from_tool_changer_base))
+        client.set_object_frame('^{}'.format('g1'), Frame.from_transformation(tool0_tf*tool0_from_gripper_base))
 
-        # * add static obstacles
-        client.add_collision_mesh(base_plate_cm, {})
-        client.add_collision_mesh(column_obstacle_cm, {})
+        names = client._get_collision_object_names('^{}'.format('g1')) + \
+            client._get_collision_object_names('^{}'.format('TC'))
+        for ee_name in names:
+            attach_options = {'robot' : robot}
+            if tool_type == 'actuated':
+                attached_child_link_name = 'toolchanger_base' if 'TC' in ee_name else 'gripper_base'
+                attach_options.update({'attached_child_link_name' : attached_child_link_name})
+            client.add_attached_collision_mesh(AttachedCollisionMesh(CollisionMesh(None, ee_name),
+                flange_link_name, touch_links=ee_touched_link_names), options=attach_options)
 
-        # * add attachment
-        for ee_acm in ee_acms:
-            client.add_attached_collision_mesh(ee_acm, {'robot': robot, 'mass': 1})
-        client.add_attached_collision_mesh(beam_acm, {'robot': robot, 'mass': 1})
+        #* attach beam
+        client.add_collision_mesh(itj_beam_cm)
+        tool0_tf = Transformation.from_frame(client.get_link_frame_from_name(robot, flange_link_name))
+        tool0_from_beam_base = itj_beam_grasp_transf
+        client.set_object_frame('^{}$'.format('itj_beam_b2'), Frame.from_transformation(tool0_tf*tool0_from_beam_base))
+        client.add_attached_collision_mesh(AttachedCollisionMesh(CollisionMesh(None, 'itj_beam_b2'),
+            flange_link_name, touch_links=[]), options={'robot' : robot})
+        wait_if_gui('beam attached.')
 
         vals = [-1.4660765716752369, -0.22689280275926285, 0.27925268031909273, 0.17453292519943295, 0.22689280275926285, -0.22689280275926285]
         start_conf = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
         # client.set_robot_configuration(robot, start_conf)
         # wait_if_gui()
 
-        vals = [0.05235987755982989, -0.087266462599716474, -0.05235987755982989, 1.7104226669544429, 0.13962634015954636, -0.43633231299858238]
+        # vals = [0.05235987755982989, -0.087266462599716474, -0.05235987755982989, 1.7104226669544429, 0.13962634015954636, -0.43633231299858238]
+        vals = [0.034906585039886591, 0.68067840827778847, 0.15707963267948966, -0.89011791851710809, -0.034906585039886591, -2.2514747350726849]
         end_conf = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
         # client.set_robot_configuration(robot, end_conf)
         # wait_if_gui()
@@ -300,7 +390,7 @@ def test_plan_motion(abb_irb4600_40_255_setup, itj_TC_PG500_cms, itj_beam_cm, co
             wait_if_gui('Start sim.')
             time_step = 0.03
             for traj_pt in trajectory.points:
-                client.set_robot_configuration(robot, traj_pt, group=move_group)
+                client.set_robot_configuration(robot, traj_pt)
                 wait_for_duration(time_step)
 
         wait_if_gui("Finished.")

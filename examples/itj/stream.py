@@ -5,6 +5,7 @@ from copy import copy, deepcopy
 from itertools import product
 
 from compas.geometry import Frame, distance_point_point
+from compas.datastructures.mesh.triangulation import mesh_quads_to_triangles
 from compas_fab.robots import Configuration, JointTrajectoryPoint, JointTrajectory
 from compas_fab.robots import CollisionMesh, Duration, AttachedCollisionMesh
 
@@ -90,14 +91,16 @@ def set_state(client, robot, process, state_from_object, initialize=False, scale
                 if object_id.startswith('b'):
                     # ! notice that the notch geometry will be convexified in pybullet
                     color = BEAM_COLOR
-                    cm = CollisionMesh(obj.mesh, object_id)
+                    mesh = obj.mesh.copy()
+                    mesh_quads_to_triangles(mesh)
+                    cm = CollisionMesh(mesh, object_id)
                     cm.scale(scale)
                     # add mesh to environment at origin
                     client.add_collision_mesh(cm, {'color':color})
                 else:
                     urdf_path = obj.get_urdf_path(DATA_DIR)
                     if reinit_tool or not os.path.exists(urdf_path):
-                        obj.save_as_urdf(DATA_DIR, scale=1e-3)
+                        obj.save_as_urdf(DATA_DIR, scale=1e-3, triangulize=True)
                         cprint('Tool {} ({}) URDF generated to {}'.format(object_id, obj.name, urdf_path), 'green')
                     with HideOutput():
                         tool_robot = load_pybullet(urdf_path, fixed_base=False)
