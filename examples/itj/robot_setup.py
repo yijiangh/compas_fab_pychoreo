@@ -29,11 +29,6 @@ R21_IDLE_CONF_VALS = convert_rfl_robot_conf_unit([38000, 0, -4915,
 R22_IDLE_CONF_VALS = convert_rfl_robot_conf_unit([-12237, -4915,
     0, 0, 0, 0, 0, 0])
 
-# meter
-GANTRY_X_LIMIT = (18, 25) # (0, 37)
-GANTRY_Y_LIMIT = (-12.237, -5) # (-9, 0)
-GANTRY_Z_LIMIT = (-3.5, -2.5) # (-5, -1)
-
 ############################################
 
 # 2 for prismatic, 0 for revoluted
@@ -78,6 +73,11 @@ def to_rlf_robot_full_conf(robot11_confval, robot12_confval):
 # TODO use arm group from SRDF
 def get_gantry_control_joint_names(robot_id='robot11'):
     return rfl_robot_joint_names(robot_id, True)[:3]
+
+# meter
+GANTRY_X_LIMIT = (15, 28) # (0, 37)
+GANTRY_Y_LIMIT = (-12.237, -5) # (-9, 0)
+GANTRY_Z_LIMIT = (-5, -1) # (-5, -1)
 
 # rm_limits = [(-175, 175), (-85, 145), (-175, 70), (-181, 181), (-120, 120), (-181, 181)]
 def get_gantry_robot_custom_limits(robot_id='robot11'):

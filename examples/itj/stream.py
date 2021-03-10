@@ -4,7 +4,7 @@ from termcolor import cprint
 from copy import copy, deepcopy
 from itertools import product
 
-from compas.geometry import Frame, distance_point_point
+from compas.geometry import Frame, distance_point_point, Transformation
 from compas.datastructures.mesh.triangulation import mesh_quads_to_triangles
 from compas_fab.robots import Configuration, JointTrajectoryPoint, JointTrajectory
 from compas_fab.robots import CollisionMesh, Duration, AttachedCollisionMesh
@@ -29,7 +29,7 @@ from .visualization import BEAM_COLOR, GRIPPER_COLOR, CLAMP_COLOR, TOOL_CHANGER_
 from .robot_setup import R11_INTER_CONF_VALS, MAIN_ROBOT_ID, BARE_ARM_GROUP, GANTRY_ARM_GROUP, GANTRY_Z_LIMIT
 from .robot_setup import get_gantry_control_joint_names, get_cartesian_control_joint_names, get_gantry_robot_custom_limits
 from .parsing import DATA_DIR
-from .utils import reverse_trajectory
+from .utils import reverse_trajectory, merge_trajectories
 
 # in meter
 FRAME_TOL = 1e-4
@@ -73,8 +73,11 @@ def set_state(client, robot, process, state_from_object, initialize=False, scale
 
         # * environment meshes
         if initialize and include_env:
-            for name, m in process.environment_models.items():
-                cm = CollisionMesh(m, 'env_' + name)
+            for name, _mesh in process.environment_models.items():
+                # if name == 'e27':
+                mesh = _mesh.copy()
+                mesh_quads_to_triangles(mesh)
+                cm = CollisionMesh(mesh, 'env_' + name)
                 cm.scale(scale)
                 client.add_collision_mesh(cm, {'color':GREY})
 
@@ -295,7 +298,9 @@ def compute_linear_movement(client, robot, process, movement, options=None):
             client.extra_disabled_collision_links[temp_name].add(
                 ((parent_body, None), (child_body, None))
                 )
-    # print('tmp ignored: ', client.extra_disabled_collision_links[temp_name])
+    if debug:
+        print(client.extra_disabled_collision_links)
+        client._print_object_summary()
 
     with WorldSaver():
         if start_conf is not None:
@@ -431,12 +436,73 @@ def compute_free_movement(client, robot, process, movement, options=None):
 
     start_state = process.get_movement_start_state(movement)
     end_state = process.get_movement_end_state(movement)
-    start_conf = start_state['robot'].kinematic_config
-    end_conf = end_state['robot'].kinematic_config
+    orig_start_conf = start_state['robot'].kinematic_config
+    orig_end_conf = end_state['robot'].kinematic_config
 
     # * set start state
     set_state(client, robot, process, start_state)
-    client._print_object_summary()
+    if debug:
+        client._print_object_summary()
+
+    hotfix = True
+    if 'Free Move to reach Pickup Approach' in movement.tag:
+        # * Start_conf -> (retraction) -> free motion -> end conf
+        forward = True
+        gantry_arm_conf = orig_start_conf
+    elif 'Free Move to reach Storage Approach Frame' in movement.tag:
+        # * Start_conf -> free motion -> (retraction) -> end conf
+        forward = False
+        gantry_arm_conf = orig_end_conf
+    else:
+        hotfix = False
+
+    if hotfix:
+        client.set_robot_configuration(robot, gantry_arm_conf)
+        tool_link_name = robot.get_end_effector_link_name(group=BARE_ARM_GROUP)
+        tool0_frame = client.get_link_frame_from_name(robot, tool_link_name)
+        VER_RETRACTION_DISTANCE = 100 * 1e-3 # meter
+        HOR_RETRACTION_DISTANCE = 400 * 1e-3 # meter
+        ver_retract_tf = Transformation.from_frame(Frame([0, 0, VER_RETRACTION_DISTANCE], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]))
+        hor_retract_tf = Transformation.from_frame(Frame([-HOR_RETRACTION_DISTANCE, 0, 0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]))
+        tool0_frame_ver_retract = tool0_frame.transformed(ver_retract_tf)
+        tool0_frame_hor_retract = tool0_frame_ver_retract.transformed(hor_retract_tf)
+
+        interp_frames = [tool0_frame, tool0_frame_ver_retract, tool0_frame_hor_retract]
+        for frame in interp_frames:
+            draw_pose(pose_from_frame(frame))
+        # wait_if_gui('hotfix cartesian')
+
+        options['diagnosis'] = True
+        samples_cnt = path_failures = 0
+        for _ in range(10):
+            with WorldSaver():
+                cart_conf = client.plan_cartesian_motion(robot, interp_frames, start_configuration=gantry_arm_conf,
+                    group=GANTRY_ARM_GROUP, options=options)
+            samples_cnt += 1
+            if cart_conf is not None:
+                solution_found = True
+                cprint('(hotfix retraction for free motion) Collision free! After {} path failure over {} samples.'.format(
+                    path_failures, samples_cnt), 'green')
+                if not forward:
+                    cart_conf = reverse_trajectory(cart_conf)
+                break
+            else:
+                path_failures += 1
+        else:
+            cprint('(hotfix retraction for free motion) Cartesian Path planning (w/ prespecified st/end conf) failure after {} attempts.'.format(
+                samples_cnt), 'yellow')
+            return None
+        if forward:
+            # * Start_conf -> (retraction) -> free motion -> end conf
+            start_conf = cart_conf.points[-1]
+            end_conf = orig_end_conf
+        else:
+            # * Start_conf -> free motion -> (retraction) -> end conf
+            start_conf = orig_start_conf
+            end_conf = cart_conf.points[0]
+    else:
+        start_conf = orig_start_conf
+        end_conf = orig_end_conf
 
     if start_conf is None or end_conf is None:
         cprint('At least one of robot start/end conf is NOT specified in {}, return None'.format(movement.short_summary), 'red')
@@ -456,7 +522,12 @@ def compute_free_movement(client, robot, process, movement, options=None):
         cprint('No free movement found for {}.'.format(movement.short_summary), 'red')
     else:
         cprint('Free movement found for {}!'.format(movement.short_summary), 'green')
-    return traj
+
+    if hotfix and traj is not None:
+        trajs = [cart_conf, traj] if forward else [traj, cart_conf]
+        return merge_trajectories(trajs)
+    else:
+        return traj
 
 
 ##########################################

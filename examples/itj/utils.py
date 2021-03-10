@@ -37,6 +37,20 @@ def reverse_trajectory(traj):
     return JointTrajectory(trajectory_points=jt_traj_pts, joint_names=joint_names,
         start_configuration=jt_traj_pts[0], fraction=1.0)
 
+def merge_trajectories(trajs):
+    assert len(trajs) > 1
+    jt_traj_pts = []
+    joint_names = trajs[0].points[0].joint_names
+    cnt = 0
+    for traj in trajs:
+        for conf in traj.points:
+            jt_traj_pt = JointTrajectoryPoint(values=conf.values, types=conf.types, time_from_start=Duration(cnt,0))
+            jt_traj_pt.joint_names = conf.joint_names
+            jt_traj_pts.append(jt_traj_pt)
+            cnt += 1
+    return JointTrajectory(trajectory_points=jt_traj_pts, joint_names=joint_names,
+        start_configuration=jt_traj_pts[0], fraction=1.0)
+
 ##########################################
 
 def notify(msg=''):
