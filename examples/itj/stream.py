@@ -460,14 +460,15 @@ def compute_free_movement(client, robot, process, movement, options=None):
         client.set_robot_configuration(robot, gantry_arm_conf)
         tool_link_name = robot.get_end_effector_link_name(group=BARE_ARM_GROUP)
         tool0_frame = client.get_link_frame_from_name(robot, tool_link_name)
-        VER_RETRACTION_DISTANCE = 100 * 1e-3 # meter
-        HOR_RETRACTION_DISTANCE = 400 * 1e-3 # meter
+        VER_RETRACTION_DISTANCE = 280 * 1e-3 # meter
+        # HOR_RETRACTION_DISTANCE = 400 * 1e-3 # meter
         ver_retract_tf = Transformation.from_frame(Frame([0, 0, VER_RETRACTION_DISTANCE], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]))
-        hor_retract_tf = Transformation.from_frame(Frame([-HOR_RETRACTION_DISTANCE, 0, 0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]))
+        # hor_retract_tf = Transformation.from_frame(Frame([-HOR_RETRACTION_DISTANCE, 0, 0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]))
         tool0_frame_ver_retract = tool0_frame.transformed(ver_retract_tf)
-        tool0_frame_hor_retract = tool0_frame_ver_retract.transformed(hor_retract_tf)
+        # tool0_frame_hor_retract = tool0_frame_ver_retract.transformed(hor_retract_tf)
 
-        interp_frames = [tool0_frame, tool0_frame_ver_retract, tool0_frame_hor_retract]
+        # interp_frames = [tool0_frame, tool0_frame_ver_retract, tool0_frame_hor_retract]
+        interp_frames = [tool0_frame, tool0_frame_ver_retract]
         for frame in interp_frames:
             draw_pose(pose_from_frame(frame))
         # wait_if_gui('hotfix cartesian')
