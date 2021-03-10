@@ -114,7 +114,7 @@ def set_state(client, robot, process, state_from_object, initialize=False, scale
                 current_frame = copy(object_state.current_frame)
                 current_frame.point *= scale
                 # * set pose according to state
-                client.set_object_frame('^{}'.format(object_id), current_frame)
+                client.set_object_frame('^{}$'.format(object_id), current_frame)
 
             if object_state.kinematic_config is not None:
                 assert object_id.startswith('c') or object_id.startswith('g')
@@ -126,7 +126,7 @@ def set_state(client, robot, process, state_from_object, initialize=False, scale
                     client._set_body_configuration(b, tool_conf)
 
             # * attachment management
-            wildcard = '^{}'.format(object_id)
+            wildcard = '^{}$'.format(object_id)
             # -1 if not attached and not collision object
             # 0 if collision object, 1 if attached
             status = client._get_body_status(wildcard)
@@ -171,7 +171,7 @@ def set_state(client, robot, process, state_from_object, initialize=False, scale
                     # wait_if_gui('Conf set for attachment')
 
                     # * create attachments
-                    wildcard = '^{}'.format(object_id)
+                    wildcard = '^{}$'.format(object_id)
                     names = client._get_collision_object_names(wildcard)
                     # touched_links is only for the adjacent Robot links
                     touched_links = ['{}_tool0'.format(MAIN_ROBOT_ID), '{}_link_6'.format(MAIN_ROBOT_ID)] \
@@ -198,10 +198,10 @@ def set_state(client, robot, process, state_from_object, initialize=False, scale
                                 g_id = o_id
                                 break
                         assert g_id is not None, 'At least one gripper should be attached to the robot when the beam is attached.'
-                        extra_disabled_bodies = client._get_bodies('^{}'.format(g_id))
+                        extra_disabled_bodies = client._get_bodies('^{}$'.format(g_id))
                     elif object_id.startswith('c') or object_id.startswith('g'):
                         # tool_changer and gripper
-                        extra_disabled_bodies = client._get_bodies('^{}'.format('tool_changer'))
+                        extra_disabled_bodies = client._get_bodies('^{}$'.format('tool_changer'))
                     for name in names:
                         at_bodies = client._get_attached_bodies('^{}$'.format(name))
                         assert len(at_bodies) > 0
@@ -292,8 +292,8 @@ def compute_linear_movement(client, robot, process, movement, options=None):
     # TODO: ignore beam / env collision in the first pickup pose
     temp_name = '_tmp'
     for o1_name, o2_name in movement.allowed_collision_matrix:
-        o1_bodies = client._get_bodies('^{}'.format(o1_name))
-        o2_bodies = client._get_bodies('^{}'.format(o2_name))
+        o1_bodies = client._get_bodies('^{}$'.format(o1_name))
+        o2_bodies = client._get_bodies('^{}$'.format(o2_name))
         for parent_body, child_body in product(o1_bodies, o2_bodies):
             client.extra_disabled_collision_links[temp_name].add(
                 ((parent_body, None), (child_body, None))

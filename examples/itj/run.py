@@ -20,12 +20,7 @@ from .visualization import visualize_movement_trajectory
 
 from integral_timber_joints.process import RoboticFreeMovement, RoboticLinearMovement, RoboticMovement
 
-# * NOW!!
-# TODO gantry/joint value jump between cartesian movements
-# TODO in transit/transfer, gripper hits the ground
-
 # * Next steps
-# TODO add clamp collision geometry to transit/transfer planning
 # TODO use linkstatistics joint weight and resolutions
 
 def print_title(x):
@@ -34,9 +29,6 @@ def print_title(x):
 
 ###########################################
 
-HERE = os.path.dirname(__file__)
-JSON_OUT_DIR = os.path.join(HERE, 'results')
-
 def compute_movement(client, robot, process, movement, options=None):
     if not isinstance(movement, RoboticMovement):
         return None
@@ -44,13 +36,13 @@ def compute_movement(client, robot, process, movement, options=None):
     options = options or {}
     traj = None
     if isinstance(movement, RoboticLinearMovement):
-        # interpolation step size, in meter
         lm_options = options.copy()
-        lm_options.update({'max_step' : 0.01, 'distance_threshold':0.0013})
+        # * interpolation step size, in meter
+        lm_options.update({'max_step' : 0.01, 'distance_threshold':0.002})
         traj = compute_linear_movement(client, robot, process, movement, lm_options)
     elif isinstance(movement, RoboticFreeMovement):
         fm_options = options.copy()
-        fm_options.update({'rrt_restarts' : 30, 'rrt_iterations' : 50, 'max_step' : 0.01})
+        fm_options.update({'rrt_restarts' : 10, 'rrt_iterations' : 50, 'max_step' : 0.01})
         traj = compute_free_movement(client, robot, process, movement, fm_options)
     else:
         raise ValueError()
@@ -183,8 +175,8 @@ def main():
     # if args.debug:
     #     wait_for_user()
 
-    # with LockRenderer(not (args.debug or args.diagnosis)):
-    with LockRenderer():
+    with LockRenderer(not (args.debug or args.diagnosis)):
+    # with LockRenderer():
         # * 1) compute Linear movements (priority 1)
         print_title('1) compute Linear movements (priority 1)')
         p1_movements = process.get_movements_by_planning_priority(beam_id, 1)
@@ -193,9 +185,9 @@ def main():
             m_id = all_movements.index(m)
             print('{})'.format(m_id))
             all_movements[m_id] = compute_movement(client, robot, process, m, options)
-            # if args.debug:
-            #     with WorldSaver():
-            #         visualize_movement_trajectory(client, robot, process, m, step_sim=args.step_sim)
+            if args.debug:
+                with WorldSaver():
+                    visualize_movement_trajectory(client, robot, process, m, step_sim=args.step_sim)
         # * 2) propagate (priority 1) movement's start/end state to adjacent (prio -1) movements
         propagate_states(process, p1_movements, all_movements)
         process.get_movement_summary_by_beam_id(beam_id)
@@ -218,9 +210,9 @@ def main():
                     print('{})'.format(m_id))
                     all_movements[m_id] = compute_movement(client, robot, process, m, options)
                     altered_movements.append(all_movements[m_id])
-                    # if args.debug:
-                    #     with WorldSaver():
-                    #         visualize_movement_trajectory(client, robot, process, m, step_sim=args.step_sim)
+                    if args.debug:
+                        with WorldSaver():
+                            visualize_movement_trajectory(client, robot, process, m, step_sim=args.step_sim)
         propagate_states(process, altered_movements, all_movements)
         process.get_movement_summary_by_beam_id(beam_id)
         if args.debug:
@@ -244,9 +236,9 @@ def main():
                     print('{})'.format(m_id))
                     all_movements[m_id] = compute_movement(client, robot, process, m, options)
                     altered_movements.append(all_movements[m_id])
-                    # if args.debug:
-                    #     with WorldSaver():
-                    #         visualize_movement_trajectory(client, robot, process, m, step_sim=args.step_sim)
+                    if args.debug:
+                        with WorldSaver():
+                            visualize_movement_trajectory(client, robot, process, m, step_sim=args.step_sim)
                     # * 6) propagate to -1 movements
                     print_title('6) Propagate for no-spec: ({}) {}'.format(m_id, m.short_summary))
                     propagate_states(process, [m], all_movements)
@@ -272,9 +264,9 @@ def main():
                     print('{})'.format(m_id))
                     all_movements[m_id] = compute_movement(client, robot, process, m, options)
                     altered_movements.append(all_movements[m_id])
-                    # if args.debug:
-                    #     with WorldSaver():
-                    #         visualize_movement_trajectory(client, robot, process, m, step_sim=args.step_sim)
+                    if args.debug:
+                        with WorldSaver():
+                            visualize_movement_trajectory(client, robot, process, m, step_sim=args.step_sim)
         propagate_states(process, altered_movements, all_movements)
         process.get_movement_summary_by_beam_id(beam_id)
         if args.debug:
@@ -288,7 +280,6 @@ def main():
                 m_id = all_movements.index(m)
                 print('{})'.format(m_id))
                 all_movements[m_id] = compute_movement(client, robot, process, m, options)
-                # if True:
                 if args.debug:
                     with WorldSaver():
                         visualize_movement_trajectory(client, robot, process, m, step_sim=args.step_sim)
