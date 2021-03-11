@@ -89,7 +89,7 @@ def parse_process(process_name, parse_temp=False):
     cprint('Process json parsed from {}'.format(file_path), 'green')
     return process
 
-def save_process_and_movements(process_name, _process, _movements, overwrite=False, include_traj_in_process=False, indent=None):
+def save_process_and_movements(process_name, _process, _movements, overwrite=False, include_traj_in_process=False, indent=None, save_temp=True):
     process = deepcopy(_process)
     movements = deepcopy(_movements)
 
@@ -123,13 +123,14 @@ def save_process_and_movements(process_name, _process, _movements, overwrite=Fal
     print('---')
     cprint('Process written to {}'.format(process_file_path), 'green')
 
-    if not os.path.exists(TEMP_DESIGN_DIR):
-        os.makedirs(TEMP_DESIGN_DIR)
-    temp_process_file_path = get_process_path(process_name, file_dir=TEMP_DESIGN_DIR)
-    with open(temp_process_file_path, 'w') as f:
-        json.dump(process, f, cls=DataEncoder, indent=indent, sort_keys=True)
-    print('---')
-    cprint('(extra copy) Process written to {}'.format(temp_process_file_path), 'green')
+    if save_temp:
+        if not os.path.exists(TEMP_DESIGN_DIR):
+            os.makedirs(TEMP_DESIGN_DIR)
+        temp_process_file_path = get_process_path(process_name, file_dir=TEMP_DESIGN_DIR)
+        with open(temp_process_file_path, 'w') as f:
+            json.dump(process, f, cls=DataEncoder, indent=indent, sort_keys=True)
+        print('---')
+        cprint('(extra copy) Process written to {}'.format(temp_process_file_path), 'green')
 
 
 ##########################################

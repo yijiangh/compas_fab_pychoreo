@@ -7,7 +7,7 @@ from itertools import product
 from compas.geometry import Frame, distance_point_point, Transformation
 from compas_fab.robots import Configuration
 
-from integral_timber_joints.process import RoboticFreeMovement, RoboticLinearMovement
+from integral_timber_joints.process import RoboticFreeMovement, RoboticLinearMovement, RoboticClampSyncLinearMovement
 from integral_timber_joints.process.state import get_object_from_flange
 
 import ikfast_abb_irb4600_40_255
@@ -24,6 +24,18 @@ from .robot_setup import R11_INTER_CONF_VALS, MAIN_ROBOT_ID, BARE_ARM_GROUP, GAN
 from .robot_setup import get_gantry_control_joint_names, get_gantry_robot_custom_limits
 from .utils import reverse_trajectory, merge_trajectories, FRAME_TOL
 from .state import set_state
+
+##############################
+
+def fill_in_tool_path(client, robot, traj, group=GANTRY_ARM_GROUP):
+    if traj:
+        tool_link_name = robot.get_end_effector_link_name(group=group)
+        with WorldSaver():
+            for tj_pt in traj.points:
+                client.set_robot_configuration(robot, tj_pt)
+                tj_pt.path_from_link = {}
+                tj_pt.path_from_link[tool_link_name] = client.get_link_frame_from_name(robot, tool_link_name)
+    return traj
 
 ##############################
 
@@ -47,7 +59,8 @@ def _get_sample_bare_arm_ik_fn(client, robot):
 ##############################
 
 def compute_linear_movement(client, robot, process, movement, options=None):
-    assert isinstance(movement, RoboticLinearMovement)
+    assert isinstance(movement, RoboticLinearMovement) or \
+           isinstance(movement, RoboticClampSyncLinearMovement)
     robot_uid = client.get_robot_pybullet_uid(robot)
 
     # * options
@@ -142,7 +155,7 @@ def compute_linear_movement(client, robot, process, movement, options=None):
         base_gen_fn = uniform_pose_generator(robot_uid, pose_from_frame(interp_frames[0], scale=1), reachable_range=reachable_range)
         for gi in range(gantry_attempts):
             if debug:
-                print('-- gantry sampling iter {}'.format(gi))
+                cprint('-- gantry sampling iter {}'.format(gi), 'magenta')
             x, y, yaw = next(base_gen_fn)
             # TODO a more formal gantry_base_from_world_base
             y *= -1
@@ -163,7 +176,7 @@ def compute_linear_movement(client, robot, process, movement, options=None):
                 if not client.check_collisions(robot, gantry_arm_conf, options=options):
                     # * Cartesian planning, only for the six-axis arm (aka sub_conf)
                     # cart_conf_vals = plan_cartesian_motion(robot_uid, ik_joints[0], ik_tool_link, interp_poses, get_sub_conf=True)
-                    for ci in range(5):
+                    for ci in range(2):
                         if debug:
                             print('\tcartesian trial #{}'.format(ci))
                         cart_conf = client.plan_cartesian_motion(robot, interp_frames, start_configuration=gantry_arm_conf,
@@ -197,7 +210,7 @@ def compute_linear_movement(client, robot, process, movement, options=None):
             interp_frames = interp_frames[::-1]
 
         samples_cnt = 0
-        for ci in range(10):
+        for ci in range(5):
             if debug:
                 print('\tcartesian trial #{}'.format(ci))
             cart_conf = client.plan_cartesian_motion(robot, interp_frames, start_configuration=gantry_arm_conf,
@@ -230,7 +243,7 @@ def compute_linear_movement(client, robot, process, movement, options=None):
             wait_for_user()
     else:
         cprint('No linear movement found for {}.'.format(movement.short_summary), 'red')
-    return traj
+    return fill_in_tool_path(client, robot, traj, group=GANTRY_ARM_GROUP)
 
 ##############################
 
@@ -338,9 +351,9 @@ def compute_free_movement(client, robot, process, movement, options=None):
 
     if hotfix and traj is not None:
         trajs = [cart_conf, traj] if forward else [traj, cart_conf]
-        return merge_trajectories(trajs)
-    else:
-        return traj
+        traj = merge_trajectories(trajs)
+
+    return fill_in_tool_path(client, robot, traj, group=GANTRY_ARM_GROUP)
 
 
 ##########################################

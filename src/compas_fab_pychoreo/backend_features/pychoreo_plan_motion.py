@@ -64,6 +64,7 @@ class PyChoreoPlanMotion(PlanMotion):
         weights = options.get('weights') or None
         rrt_restarts = options.get('rrt_restarts', 2)
         rrt_iterations = options.get('rrt_iterations', 20)
+        smooth_iterations = options.get('smooth_iterations', 20)
         # TODO: auto compute joint weight
         # print('plan motion options: ', options)
 
@@ -92,7 +93,7 @@ class PyChoreoPlanMotion(PlanMotion):
             if not check_initial_end(start_conf, end_conf, collision_fn, diagnosis=diagnosis):
                 return None
             path = birrt(start_conf, end_conf, distance_fn, sample_fn, extend_fn, collision_fn,
-                restarts=rrt_restarts, iterations=rrt_iterations)
+                restarts=rrt_restarts, iterations=rrt_iterations, smooth=smooth_iterations)
             #return plan_lazy_prm(start_conf, end_conf, sample_fn, extend_fn, collision_fn)
 
         if path is None:

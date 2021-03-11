@@ -19,10 +19,11 @@ from .stream import set_state, compute_free_movement, compute_linear_movement
 from .state import set_state
 from .visualization import visualize_movement_trajectory
 
-from integral_timber_joints.process import RoboticFreeMovement, RoboticLinearMovement, RoboticMovement
+from integral_timber_joints.process import RoboticFreeMovement, RoboticLinearMovement, RoboticMovement, RoboticClampSyncLinearMovement
 
 # * Next steps
 # TODO use linkstatistics joint weight and resolutions
+# TODO further smoothing transit/transfer trajectories
 
 def print_title(x):
     print('\n\n')
@@ -36,14 +37,26 @@ def compute_movement(client, robot, process, movement, options=None):
     cprint(movement.short_summary, 'cyan')
     options = options or {}
     traj = None
-    if isinstance(movement, RoboticLinearMovement):
+    if isinstance(movement, RoboticLinearMovement) or \
+       isinstance(movement, RoboticClampSyncLinearMovement):
         lm_options = options.copy()
         # * interpolation step size, in meter
-        lm_options.update({'max_step' : 0.01, 'distance_threshold':0.002})
+        lm_options.update({
+            'max_step' : 0.01,
+            'distance_threshold':0.002,
+            'gantry_attempts' : 100,
+            })
         traj = compute_linear_movement(client, robot, process, movement, lm_options)
     elif isinstance(movement, RoboticFreeMovement):
         fm_options = options.copy()
-        fm_options.update({'rrt_restarts' : 50, 'rrt_iterations' : 50, 'max_step' : 0.01, 'resolutions' : 0.05})
+        fm_options.update({
+            'rrt_restarts' : 50,
+            'rrt_iterations' : 50,
+            'smooth_iterations': 50,
+            # 'resolutions' : 0.1,
+            'resolutions' : 0.05,
+            'max_step' : 0.01
+            })
         traj = compute_free_movement(client, robot, process, movement, fm_options)
     else:
         raise ValueError()
@@ -119,6 +132,8 @@ def main():
     parser.add_argument('--view_states', action='store_true', help='Visualize states.')
     parser.add_argument('--reinit_tool', action='store_true', help='Regenerate tool URDFs.')
     parser.add_argument('--parse_temp', action='store_true', help='Parse temporary process file. Defaults to False.')
+    parser.add_argument('--save_temp', action='store_true', help='Save a temporary process file. Defaults to False.')
+    parser.add_argument('--viz_upon_found', action='store_true', help='Viz found traj immediately after found. Defaults to False.')
     args = parser.parse_args()
     print('Arguments:', args)
     print('='*10)
@@ -140,7 +155,7 @@ def main():
 
     process.initial_state['robot'].kinematic_config = process.robot_initial_config
     set_state(client, robot, process, process.initial_state, initialize=True,
-        options={'debug' : args.debug, 'include_env' : not args.disable_env, 'reinit_tool' : args.reinit_tool})
+        options={'debug' : False, 'include_env' : not args.disable_env, 'reinit_tool' : args.reinit_tool})
     # * collision sanity check
     assert not client.check_collisions(robot, full_start_conf, options={'diagnosis':True})
 
@@ -179,7 +194,7 @@ def main():
             m_id = all_movements.index(m)
             print('{})'.format(m_id))
             all_movements[m_id] = compute_movement(client, robot, process, m, options)
-            if args.debug:
+            if args.viz_upon_found:
                 with WorldSaver():
                     visualize_movement_trajectory(client, robot, process, m, step_sim=args.step_sim)
         # * 2) propagate (priority 1) movement's start/end state to adjacent (prio -1) movements
@@ -196,7 +211,7 @@ def main():
                 has_end_conf = process.movement_has_end_robot_config(m)
                 has_traj = m.trajectory is not None
                 if has_start_conf and has_end_conf and not has_traj:
-                    cprint('{} has both start, end conf specified, but no traj computer. This is BAD!!'.format(m), 'yellow')
+                    cprint('{} has both start, end conf specified, but no traj computer. This is BAD!!'.format(m.short_summary), 'yellow')
                     wait_for_user()
                 if not has_traj and (has_start_conf ^ has_end_conf): # XOR
                     print('-'*10)
@@ -204,7 +219,7 @@ def main():
                     print('{})'.format(m_id))
                     all_movements[m_id] = compute_movement(client, robot, process, m, options)
                     altered_movements.append(all_movements[m_id])
-                    if args.debug:
+                    if args.viz_upon_found:
                         with WorldSaver():
                             visualize_movement_trajectory(client, robot, process, m, step_sim=args.step_sim)
         propagate_states(process, altered_movements, all_movements)
@@ -230,7 +245,7 @@ def main():
                     print('{})'.format(m_id))
                     all_movements[m_id] = compute_movement(client, robot, process, m, options)
                     altered_movements.append(all_movements[m_id])
-                    if args.debug:
+                    if args.viz_upon_found:
                         with WorldSaver():
                             visualize_movement_trajectory(client, robot, process, m, step_sim=args.step_sim)
                     # * 6) propagate to -1 movements
@@ -258,7 +273,7 @@ def main():
                     print('{})'.format(m_id))
                     all_movements[m_id] = compute_movement(client, robot, process, m, options)
                     altered_movements.append(all_movements[m_id])
-                    if args.debug:
+                    if args.viz_upon_found:
                         with WorldSaver():
                             visualize_movement_trajectory(client, robot, process, m, step_sim=args.step_sim)
         propagate_states(process, altered_movements, all_movements)
@@ -274,7 +289,7 @@ def main():
                 m_id = all_movements.index(m)
                 print('{})'.format(m_id))
                 all_movements[m_id] = compute_movement(client, robot, process, m, options)
-                if args.debug:
+                if args.viz_upon_found:
                     with WorldSaver():
                         visualize_movement_trajectory(client, robot, process, m, step_sim=args.step_sim)
         process.get_movement_summary_by_beam_id(beam_id)
@@ -283,7 +298,7 @@ def main():
 
     # * export computed movements
     if args.write:
-        save_process_and_movements(args.problem, process, all_movements, overwrite=False, include_traj_in_process=False)
+        save_process_and_movements(args.problem, process, all_movements, overwrite=False, include_traj_in_process=False, save_temp=args.save_temp)
 
     # * final visualization
     if args.watch:

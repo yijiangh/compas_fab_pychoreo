@@ -30,7 +30,7 @@ from .utils import FRAME_TOL
 
 def set_state(client, robot, process, state_from_object, initialize=False, scale=1e-3, options=None):
     options = options or {}
-    gantry_attempts = options.get('gantry_attempts') or 50
+    gantry_attempts = options.get('gantry_attempts') or 200
     debug = options.get('debug', False)
     include_env = options.get('include_env', True)
     reinit_tool = options.get('reinit_tool', False)
