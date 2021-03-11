@@ -85,10 +85,6 @@ def propagate_states(process, sub_movements, all_movements):
             back_start_state['robot'].kinematic_config = target_start_conf
             back_id -= 1
 
-            # tmp_back_start_state = process.get_movement_start_state(back_m)
-            # tmp_back_end_state = process.get_movement_end_state(back_m)
-            # assert tmp_back_start_state['robot'].kinematic_config.close_to(tmp_back_end_state['robot'].kinematic_config)
-
         # * forward fill all adjacent (-1) movements
         forward_id = m_id+1
         while forward_id < len(all_movements) and all_movements[forward_id].planning_priority == -1:
@@ -104,9 +100,6 @@ def propagate_states(process, sub_movements, all_movements):
             forward_end_state['robot'].kinematic_config = target_end_conf
             forward_id += 1
 
-            # tmp_forward_start_state = process.get_movement_start_state(forward_m)
-            # tmp_forward_end_state = process.get_movement_end_state(forward_m)
-            # assert tmp_forward_start_state['robot'].kinematic_config.close_to(tmp_forward_end_state['robot'].kinematic_config)
         return all_movements
 
 #################################
@@ -125,8 +118,7 @@ def main():
     parser.add_argument('--disable_env', action='store_true', help='Disable environment collision geometry.')
     parser.add_argument('--view_states', action='store_true', help='Visualize states.')
     parser.add_argument('--reinit_tool', action='store_true', help='Regenerate tool URDFs.')
-    parser.add_argument('--parse_temp', action='store_false', help='Parse temporary process file. Defaults to True.')
-    # parser.add_argument('-ptm', '--parse_transfer_motion', action='store_true', help='Parse saved transfer motion.')
+    parser.add_argument('--parse_temp', action='store_true', help='Parse temporary process file. Defaults to False.')
     args = parser.parse_args()
     print('Arguments:', args)
     print('='*10)
@@ -289,6 +281,10 @@ def main():
         if args.debug:
             wait_for_user()
 
+    # * export computed movements
+    if args.write:
+        save_process_and_movements(args.problem, process, all_movements, overwrite=False, include_traj_in_process=False)
+
     # * final visualization
     if args.watch:
         print('='*20)
@@ -301,10 +297,6 @@ def main():
         for m in all_movements:
             visualize_movement_trajectory(client, robot, process, m, step_sim=args.step_sim)
         # client.disconnect()
-
-    # * export computed movements
-    if args.write:
-        save_process_and_movements(args.problem, process, all_movements, overwrite=False, include_traj_in_process=False)
 
     client.disconnect()
 

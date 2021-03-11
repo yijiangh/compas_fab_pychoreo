@@ -99,7 +99,8 @@ def compute_linear_movement(client, robot, process, movement, options=None):
                 ((parent_body, None), (child_body, None))
                 )
     if debug:
-        print(client.extra_disabled_collision_links)
+        print('movement.allowed_collision_matrix: ', movement.allowed_collision_matrix)
+        print('extra_disabled_collision_links: ', client.extra_disabled_collision_links)
         client._print_object_summary()
 
     with WorldSaver():
@@ -139,7 +140,9 @@ def compute_linear_movement(client, robot, process, movement, options=None):
     if start_conf is None and end_conf is None:
         # * sample from a ball near the pose
         base_gen_fn = uniform_pose_generator(robot_uid, pose_from_frame(interp_frames[0], scale=1), reachable_range=reachable_range)
-        for _ in range(gantry_attempts):
+        for gi in range(gantry_attempts):
+            if debug:
+                print('-- gantry sampling iter {}'.format(gi))
             x, y, yaw = next(base_gen_fn)
             # TODO a more formal gantry_base_from_world_base
             y *= -1
@@ -160,7 +163,9 @@ def compute_linear_movement(client, robot, process, movement, options=None):
                 if not client.check_collisions(robot, gantry_arm_conf, options=options):
                     # * Cartesian planning, only for the six-axis arm (aka sub_conf)
                     # cart_conf_vals = plan_cartesian_motion(robot_uid, ik_joints[0], ik_tool_link, interp_poses, get_sub_conf=True)
-                    for _ in range(5):
+                    for ci in range(5):
+                        if debug:
+                            print('\tcartesian trial #{}'.format(ci))
                         cart_conf = client.plan_cartesian_motion(robot, interp_frames, start_configuration=gantry_arm_conf,
                             group=GANTRY_ARM_GROUP, options=options)
                         if cart_conf is not None:
@@ -192,7 +197,9 @@ def compute_linear_movement(client, robot, process, movement, options=None):
             interp_frames = interp_frames[::-1]
 
         samples_cnt = 0
-        for _ in range(10):
+        for ci in range(10):
+            if debug:
+                print('\tcartesian trial #{}'.format(ci))
             cart_conf = client.plan_cartesian_motion(robot, interp_frames, start_configuration=gantry_arm_conf,
                 group=GANTRY_ARM_GROUP, options=options)
             samples_cnt += 1

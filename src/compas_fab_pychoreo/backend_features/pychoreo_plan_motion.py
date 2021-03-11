@@ -90,7 +90,6 @@ class PyChoreoPlanMotion(PlanMotion):
             assert len(ik_joints) == len(end_conf)
 
             if not check_initial_end(start_conf, end_conf, collision_fn, diagnosis=diagnosis):
-                # cprint('Initial/end conf in collision!', 'red')
                 return None
             path = birrt(start_conf, end_conf, distance_fn, sample_fn, extend_fn, collision_fn,
                 restarts=rrt_restarts, iterations=rrt_iterations)

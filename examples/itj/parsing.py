@@ -1,6 +1,7 @@
 import os
 import json
 import sys
+from copy import deepcopy
 from termcolor import cprint
 
 from compas.datastructures import Mesh
@@ -71,20 +72,28 @@ def get_process_path(assembly_name, file_dir=DESIGN_DIR):
     else:
         filename = '{}.json'.format(assembly_name)
     model_path = os.path.abspath(os.path.join(file_dir, filename))
-    if not os.path.exists(model_path):
-        raise FileNotFoundError(model_path)
     return model_path
 
 def parse_process(process_name, parse_temp=False):
     # * Load process from file
-    with open(get_process_path(process_name, file_dir=TEMP_DESIGN_DIR if parse_temp else DESIGN_DIR), 'r') as f:
+    file_path = get_process_path(process_name, file_dir=TEMP_DESIGN_DIR if parse_temp else DESIGN_DIR)
+    if parse_temp and not os.path.exists(file_path):
+        cprint('No temp process file found, using the original one.', 'yellow')
+        file_path = get_process_path(process_name, file_dir=DESIGN_DIR)
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(file_path)
+
+    with open(file_path, 'r') as f:
         process = json.load(f, cls=DataDecoder)
         # type: RobotClampAssemblyProcess
+    cprint('Process json parsed from {}'.format(file_path), 'green')
     return process
 
-def save_process_and_movements(process_name, process, movements, overwrite=False, include_traj_in_process=False, indent=None):
+def save_process_and_movements(process_name, _process, _movements, overwrite=False, include_traj_in_process=False, indent=None):
+    process = deepcopy(_process)
+    movements = deepcopy(_movements)
+
     process_file_path = get_process_path(process_name, file_dir=DESIGN_DIR)
-    temp_process_file_path = get_process_path(process_name, file_dir=TEMP_DESIGN_DIR)
     process_dir = os.path.dirname(process_file_path)
     if not overwrite:
         process_fname = os.path.basename(process_file_path)
@@ -101,6 +110,7 @@ def save_process_and_movements(process_name, process, movements, overwrite=False
         m_file_path = os.path.abspath(os.path.join(process_dir, m.filepath))
         with open(m_file_path, 'w') as f:
             json.dump(m, f, cls=DataEncoder, indent=indent, sort_keys=True)
+    print('---')
     cprint('#{} movements written to {}'.format(len(movements), os.path.abspath(DESIGN_DIR)), 'green')
 
     if not include_traj_in_process:
@@ -110,11 +120,16 @@ def save_process_and_movements(process_name, process, movements, overwrite=False
 
     with open(process_file_path, 'w') as f:
         json.dump(process, f, cls=DataEncoder, indent=indent, sort_keys=True)
+    print('---')
     cprint('Process written to {}'.format(process_file_path), 'green')
 
+    if not os.path.exists(TEMP_DESIGN_DIR):
+        os.makedirs(TEMP_DESIGN_DIR)
+    temp_process_file_path = get_process_path(process_name, file_dir=TEMP_DESIGN_DIR)
     with open(temp_process_file_path, 'w') as f:
         json.dump(process, f, cls=DataEncoder, indent=indent, sort_keys=True)
-    cprint('(extra copy) Process written to {}'.format(process_file_path), 'green')
+    print('---')
+    cprint('(extra copy) Process written to {}'.format(temp_process_file_path), 'green')
 
 
 ##########################################
