@@ -16,6 +16,7 @@ from .parsing import parse_process, save_process_and_movements
 from .robot_setup import load_RFL_world, to_rlf_robot_full_conf, R11_INTER_CONF_VALS, R12_INTER_CONF_VALS
 from .utils import notify
 from .stream import set_state, compute_free_movement, compute_linear_movement
+from .state import set_state
 from .visualization import visualize_movement_trajectory
 
 from integral_timber_joints.process import RoboticFreeMovement, RoboticLinearMovement, RoboticMovement
@@ -42,7 +43,7 @@ def compute_movement(client, robot, process, movement, options=None):
         traj = compute_linear_movement(client, robot, process, movement, lm_options)
     elif isinstance(movement, RoboticFreeMovement):
         fm_options = options.copy()
-        fm_options.update({'rrt_restarts' : 10, 'rrt_iterations' : 50, 'max_step' : 0.01})
+        fm_options.update({'rrt_restarts' : 50, 'rrt_iterations' : 50, 'max_step' : 0.01, 'resolutions' : 0.05})
         traj = compute_free_movement(client, robot, process, movement, fm_options)
     else:
         raise ValueError()
@@ -124,6 +125,7 @@ def main():
     parser.add_argument('--disable_env', action='store_true', help='Disable environment collision geometry.')
     parser.add_argument('--view_states', action='store_true', help='Visualize states.')
     parser.add_argument('--reinit_tool', action='store_true', help='Regenerate tool URDFs.')
+    parser.add_argument('--parse_temp', action='store_false', help='Parse temporary process file. Defaults to True.')
     # parser.add_argument('-ptm', '--parse_transfer_motion', action='store_true', help='Parse saved transfer motion.')
     args = parser.parse_args()
     print('Arguments:', args)
@@ -133,7 +135,7 @@ def main():
     seq_i = int(args.seq_i)
     client, robot, _ = load_RFL_world(viewer=args.viewer or args.diagnosis or args.view_states)
 
-    process = parse_process(args.problem)
+    process = parse_process(args.problem, parse_temp=args.parse_temp)
     assembly = process.assembly
     beam_ids = [b for b in process.assembly.sequence]
     beam_id = beam_ids[seq_i]

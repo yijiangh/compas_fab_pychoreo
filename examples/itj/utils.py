@@ -6,6 +6,9 @@ from compas_fab.robots import Configuration, JointTrajectory, JointTrajectoryPoi
 # unit conversion
 MIL2M = 1e-3
 
+# in meter
+FRAME_TOL = 1e-4
+
 ##########################################
 
 def convert_robot_conf_unit(conf_vals, length_scale=MIL2M, angle_unit='rad', prismatic_ids=range(0,2), revoluted_ids=range(2,8)):

@@ -63,6 +63,7 @@ def rfl_setup():
 ###########################################
 
 DESIGN_DIR = os.path.abspath(os.path.join(HERE, '..', '..', '..', 'itj_design_study', '210128_RemodelFredPavilion'))
+TEMP_DESIGN_DIR = os.path.abspath(os.path.join(HERE, '..', '..', '..', 'itj_design_study', '210128_RemodelFredPavilion', 'YJ_tmp'))
 
 def get_process_path(assembly_name, file_dir=DESIGN_DIR):
     if assembly_name.endswith('.json'):
@@ -74,14 +75,16 @@ def get_process_path(assembly_name, file_dir=DESIGN_DIR):
         raise FileNotFoundError(model_path)
     return model_path
 
-def parse_process(process_name):
+def parse_process(process_name, parse_temp=False):
     # * Load process from file
-    with open(get_process_path(process_name), 'r') as f:
-        process = json.load(f, cls=DataDecoder)  # type: RobotClampAssemblyProcess
+    with open(get_process_path(process_name, file_dir=TEMP_DESIGN_DIR if parse_temp else DESIGN_DIR), 'r') as f:
+        process = json.load(f, cls=DataDecoder)
+        # type: RobotClampAssemblyProcess
     return process
 
 def save_process_and_movements(process_name, process, movements, overwrite=False, include_traj_in_process=False, indent=None):
-    process_file_path = get_process_path(process_name)
+    process_file_path = get_process_path(process_name, file_dir=DESIGN_DIR)
+    temp_process_file_path = get_process_path(process_name, file_dir=TEMP_DESIGN_DIR)
     process_dir = os.path.dirname(process_file_path)
     if not overwrite:
         process_fname = os.path.basename(process_file_path)
@@ -108,6 +111,10 @@ def save_process_and_movements(process_name, process, movements, overwrite=False
     with open(process_file_path, 'w') as f:
         json.dump(process, f, cls=DataEncoder, indent=indent, sort_keys=True)
     cprint('Process written to {}'.format(process_file_path), 'green')
+
+    with open(temp_process_file_path, 'w') as f:
+        json.dump(process, f, cls=DataEncoder, indent=indent, sort_keys=True)
+    cprint('(extra copy) Process written to {}'.format(process_file_path), 'green')
 
 
 ##########################################
