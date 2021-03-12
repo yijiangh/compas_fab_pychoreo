@@ -117,6 +117,10 @@ def compute_linear_movement(client, robot, process, movement, options=None):
         print('extra_disabled_collision_links: ', client.extra_disabled_collision_links)
         client._print_object_summary()
 
+    # TODO special check for CLampSyncMove:
+    # you can disable (clamps - gripper) and (clamps - toolchanger) during the move,
+    # but double check the end state (with jaw set to closed state) if they collide.
+
     with WorldSaver():
         if start_conf is not None:
             client.set_robot_configuration(robot, start_conf)

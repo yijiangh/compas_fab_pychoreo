@@ -85,8 +85,8 @@ def compute_movement(client, robot, process, movement, options=None):
         wait_for_user('Planning fails, press Enter to continue.')
     return movement
 
-def propagate_states(process, sub_movements, all_movements):
-    for target_m in sub_movements:
+def propagate_states(process, selected_movements, all_movements):
+    for target_m in selected_movements:
         if not isinstance(target_m, RoboticMovement) or target_m.trajectory is None:
             continue
         m_id = all_movements.index(target_m)
@@ -94,7 +94,7 @@ def propagate_states(process, sub_movements, all_movements):
         target_end_state = process.get_movement_end_state(target_m)
         target_start_conf = target_start_state['robot'].kinematic_config
         target_end_conf = target_end_state['robot'].kinematic_config
-        print('~~~')
+        print('~'*5)
         print('\tPropagate states for ({}) : {}'.format(m_id, target_m.short_summary))
         # * backward fill all adjacent (-1) movements
         back_id = m_id-1
@@ -125,10 +125,24 @@ def propagate_states(process, sub_movements, all_movements):
             forward_start_state['robot'].kinematic_config = target_end_conf
             forward_end_state['robot'].kinematic_config = target_end_conf
             forward_id += 1
-
-        return all_movements
+    # end loop selected_movements
+    return all_movements
 
 def get_movement_status(process, m, movement_types):
+    """[summary]
+
+    Parameters
+    ----------
+    process : [type]
+    m : Movement
+    movement_types : list(Movement)
+        A list of movement class types, so this function returns `MovementStatus.incorrect_type`
+        if the given `m` does not fall into any of the given types.
+
+    Returns
+    -------
+    MovementStatus.xxx
+    """
     if not isinstance(m, RoboticMovement) or all([not isinstance(m, mt) for mt in movement_types]):
         return MovementStatus.incorrect_type
     has_start_conf = process.movement_has_start_robot_config(m)
@@ -157,9 +171,16 @@ def compute_selected_movements(client, robot, process, beam_id, priority, moveme
     print_title('* compute {} (priority {}, status {})'.format([mt.__name__ for mt in movement_types], priority, movement_status))
     all_movements = process.get_movements_by_beam_id(beam_id)
     selected_movements = process.get_movements_by_planning_priority(beam_id, priority)
+
+    # since adjacent "neither_done" states will change to `one_sided` and get skipped
+    # which will cause adjacent linear movement joint flip problems (especially for clamp placements)
+    movement_statuses = [movement_status]
+    if movement_status == MovementStatus.neither_done:
+        movement_statuses.append(MovementStatus.one_sided)
+
     for m in selected_movements:
-        if get_movement_status(process, m, movement_types) == movement_status:
-            altered_movements = []
+        altered_movements = []
+        if get_movement_status(process, m, movement_types) in movement_statuses:
             print('-'*10)
             m_id = all_movements.index(m)
             print('({})'.format(m_id))
@@ -170,19 +191,20 @@ def compute_selected_movements(client, robot, process, beam_id, priority, moveme
                 with WorldSaver():
                     visualize_movement_trajectory(client, robot, process, m, step_sim=step_sim)
 
-            if movement_status == MovementStatus.neither_done:
-                m_next_id = m_id + 1
-                while m_next_id < len(all_movements) \
-                    and get_movement_status(process, all_movements[m_next_id], movement_status) == MovementStatus.neither_done \
-                    and all_movements[m_next_id] in selected_movements:
-                    print('({})'.format(m_next_id))
-                    compute_movement(client, robot, process, all_movements[m_next_id], options)
-                    altered_movements.append(all_movements[m_next_id])
-                    m_next_id += 1
+            # if movement_status == MovementStatus.neither_done:
+            #     # forward computation propagation
+            #     m_next_id = m_id + 1
+            #     while m_next_id < len(all_movements) \
+            #         and get_movement_status(process, all_movements[m_next_id], movement_types) == MovementStatus.one_sided \
+            #         and all_movements[m_next_id] in selected_movements:
+            #         print('({})'.format(m_next_id))
+            #         compute_movement(client, robot, process, all_movements[m_next_id], options)
+            #         altered_movements.append(all_movements[m_next_id])
+            #         m_next_id += 1
+        # * propagate to -1 movements
+        propagate_states(process, altered_movements, all_movements)
 
-            # * propagate to -1 movements
-            propagate_states(process, altered_movements, all_movements)
-
+    print('\n\n')
     process.get_movement_summary_by_beam_id(beam_id)
 
 #################################
@@ -256,24 +278,16 @@ def main():
 
     with LockRenderer(not (args.debug or args.diagnosis)):
     # with LockRenderer():
-        # * compute Linear movements (priority 1)
         compute_selected_movements(client, robot, process, beam_id, 1, [RoboticLinearMovement, RoboticClampSyncLinearMovement],
             MovementStatus.neither_done,
             options=options, viz_upon_found=args.viz_upon_found, step_sim=args.step_sim)
 
-        # * compute linear movements with one state (start OR end) specified
         compute_selected_movements(client, robot, process, beam_id, 0, [RoboticLinearMovement], MovementStatus.one_sided,
             options=options, viz_upon_found=args.viz_upon_found, step_sim=args.step_sim)
 
-        # * compute linear movements with neither start nor conf specified
         compute_selected_movements(client, robot, process, beam_id, 0, [RoboticLinearMovement], MovementStatus.neither_done,
             options=options, viz_upon_found=args.viz_upon_found, step_sim=args.step_sim)
 
-        # * compute linear movements with neither start nor conf specified
-        compute_selected_movements(client, robot, process, beam_id, 0, [RoboticLinearMovement], MovementStatus.one_sided,
-            options=options, viz_upon_found=args.viz_upon_found, step_sim=args.step_sim)
-
-        # * compute all free movements, start and end should be both specified by now?
         compute_selected_movements(client, robot, process, beam_id, 0, [RoboticFreeMovement], MovementStatus.both_done,
             options=options, viz_upon_found=args.viz_upon_found, step_sim=args.step_sim)
 
@@ -285,14 +299,9 @@ def main():
     if args.watch:
         print('='*20)
         print_title('Visualize results')
-        # client, _, _ = load_RFL_world(viewer=args.viewer or args.diagnosis or args.view_states)
-        # set_state(client, robot, process, process.initial_state,
-            # initialize=True,
-            # options={'debug' : args.debug, 'include_env' : not args.disable_env, 'reinit_tool' : args.reinit_tool})
         set_state(client, robot, process, process.initial_state)
         for m in all_movements:
             visualize_movement_trajectory(client, robot, process, m, step_sim=args.step_sim)
-        # client.disconnect()
 
     client.disconnect()
 
