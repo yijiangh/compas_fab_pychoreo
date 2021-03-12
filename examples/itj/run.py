@@ -62,7 +62,7 @@ def compute_movement(client, robot, process, movement, options=None):
     elif isinstance(movement, RoboticFreeMovement):
         fm_options = options.copy()
         fm_options.update({
-            'rrt_restarts' : 50,
+            'rrt_restarts' : 100,
             'rrt_iterations' : 50,
             'smooth_iterations': 100,
             # 'resolutions' : 0.1,
@@ -100,28 +100,31 @@ def propagate_states(process, selected_movements, all_movements):
         back_id = m_id-1
         while back_id > 0 and all_movements[back_id].planning_priority == -1:
             back_m = all_movements[back_id]
-            print('\t- past (backward): ({}) {}'.format(colored(back_id, 'green'), back_m.short_summary))
             back_start_state = process.get_movement_start_state(back_m)
             back_end_state = process.get_movement_end_state(back_m)
             back_end_conf = back_end_state['robot'].kinematic_config
-            if back_end_conf is not None and not back_end_conf.close_to(target_start_conf, tol=1e-3):
-                cprint('Start conf not coincided - max diff {}'.format(back_end_conf.max_difference(target_start_conf)), 'red')
-                wait_for_user()
+            if back_end_conf is not None and \
+                not back_end_conf.close_to(target_start_conf, tol=1e-3):
+                    cprint('Start conf not coincided - max diff {}'.format(back_end_conf.max_difference(target_start_conf)), 'red')
+                    wait_for_user()
+            # else:
+            print('\t- past (backward): ({}) {}'.format(colored(back_id, 'green'), back_m.short_summary))
             back_end_state['robot'].kinematic_config = target_start_conf
             back_start_state['robot'].kinematic_config = target_start_conf
             back_id -= 1
-
         # * forward fill all adjacent (-1) movements
         forward_id = m_id+1
         while forward_id < len(all_movements) and all_movements[forward_id].planning_priority == -1:
             forward_m = all_movements[forward_id]
-            print('\t- future (forward): ({}) {}'.format(colored(forward_id, 'green'), forward_m.short_summary))
             forward_start_state = process.get_movement_start_state(forward_m)
             forward_end_state = process.get_movement_end_state(forward_m)
             forward_start_conf = forward_start_state['robot'].kinematic_config
-            if forward_start_conf is not None and not forward_start_conf.close_to(target_end_conf, tol=1e-3):
-                cprint('End conf not coincided - max diff {}'.format(back_end_conf.max_difference(target_end_conf)), 'red')
-                wait_for_user()
+            # TODO check why there is discrepancy sometimes
+            if forward_start_conf is not None and \
+                not forward_start_conf.close_to(target_end_conf, tol=1e-3):
+                    cprint('End conf not coincided - max diff {}'.format(back_end_conf.max_difference(target_end_conf)), 'red')
+                    wait_for_user()
+            print('\t- future (forward): ({}) {}'.format(colored(forward_id, 'green'), forward_m.short_summary))
             forward_start_state['robot'].kinematic_config = target_end_conf
             forward_end_state['robot'].kinematic_config = target_end_conf
             forward_id += 1
@@ -174,6 +177,8 @@ def compute_selected_movements(client, robot, process, beam_id, priority, moveme
 
     # since adjacent "neither_done" states will change to `one_sided` and get skipped
     # which will cause adjacent linear movement joint flip problems (especially for clamp placements)
+    # Thus, when solving `neither_done`, we solve for both `neither_done` and `one_sided` sequentially
+    # The movement statuses get changed on the fly.
     movement_statuses = [movement_status]
     if movement_status == MovementStatus.neither_done:
         movement_statuses.append(MovementStatus.one_sided)
@@ -285,6 +290,10 @@ def main():
         compute_selected_movements(client, robot, process, beam_id, 0, [RoboticLinearMovement], MovementStatus.one_sided,
             options=options, viz_upon_found=args.viz_upon_found, step_sim=args.step_sim)
 
+        # since adjacent "neither_done" states will change to `one_sided` and get skipped
+        # which will cause adjacent linear movement joint flip problems (especially for clamp placements)
+        # Thus, when solving `neither_done`, we solve for both `neither_done` and `one_sided` sequentially
+        # The movement statuses get changed on the fly.
         compute_selected_movements(client, robot, process, beam_id, 0, [RoboticLinearMovement], MovementStatus.neither_done,
             options=options, viz_upon_found=args.viz_upon_found, step_sim=args.step_sim)
 

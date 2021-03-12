@@ -107,7 +107,7 @@ class PyChoreoClient(PyBulletClient):
         robot = options['robot']
         mass = options.get('mass', STATIC_MASS)
         options['mass'] = mass
-        color = options.get('color', BLUE)
+        color = options.get('color', None)
         attached_child_link_name = options.get('attached_child_link_name', None)
 
         robot_uid = robot.attributes['pybullet_uid']
@@ -135,8 +135,9 @@ class PyChoreoClient(PyBulletClient):
                     ((robot_uid, touched_link_name), (body, None))
                     )
             links = get_all_links(body)
-            for link in links:
-                set_color(body, color, link=link)
+            if color:
+                for link in links:
+                    set_color(body, color, link=link)
             # create attachment based on their *current* pose
             attach_child_link = BASE_LINK if not attached_child_link_name else link_from_name(body, attached_child_link_name)
             attachment = create_attachment(robot_uid, tool_attach_link, body, attach_child_link)
@@ -247,9 +248,6 @@ class PyChoreoClient(PyBulletClient):
                 links = get_all_links(body)
                 for link in links:
                     set_color(body, color, link=link)
-
-    # TODO
-    # def set_object_frame(self, wildcard):
 
     def _print_object_summary(self):
         print('^'*10)
