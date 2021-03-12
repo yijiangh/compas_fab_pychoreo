@@ -22,7 +22,7 @@ from pybullet_planning import plan_cartesian_motion, uniform_pose_generator, dum
 
 from .robot_setup import R11_INTER_CONF_VALS, MAIN_ROBOT_ID, BARE_ARM_GROUP, GANTRY_ARM_GROUP, GANTRY_Z_LIMIT
 from .robot_setup import get_gantry_control_joint_names, get_cartesian_control_joint_names, get_gantry_robot_custom_limits
-from .visualization import BEAM_COLOR, GRIPPER_COLOR, CLAMP_COLOR, TOOL_CHANGER_COLOR
+from .visualization import color_from_object_id
 from .parsing import DATA_DIR
 from .utils import FRAME_TOL
 
@@ -30,7 +30,7 @@ from .utils import FRAME_TOL
 
 def set_state(client, robot, process, state_from_object, initialize=False, scale=1e-3, options=None):
     options = options or {}
-    gantry_attempts = options.get('gantry_attempts') or 200
+    gantry_attempts = options.get('gantry_attempts') or 500
     debug = options.get('debug', False)
     include_env = options.get('include_env', True)
     reinit_tool = options.get('reinit_tool', False)
@@ -85,13 +85,12 @@ def set_state(client, robot, process, state_from_object, initialize=False, scale
                 color = GREY
                 if object_id.startswith('b'):
                     # ! notice that the notch geometry will be convexified in pybullet
-                    color = BEAM_COLOR
                     mesh = obj.mesh.copy()
                     mesh_quads_to_triangles(mesh)
                     cm = CollisionMesh(mesh, object_id)
                     cm.scale(scale)
                     # add mesh to environment at origin
-                    client.add_collision_mesh(cm, {'color':color})
+                    client.add_collision_mesh(cm)
                 else:
                     urdf_path = obj.get_urdf_path(DATA_DIR)
                     if reinit_tool or not os.path.exists(urdf_path):
@@ -106,7 +105,7 @@ def set_state(client, robot, process, state_from_object, initialize=False, scale
                 current_frame = copy(object_state.current_frame)
                 current_frame.point *= scale
                 # * set pose according to state
-                client.set_object_frame('^{}$'.format(object_id), current_frame)
+                client.set_object_frame('^{}$'.format(object_id), current_frame, options={'color' : color_from_object_id(object_id)})
 
             if object_state.kinematic_config is not None:
                 assert object_id.startswith('c') or object_id.startswith('g')
@@ -141,7 +140,7 @@ def set_state(client, robot, process, state_from_object, initialize=False, scale
                     # print('flange frame: {} | object frame {} | flange pose {}'.format(flange_frame, object_frame, flange_pose))
                     # TODO wrap this base sampling + 6-axis IK into inverse_kinematics for the client
                     # * sample from a ball near the pose
-                    base_gen_fn = uniform_pose_generator(robot_uid, flange_pose, reachable_range=(0.2,1.5))
+                    base_gen_fn = uniform_pose_generator(robot_uid, flange_pose, reachable_range=(0.2,2.8))
                     for _ in range(gantry_attempts):
                         # TODO a more formal gantry_base_from_world_base
                         x, y, yaw = next(base_gen_fn)

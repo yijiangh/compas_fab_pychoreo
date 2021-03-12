@@ -238,9 +238,15 @@ class PyChoreoClient(PyBulletClient):
         return None if body_id not in name_from_body_id else name_from_body_id[body_id]
 
     def set_object_frame(self, wildcard, frame, options=None):
+        options = options or {}
+        color = options.get('color', None)
         bodies = self._get_bodies(wildcard)
         for body in bodies:
             set_pose(body, pose_from_frame(frame))
+            if color:
+                links = get_all_links(body)
+                for link in links:
+                    set_color(body, color, link=link)
 
     # TODO
     # def set_object_frame(self, wildcard):

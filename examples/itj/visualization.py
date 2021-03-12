@@ -4,10 +4,24 @@ from termcolor import cprint
 from pybullet_planning import GREY, BLUE, YELLOW, GREEN, draw_pose, has_gui, wait_if_gui, wait_for_duration
 from integral_timber_joints.process import RoboticFreeMovement, RoboticLinearMovement, RoboticMovement
 
+################################################
+
 BEAM_COLOR = GREY
 GRIPPER_COLOR = BLUE
 CLAMP_COLOR = YELLOW
 TOOL_CHANGER_COLOR = GREEN
+
+def color_from_object_id(object_id):
+    if object_id.startswith('c'):
+        return CLAMP_COLOR
+    elif object_id.startswith('g'):
+        return GRIPPER_COLOR
+    elif object_id.startswith('t'):
+        return TOOL_CHANGER_COLOR
+    elif object_id.startswith('b'):
+        return BEAM_COLOR
+    else:
+        return None
 
 ################################################
 

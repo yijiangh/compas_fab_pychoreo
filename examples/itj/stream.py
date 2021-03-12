@@ -3,6 +3,7 @@ import pybullet
 from termcolor import cprint
 from copy import copy, deepcopy
 from itertools import product
+from collections import defaultdict
 
 from compas.geometry import Frame, distance_point_point, Transformation
 from compas_fab.robots import Configuration
@@ -30,11 +31,11 @@ from .state import set_state
 def fill_in_tool_path(client, robot, traj, group=GANTRY_ARM_GROUP):
     if traj:
         tool_link_name = robot.get_end_effector_link_name(group=group)
+        traj.path_from_link = defaultdict(list)
         with WorldSaver():
             for tj_pt in traj.points:
                 client.set_robot_configuration(robot, tj_pt)
-                tj_pt.path_from_link = {}
-                tj_pt.path_from_link[tool_link_name] = client.get_link_frame_from_name(robot, tool_link_name)
+                traj.path_from_link[tool_link_name].append(client.get_link_frame_from_name(robot, tool_link_name))
     return traj
 
 ##############################
@@ -67,7 +68,7 @@ def compute_linear_movement(client, robot, process, movement, options=None):
     # sampling attempts
     options = options or {}
     gantry_attempts = options.get('gantry_attempts') or 10
-    reachable_range = options.get('reachable_range') or (0.2, 1.5) # (0.68, 2.83)
+    reachable_range = options.get('reachable_range') or (0.2, 2.8) # (0.68, 2.83)
     debug = options.get('debug', False)
 
     # * custom limits
@@ -202,9 +203,11 @@ def compute_linear_movement(client, robot, process, movement, options=None):
         if start_conf is not None and end_conf is not None:
             cprint('Both start/end confs are pre-specified, problem might be too stiff to be solved.', 'yellow')
         if start_conf:
+            cprint('One-sided Cartesian planning : start conf set, forward mode')
             forward = True
             gantry_arm_conf = start_conf
         else:
+            cprint('One-sided Cartesian planning : end conf set, backward mode')
             forward = False
             gantry_arm_conf = end_conf
             interp_frames = interp_frames[::-1]

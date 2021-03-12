@@ -5,8 +5,9 @@ import argparse
 import json
 import sys
 from os import path
+from enum import Enum, unique
 
-from termcolor import cprint
+from termcolor import cprint, colored
 from copy import copy, deepcopy
 
 from pybullet_planning import wait_if_gui, wait_for_duration, wait_for_user, LockRenderer
@@ -24,10 +25,21 @@ from integral_timber_joints.process import RoboticFreeMovement, RoboticLinearMov
 # * Next steps
 # TODO use linkstatistics joint weight and resolutions
 # TODO further smoothing transit/transfer trajectories
+# TODO backtrack in case of subsequent sampling cannot find a solution (linear movement with one end specified)
 
 def print_title(x):
     print('\n\n')
-    cprint(x, 'yellow', 'on_cyan', attrs=['bold'])
+    cprint(x, 'green', 'on_red', attrs=['bold'])
+
+###########################################
+
+@unique
+class MovementStatus(Enum):
+    incorrect_type = 0
+    has_traj = 1
+    one_sided = 2
+    both_done = 3
+    neither_done = 4
 
 ###########################################
 
@@ -52,7 +64,7 @@ def compute_movement(client, robot, process, movement, options=None):
         fm_options.update({
             'rrt_restarts' : 50,
             'rrt_iterations' : 50,
-            'smooth_iterations': 50,
+            'smooth_iterations': 100,
             # 'resolutions' : 0.1,
             'resolutions' : 0.05,
             'max_step' : 0.01
@@ -64,6 +76,7 @@ def compute_movement(client, robot, process, movement, options=None):
     if traj is not None:
         # update start/end states
         movement.trajectory = traj
+        movement.path_from_link = traj.path_from_link
         start_state = process.get_movement_start_state(movement)
         start_state['robot'].kinematic_config = traj.points[0]
         end_state = process.get_movement_end_state(movement)
@@ -82,12 +95,12 @@ def propagate_states(process, sub_movements, all_movements):
         target_start_conf = target_start_state['robot'].kinematic_config
         target_end_conf = target_end_state['robot'].kinematic_config
         print('~~~')
-        print('Propagate states for ({}) : {}'.format(m_id, target_m.short_summary))
+        print('\tPropagate states for ({}) : {}'.format(m_id, target_m.short_summary))
         # * backward fill all adjacent (-1) movements
         back_id = m_id-1
         while back_id > 0 and all_movements[back_id].planning_priority == -1:
             back_m = all_movements[back_id]
-            print('past (backward): ({}) {}'.format(back_id, back_m.short_summary))
+            print('\t- past (backward): ({}) {}'.format(colored(back_id, 'green'), back_m.short_summary))
             back_start_state = process.get_movement_start_state(back_m)
             back_end_state = process.get_movement_end_state(back_m)
             back_end_conf = back_end_state['robot'].kinematic_config
@@ -102,18 +115,75 @@ def propagate_states(process, sub_movements, all_movements):
         forward_id = m_id+1
         while forward_id < len(all_movements) and all_movements[forward_id].planning_priority == -1:
             forward_m = all_movements[forward_id]
-            print('future (forward): ({}) {}'.format(forward_id, forward_m.short_summary))
+            print('\t- future (forward): ({}) {}'.format(colored(forward_id, 'green'), forward_m.short_summary))
             forward_start_state = process.get_movement_start_state(forward_m)
             forward_end_state = process.get_movement_end_state(forward_m)
             forward_start_conf = forward_start_state['robot'].kinematic_config
             if forward_start_conf is not None and not forward_start_conf.close_to(target_end_conf, tol=1e-3):
-                cprint('Start conf not coincided - max diff {}'.format(back_end_conf.max_difference(target_end_conf)), 'red')
+                cprint('End conf not coincided - max diff {}'.format(back_end_conf.max_difference(target_end_conf)), 'red')
                 wait_for_user()
             forward_start_state['robot'].kinematic_config = target_end_conf
             forward_end_state['robot'].kinematic_config = target_end_conf
             forward_id += 1
 
         return all_movements
+
+def get_movement_status(process, m, movement_types):
+    if not isinstance(m, RoboticMovement) or all([not isinstance(m, mt) for mt in movement_types]):
+        return MovementStatus.incorrect_type
+    has_start_conf = process.movement_has_start_robot_config(m)
+    has_end_conf = process.movement_has_end_robot_config(m)
+    has_traj = m.trajectory is not None
+    # special warning
+    if not isinstance(m, RoboticFreeMovement) and \
+            has_start_conf and has_end_conf and not has_traj:
+        cprint('{} has both start, end conf specified, but no traj computed. This is BAD!!'.format(m.short_summary), 'yellow')
+        wait_for_user()
+    # imply(has_traj, has_start_conf and has_end_conf)
+    assert not has_traj or (has_start_conf and has_end_conf)
+    if has_traj:
+        return MovementStatus.has_traj
+    else:
+        if has_start_conf ^ has_end_conf:
+            return MovementStatus.one_sided
+        elif has_start_conf and has_end_conf:
+            return MovementStatus.both_done
+        elif not has_start_conf and not has_end_conf:
+            return MovementStatus.neither_done
+
+def compute_selected_movements(client, robot, process, beam_id, priority, movement_types, movement_status, options=None,
+        viz_upon_found=False, step_sim=False):
+    print('='*20)
+    print_title('* compute {} (priority {}, status {})'.format([mt.__name__ for mt in movement_types], priority, movement_status))
+    all_movements = process.get_movements_by_beam_id(beam_id)
+    selected_movements = process.get_movements_by_planning_priority(beam_id, priority)
+    for m in selected_movements:
+        if get_movement_status(process, m, movement_types) == movement_status:
+            altered_movements = []
+            print('-'*10)
+            m_id = all_movements.index(m)
+            print('({})'.format(m_id))
+            # all_movements[m_id] =
+            compute_movement(client, robot, process, m, options)
+            altered_movements.append(m)
+            if viz_upon_found:
+                with WorldSaver():
+                    visualize_movement_trajectory(client, robot, process, m, step_sim=step_sim)
+
+            if movement_status == MovementStatus.neither_done:
+                m_next_id = m_id + 1
+                while m_next_id < len(all_movements) \
+                    and get_movement_status(process, all_movements[m_next_id], movement_status) == MovementStatus.neither_done \
+                    and all_movements[m_next_id] in selected_movements:
+                    print('({})'.format(m_next_id))
+                    compute_movement(client, robot, process, all_movements[m_next_id], options)
+                    altered_movements.append(all_movements[m_next_id])
+                    m_next_id += 1
+
+            # * propagate to -1 movements
+            propagate_states(process, altered_movements, all_movements)
+
+    process.get_movement_summary_by_beam_id(beam_id)
 
 #################################
 
@@ -172,7 +242,7 @@ def main():
             start_state = process.get_movement_start_state(m)
             end_state = process.get_movement_end_state(m)
             print('----')
-            cprint('{}) {}'.format(i, m.short_summary), 'cyan')
+            cprint('({}) {}'.format(i, m.short_summary), 'cyan')
             set_state(client, robot, process, start_state, options=options)
             wait_if_gui('Start state')
             set_state(client, robot, process, end_state, options=options)
@@ -186,115 +256,26 @@ def main():
 
     with LockRenderer(not (args.debug or args.diagnosis)):
     # with LockRenderer():
-        # * 1) compute Linear movements (priority 1)
-        print_title('1) compute Linear movements (priority 1)')
-        p1_movements = process.get_movements_by_planning_priority(beam_id, 1)
-        for m in p1_movements:
-            print('-'*10)
-            m_id = all_movements.index(m)
-            print('{})'.format(m_id))
-            all_movements[m_id] = compute_movement(client, robot, process, m, options)
-            if args.viz_upon_found:
-                with WorldSaver():
-                    visualize_movement_trajectory(client, robot, process, m, step_sim=args.step_sim)
-        # * 2) propagate (priority 1) movement's start/end state to adjacent (prio -1) movements
-        propagate_states(process, p1_movements, all_movements)
-        process.get_movement_summary_by_beam_id(beam_id)
+        # * compute Linear movements (priority 1)
+        compute_selected_movements(client, robot, process, beam_id, 1, [RoboticLinearMovement, RoboticClampSyncLinearMovement],
+            MovementStatus.neither_done,
+            options=options, viz_upon_found=args.viz_upon_found, step_sim=args.step_sim)
 
-        # * 3) compute linear movements with one state (start OR end) specified
-        print_title('3) compute linear movements with one state (start OR end) specified')
-        p0_movements = process.get_movements_by_planning_priority(beam_id, 0)
-        altered_movements = []
-        for m in p0_movements:
-            if isinstance(m, RoboticLinearMovement):
-                has_start_conf = process.movement_has_start_robot_config(m)
-                has_end_conf = process.movement_has_end_robot_config(m)
-                has_traj = m.trajectory is not None
-                if has_start_conf and has_end_conf and not has_traj:
-                    cprint('{} has both start, end conf specified, but no traj computer. This is BAD!!'.format(m.short_summary), 'yellow')
-                    wait_for_user()
-                if not has_traj and (has_start_conf ^ has_end_conf): # XOR
-                    print('-'*10)
-                    m_id = all_movements.index(m)
-                    print('{})'.format(m_id))
-                    all_movements[m_id] = compute_movement(client, robot, process, m, options)
-                    altered_movements.append(all_movements[m_id])
-                    if args.viz_upon_found:
-                        with WorldSaver():
-                            visualize_movement_trajectory(client, robot, process, m, step_sim=args.step_sim)
-        propagate_states(process, altered_movements, all_movements)
-        process.get_movement_summary_by_beam_id(beam_id)
-        if args.debug:
-            wait_for_user()
+        # * compute linear movements with one state (start OR end) specified
+        compute_selected_movements(client, robot, process, beam_id, 0, [RoboticLinearMovement], MovementStatus.one_sided,
+            options=options, viz_upon_found=args.viz_upon_found, step_sim=args.step_sim)
 
-        # * 5) compute linear movements with neither start nor conf specified
-        print_title('5) compute linear movements with NO state specified')
-        p0_movements = process.get_movements_by_planning_priority(beam_id, 0)
-        altered_movements = []
-        for m in p0_movements:
-            if isinstance(m, RoboticLinearMovement):
-                has_start_conf = process.movement_has_start_robot_config(m)
-                has_end_conf = process.movement_has_end_robot_config(m)
-                has_traj = m.trajectory is not None
-                if has_start_conf and has_end_conf and not has_traj:
-                    cprint('{} has both start, end conf specified, but no traj computed. This is BAD!!'.format(m), 'yellow')
-                    wait_for_user()
-                if not has_traj and (not has_start_conf and not has_end_conf):
-                    print('-'*10)
-                    m_id = all_movements.index(m)
-                    print('{})'.format(m_id))
-                    all_movements[m_id] = compute_movement(client, robot, process, m, options)
-                    altered_movements.append(all_movements[m_id])
-                    if args.viz_upon_found:
-                        with WorldSaver():
-                            visualize_movement_trajectory(client, robot, process, m, step_sim=args.step_sim)
-                    # * 6) propagate to -1 movements
-                    print_title('6) Propagate for no-spec: ({}) {}'.format(m_id, m.short_summary))
-                    propagate_states(process, [m], all_movements)
-        process.get_movement_summary_by_beam_id(beam_id)
-        if args.debug:
-            wait_for_user()
+        # * compute linear movements with neither start nor conf specified
+        compute_selected_movements(client, robot, process, beam_id, 0, [RoboticLinearMovement], MovementStatus.neither_done,
+            options=options, viz_upon_found=args.viz_upon_found, step_sim=args.step_sim)
 
-        # * 6) compute linear movements with one state (start OR end) specified
-        print_title('6) compute linear movements with one state (start OR end) specified')
-        p0_movements = process.get_movements_by_planning_priority(beam_id, 0)
-        altered_movements = []
-        for m in p0_movements:
-            if isinstance(m, RoboticLinearMovement):
-                has_start_conf = process.movement_has_start_robot_config(m)
-                has_end_conf = process.movement_has_end_robot_config(m)
-                has_traj = m.trajectory is not None
-                if has_start_conf and has_end_conf and not has_traj:
-                    cprint('{} has both start, end conf specified, but no traj computer. This is BAD!!'.format(m), 'yellow')
-                    wait_for_user()
-                if not has_traj and (has_start_conf ^ has_end_conf): # XOR
-                    print('-'*10)
-                    m_id = all_movements.index(m)
-                    print('{})'.format(m_id))
-                    all_movements[m_id] = compute_movement(client, robot, process, m, options)
-                    altered_movements.append(all_movements[m_id])
-                    if args.viz_upon_found:
-                        with WorldSaver():
-                            visualize_movement_trajectory(client, robot, process, m, step_sim=args.step_sim)
-        propagate_states(process, altered_movements, all_movements)
-        process.get_movement_summary_by_beam_id(beam_id)
-        if args.debug:
-            wait_for_user()
+        # * compute linear movements with neither start nor conf specified
+        compute_selected_movements(client, robot, process, beam_id, 0, [RoboticLinearMovement], MovementStatus.one_sided,
+            options=options, viz_upon_found=args.viz_upon_found, step_sim=args.step_sim)
 
-        # * 7) compute all free movements, start and end should be both specified by now?
-        print_title('7) Compute free move')
-        for m in p0_movements:
-            if isinstance(m, RoboticFreeMovement):
-                print('-'*10)
-                m_id = all_movements.index(m)
-                print('{})'.format(m_id))
-                all_movements[m_id] = compute_movement(client, robot, process, m, options)
-                if args.viz_upon_found:
-                    with WorldSaver():
-                        visualize_movement_trajectory(client, robot, process, m, step_sim=args.step_sim)
-        process.get_movement_summary_by_beam_id(beam_id)
-        if args.debug:
-            wait_for_user()
+        # * compute all free movements, start and end should be both specified by now?
+        compute_selected_movements(client, robot, process, beam_id, 0, [RoboticFreeMovement], MovementStatus.both_done,
+            options=options, viz_upon_found=args.viz_upon_found, step_sim=args.step_sim)
 
     # * export computed movements
     if args.write:
