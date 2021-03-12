@@ -49,13 +49,20 @@ def compute_movement(client, robot, process, movement, options=None):
     cprint(movement.short_summary, 'cyan')
     options = options or {}
     traj = None
-    if isinstance(movement, RoboticLinearMovement) or \
-       isinstance(movement, RoboticClampSyncLinearMovement):
+    if isinstance(movement, RoboticLinearMovement):
+        lm_options = options.copy()
+        lm_options.update({
+            'max_step' : 0.01, # interpolation step size, in meter
+            'distance_threshold':0.002, # collision checking tolerance
+            'gantry_attempts' : 100,
+            })
+        traj = compute_linear_movement(client, robot, process, movement, lm_options)
+    elif isinstance(movement, RoboticClampSyncLinearMovement):
         lm_options = options.copy()
         # * interpolation step size, in meter
         lm_options.update({
-            'max_step' : 0.01,
-            'distance_threshold':0.002,
+            'max_step' : 0.02, # interpolation step size, in meter
+            'distance_threshold':0.002, # collision checking tolerance
             'gantry_attempts' : 100,
             })
         traj = compute_linear_movement(client, robot, process, movement, lm_options)
