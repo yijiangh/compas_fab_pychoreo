@@ -76,6 +76,7 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
         joint_types = robot.get_joint_types_by_names(joint_names)
 
         # * parse options
+        verbose = is_valid_option(options, 'verbose', False)
         diagnosis = is_valid_option(options, 'diagnosis', False)
         avoid_collisions = options.get('avoid_collisions', True)
         pos_step_size = is_valid_option(options, 'max_step', 0.01)
@@ -138,12 +139,14 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
                 path, cost = plan_cartesian_motion_lg(robot_uid, ik_joints, ee_poses, sample_ik_fn, collision_fn, \
                     jump_threshold=jump_threshold, sample_ee_fn=sample_ee_fn)
 
-                print('Ladder graph cost: {}'.format(cost))
+                if verbose:
+                    print('Ladder graph cost: {}'.format(cost))
             else:
                 raise ValueError('Cartesian planner {} not implemented!', planner_id)
 
         if path is None:
-            cprint('No Cartesian motion found!', 'red')
+            if verbose:
+                cprint('No Cartesian motion found!', 'red')
             return None
         else:
             jt_traj_pts = []

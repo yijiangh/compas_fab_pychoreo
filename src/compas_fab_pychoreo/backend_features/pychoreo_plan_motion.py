@@ -58,6 +58,7 @@ class PyChoreoPlanMotion(PlanMotion):
         robot_uid = robot.attributes['pybullet_uid']
 
         # * parse options
+        verbose = is_valid_option(options, 'verbose', False)
         diagnosis = options.get('diagnosis', False)
         custom_limits = options.get('custom_limits') or {}
         resolutions = options.get('resolutions') or 0.1
@@ -98,7 +99,8 @@ class PyChoreoPlanMotion(PlanMotion):
 
         if path is None:
             # TODO use LOG
-            cprint('No free motion found!', 'red')
+            if verbose:
+                cprint('No free motion found!', 'red')
             return None
         else:
             jt_traj_pts = []
