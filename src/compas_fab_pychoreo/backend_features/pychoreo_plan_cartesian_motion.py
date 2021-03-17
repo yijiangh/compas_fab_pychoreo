@@ -35,6 +35,7 @@ def plan_cartesian_motion_from_links(robot, selected_links, target_link, waypoin
             if sub_kinematic_conf is None:
                 remove_body(sub_robot)
                 return None
+                # continue
             set_joint_positions(sub_robot, sub_movable_joints, sub_kinematic_conf)
             if is_pose_close(get_link_pose(sub_robot, selected_target_link), target_pose, **kwargs):
                 set_joint_positions(robot, selected_movable_joints, sub_kinematic_conf)
@@ -125,6 +126,7 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
             for jt, jt_type in zip(ik_joints, joint_types)})
         planner_id = is_valid_option(options, 'planner_id', 'IterativeIK')
         frame_variant_gen = is_valid_option(options, 'frame_variant_generator', None)
+        ik_function = is_valid_option(options, 'ik_function', None)
 
         # * convert to poses and do workspace linear interpolation
         given_poses = [pose_from_frame(frame_WCF) for frame_WCF in frames_WCF]
@@ -137,6 +139,7 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
         attachments = values_as_list(self.client.pychoreo_attachments)
         collision_fn = PyChoreoConfigurationCollisionChecker(self.client)._get_collision_fn(robot, joint_names, options=options)
 
+        failure_reason = ''
         with WorldSaver():
             # set to start conf
             if start_configuration is not None:
@@ -144,9 +147,12 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
 
             if planner_id == 'IterativeIK':
                 selected_links = [link_from_name(robot_uid, l) for l in robot.get_link_names(group=group)]
-                with HideOutput(not verbose):
+                # with HideOutput(not verbose):
+                with HideOutput():
                     path = plan_cartesian_motion_from_links(robot_uid, selected_links, tool_link,
                         ee_poses, get_sub_conf=False)
+                if path is None:
+                    failure_reason = 'IK plan is not found.'
                 # collision checking is not included in the default Cartesian planning
                 if path is not None and avoid_collisions:
                     for i, conf_val in enumerate(path):
@@ -154,6 +160,7 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
                         for attachment in attachments:
                             attachment.assign()
                         if collision_fn(pruned_conf_val, diagnosis=diagnosis):
+                            failure_reason = 'IK plan is found but collision violated.'
                             path = None
                             break
                         path[i] = pruned_conf_val
@@ -163,9 +170,7 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
                 # get ik fn from client
                 # collision checking is turned off because collision checking is handled inside LadderGraph planner
                 ik_options = {'avoid_collisions' : False, 'return_all' : True}
-                def sample_ik_fn(pose):
-                    configurations = self.client.inverse_kinematics(robot, frame_from_pose(pose), options=ik_options)
-                    return [configuration.values for configuration in configurations if configuration is not None]
+                sample_ik_fn = ik_function or self._get_sample_ik_fn(robot, ik_options)
 
                 # convert ee_variant_fn
                 if frame_variant_gen is not None:
@@ -185,16 +190,28 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
 
         if path is None:
             if verbose:
-                cprint('No Cartesian motion found!', 'red')
+                cprint('No Cartesian motion found, due to {}!'.format(failure_reason), 'red')
             return None
         else:
+            # TODO start_conf might have different number of joints with the given group?
+            start_traj_pt = None
+            if start_configuration is not None:
+                start_traj_pt = JointTrajectoryPoint(values=start_configuration.values, types=start_configuration.types)
+                start_traj_pt.joint_names = start_configuration.joint_names
+
             jt_traj_pts = []
             for i, conf in enumerate(path):
-                # c_conf = Configuration(values=conf, types=joint_types, joint_names=joint_names)
-                jt_traj_pt = JointTrajectoryPoint(values=conf, types=joint_types, time_from_start=Duration(i*1,0))
+                jt_traj_pt = JointTrajectoryPoint(values=conf, types=joint_types)
                 jt_traj_pt.joint_names = joint_names
+                if start_traj_pt is not None:
+                    # ! TrajectoryPoint doesn't copy over joint_names...
+                    jtp = start_traj_pt.copy()
+                    jtp.joint_names = start_traj_pt.joint_names
+                    jtp.merge(jt_traj_pt)
+                    jt_traj_pt = jtp
+                jt_traj_pt.time_from_start = Duration(i*1,0)
                 jt_traj_pts.append(jt_traj_pt)
-            # TODO start_conf might have different number of joints with the given group?
+
             if start_configuration is not None and not start_configuration.close_to(jt_traj_pts[0]): # tol=0.0
                 print()
                 cprint('Joint jump from start conf, max diff {} | start conf {}, traj 0 {}'.format(
@@ -202,7 +219,7 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
                 # return None
             # TODO check intermediate joint jump
             trajectory = JointTrajectory(trajectory_points=jt_traj_pts,
-                joint_names=joint_names, start_configuration=jt_traj_pts[0], fraction=1.0)
+                joint_names=jt_traj_pts[0].joint_names, start_configuration=jt_traj_pts[0], fraction=1.0)
             return trajectory
 
     def _prune_configuration(self, robot_uid, conf_val, joint_names):
@@ -214,3 +231,13 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
             # else:
             #     print(joint_name.decode('UTF-8'))
         return pruned_conf
+
+    def _get_sample_ik_fn(self, robot, ik_options=None):
+        cprint('Ladder graph using client default IK solver.', 'yellow')
+        ik_options = ik_options or {}
+        def sample_ik_fn(pose):
+            # pb pose -> list(conf values)
+            # TODO run random seed here and return a list of confs
+            configurations = self.client.inverse_kinematics(robot, frame_from_pose(pose), options=ik_options)
+            return [configuration.values for configuration in configurations if configuration is not None]
+        return sample_ik_fn

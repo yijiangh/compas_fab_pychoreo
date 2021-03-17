@@ -18,7 +18,7 @@ from compas_fab.robots import Configuration, AttachedCollisionMesh, CollisionMes
 from pybullet_planning import link_from_name, get_link_pose, draw_pose, get_bodies, multiply, Pose, Euler, set_joint_positions, \
     joints_from_names, quat_angle_between, get_collision_fn, create_obj, unit_pose
 from pybullet_planning import wait_if_gui, wait_for_duration, remove_all_debug
-from pybullet_planning import plan_cartesian_motion, plan_cartesian_motion_lg
+from pybullet_planning import plan_cartesian_motion, plan_cartesian_motion_lg, compute_inverse_kinematics
 from pybullet_planning import randomize, elapsed_time, BLUE, GREEN, RED, LockRenderer
 
 import ikfast_abb_irb4600_40_255
@@ -270,6 +270,9 @@ def test_circle_cartesian(fixed_waam_setup, viewer, planner_ik_conf):
         if planner_id == 'LadderGraph':
             client.set_robot_configuration(robot, init_conf)
             st_time = time.time()
+
+            # options.update({'ik_function' : lambda pose: compute_inverse_kinematics(ikfast_abb_irb4600_40_255.get_ik, pose, sampled=[])})
+
             trajectory = client.plan_cartesian_motion(robot, ee_frames_WCF, group=move_group, options=options)
             cprint('W/o frame variant solving time: {}'.format(elapsed_time(st_time)), 'blue')
             cprint('Cost: {}'.format(compute_trajectory_cost(trajectory, init_conf_val=init_conf.values)), 'blue')
