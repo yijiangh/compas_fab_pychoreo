@@ -36,7 +36,7 @@ class PyChoreoConfigurationCollisionChecker(ConfigurationCollisionChecker):
         """
         options = options or {}
         assert len(configuration.joint_names) == len(configuration.values)
-        diagnosis = options.get('diagnosis') or False
+        diagnosis = options.get('diagnosis', False)
         collision_fn = self._get_collision_fn(robot, configuration.joint_names, options)
         return collision_fn(configuration.values, diagnosis=diagnosis)
 
@@ -95,5 +95,4 @@ class PyChoreoConfigurationCollisionChecker(ConfigurationCollisionChecker):
                                         custom_limits=pb_custom_limits,
                                         body_name_from_id=self.client._name_from_body_id,
                                         distance_threshold=distance_threshold)
-                                        # debug=debug
         return collision_fn

@@ -11,7 +11,48 @@ from compas_fab_pychoreo.utils import is_valid_option, values_as_list
 from compas_fab_pychoreo.backend_features.pychoreo_configuration_collision_checker import PyChoreoConfigurationCollisionChecker
 from pybullet_planning import WorldSaver, joints_from_names, plan_cartesian_motion, \
     link_from_name, interpolate_poses, plan_cartesian_motion_lg, get_labeled_configuration
-from pybullet_planning import wait_for_user
+
+from pybullet_planning import HideOutput
+from pybullet_planning import all_between, get_custom_limits, get_movable_joints, set_joint_positions, get_link_pose
+from pybullet_planning import prune_fixed_joints, get_configuration
+from pybullet_planning import inverse_kinematics_helper, is_pose_close, clone_body, remove_body
+
+def plan_cartesian_motion_from_links(robot, selected_links, target_link, waypoint_poses,
+        max_iterations=200, custom_limits={}, get_sub_conf=False, **kwargs):
+    lower_limits, upper_limits = get_custom_limits(robot, get_movable_joints(robot), custom_limits)
+    selected_movable_joints = prune_fixed_joints(robot, selected_links)
+    assert(target_link in selected_links)
+    selected_target_link = selected_links.index(target_link)
+    sub_robot = clone_body(robot, links=selected_links, visual=False, collision=False) # TODO: joint limits
+    sub_movable_joints = get_movable_joints(sub_robot)
+    #null_space = get_null_space(robot, selected_movable_joints, custom_limits=custom_limits)
+    null_space = None
+
+    solutions = []
+    for target_pose in waypoint_poses:
+        for iteration in range(max_iterations):
+            sub_kinematic_conf = inverse_kinematics_helper(sub_robot, selected_target_link, target_pose, null_space=null_space)
+            if sub_kinematic_conf is None:
+                remove_body(sub_robot)
+                return None
+            set_joint_positions(sub_robot, sub_movable_joints, sub_kinematic_conf)
+            if is_pose_close(get_link_pose(sub_robot, selected_target_link), target_pose, **kwargs):
+                set_joint_positions(robot, selected_movable_joints, sub_kinematic_conf)
+                kinematic_conf = get_configuration(robot)
+                if not all_between(lower_limits, kinematic_conf, upper_limits):
+                    remove_body(sub_robot)
+                    return None
+                if not get_sub_conf:
+                    solutions.append(kinematic_conf)
+                else:
+                    solutions.append(sub_kinematic_conf)
+                break
+        else:
+            remove_body(sub_robot)
+            return None
+    remove_body(sub_robot)
+    return solutions
+
 
 class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
     def __init__(self, client):
@@ -72,14 +113,14 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
         base_link = link_from_name(robot_uid, base_link_name)
 
         joint_names = robot.get_configurable_joint_names(group=group)
-        ik_joints = joints_from_names(robot_uid, joint_names)
         joint_types = robot.get_joint_types_by_names(joint_names)
+        ik_joints = joints_from_names(robot_uid, joint_names)
 
         # * parse options
-        verbose = is_valid_option(options, 'verbose', False)
-        diagnosis = is_valid_option(options, 'diagnosis', False)
+        verbose = options.get('verbose', True)
+        diagnosis = options.get('diagnosis', False)
         avoid_collisions = options.get('avoid_collisions', True)
-        pos_step_size = is_valid_option(options, 'max_step', 0.01)
+        pos_step_size = options.get('max_step', 0.01)
         jump_threshold = is_valid_option(options, 'jump_threshold', {jt : math.pi/3 if jt_type == Joint.REVOLUTE else 0.1 \
             for jt, jt_type in zip(ik_joints, joint_types)})
         planner_id = is_valid_option(options, 'planner_id', 'IterativeIK')
@@ -96,18 +137,16 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
         attachments = values_as_list(self.client.pychoreo_attachments)
         collision_fn = PyChoreoConfigurationCollisionChecker(self.client)._get_collision_fn(robot, joint_names, options=options)
 
-        # TODO separate attachment and robot body collision checking
-        # First check attachment & env (here we can give users fine-grained control)
-        # path planning
-        # check attachment and robot
-
         with WorldSaver():
             # set to start conf
             if start_configuration is not None:
                 self.client.set_robot_configuration(robot, start_configuration)
 
             if planner_id == 'IterativeIK':
-                path = plan_cartesian_motion(robot_uid, base_link, tool_link, ee_poses, get_sub_conf=True)
+                selected_links = [link_from_name(robot_uid, l) for l in robot.get_link_names(group=group)]
+                with HideOutput(not verbose):
+                    path = plan_cartesian_motion_from_links(robot_uid, selected_links, tool_link,
+                        ee_poses, get_sub_conf=False)
                 # collision checking is not included in the default Cartesian planning
                 if path is not None and avoid_collisions:
                     for i, conf_val in enumerate(path):
@@ -155,6 +194,7 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
                 jt_traj_pt = JointTrajectoryPoint(values=conf, types=joint_types, time_from_start=Duration(i*1,0))
                 jt_traj_pt.joint_names = joint_names
                 jt_traj_pts.append(jt_traj_pt)
+            # TODO start_conf might have different number of joints with the given group?
             if start_configuration is not None and not start_configuration.close_to(jt_traj_pts[0]): # tol=0.0
                 print()
                 cprint('Joint jump from start conf, max diff {} | start conf {}, traj 0 {}'.format(
@@ -171,4 +211,6 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
         for joint_name, joint_value in zip(conf_val_from_joint_name, conf_val):
             if joint_name in joint_names or joint_name.decode('UTF-8') in joint_names:
                 pruned_conf.append(joint_value)
+            # else:
+            #     print(joint_name.decode('UTF-8'))
         return pruned_conf

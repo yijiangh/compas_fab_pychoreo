@@ -1,17 +1,14 @@
-import pytest
 import os
+import argparse
 import numpy as np
 from math import radians as rad
 from numpy.testing import assert_almost_equal
-import time
-import random
 from termcolor import cprint
 from itertools import product
 
-import cProfile
-import pstats
-
 from compas.datastructures import Mesh
+from compas.robots import RobotModel
+from compas_fab.robots import RobotSemantics
 from compas_fab.robots import Configuration, AttachedCollisionMesh, CollisionMesh
 
 from pybullet_planning import link_from_name, get_link_pose, draw_pose, get_bodies, multiply, Pose, Euler, set_joint_positions, \
@@ -23,7 +20,6 @@ from pybullet_planning import randomize, elapsed_time, GREY, LockRenderer
 # from compas_fab.backends import PyBulletClient
 from compas_fab_pychoreo.client import PyChoreoClient
 from compas_fab_pychoreo.conversions import pose_from_frame, frame_from_pose
-from compas_fab_pychoreo_examples.ik_solver import ik_abb_irb4600_40_255, InverseKinematicsSolver, get_ik_fn_from_ikfast
 
 def to_rlf_robot_full_conf(robot11_confval, robot12_confval, scale=1e-3):
     # convert to full configuration of the RFL robot
@@ -80,11 +76,25 @@ def rfl_camera(scale=1e-3):
     return camera
 
 #####################################
+def rfl_setup():
+    HERE = os.path.dirname(__file__)
+    data_dir = os.path.abspath(os.path.join(HERE, "..", "..", "data", 'robots'))
+    urdf_filename = os.path.join(data_dir, 'rfl_description', 'rfl_description', "urdf", "rfl_pybullet.urdf")
+    srdf_filename = os.path.join(data_dir, 'rfl_description', 'rfl_description', "urdf", "rfl.srdf")
+    model = RobotModel.from_urdf_file(urdf_filename)
+    semantics = RobotSemantics.from_srdf_file(srdf_filename, model)
+    return urdf_filename, semantics
 
-@pytest.mark.collision_check_rfl
-def test_collision_checker(rfl_setup, itj_beam_cm, viewer, diagnosis):
-    # modified from https://github.com/yijiangh/pybullet_planning/blob/dev/tests/test_collisions.py
-    urdf_filename, semantics = rfl_setup
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-v', '--viewer', action='store_true', help='Enables the viewer during planning, default False')
+
+    args = parser.parse_args()
+
+    viewer = args.viewer
+    diagnosis=True
+
+    urdf_filename, semantics = rfl_setup()
     move_group = 'robot11_eaXYZ' # 'robot12_eaYZ'
 
     with PyChoreoClient(viewer=viewer) as client:
@@ -132,14 +142,21 @@ def test_collision_checker(rfl_setup, itj_beam_cm, viewer, diagnosis):
 
         # TODO add more tests
         from pybullet_planning import get_link_subtree, prune_fixed_joints, clone_body, get_movable_joints, get_all_links, \
-            set_color, child_link_from_joint
+            set_color, child_link_from_joint, get_link_name
         first_joint = ik_joints[0]
         target_link = flange_link
 
-        # selected_links = get_link_subtree(robot_uid, first_joint) # TODO: child_link_from_joint?
-        selected_links = [child_link_from_joint(joint) for joint in ik_joints]
-
+        # front_selected_links = [child_link_from_joint(joint) for joint in ik_joints]
+        # rear_selected_links = get_link_subtree(robot_uid, ik_joints[2])
+        # selected_links = list(set(front_selected_links) | set(rear_selected_links))
+        selected_links = [link_from_name(robot_uid, l) for l in robot.get_link_names(group=move_group)]
         selected_movable_joints = prune_fixed_joints(robot_uid, selected_links)
+
+        print('selected_links: ', selected_links)
+        print('selected_links names: ', [get_link_name(robot_uid, l) for l in selected_links])
+        print('all_links names: ', [get_link_name(robot_uid, l) for l in get_all_links(robot_uid)])
+        print('get_link_names: ', robot.get_link_names(group=move_group))
+
         assert(target_link in selected_links)
         selected_target_link = selected_links.index(target_link)
         sub_robot = clone_body(robot_uid, links=selected_links, visual=True, collision=True) # TODO: joint limits
@@ -149,3 +166,5 @@ def test_collision_checker(rfl_setup, itj_beam_cm, viewer, diagnosis):
         # assert not client.configuration_in_collision(conf, group=move_group, options={'diagnosis':True})
         wait_if_gui()
 
+if __name__ == '__main__':
+    main()
