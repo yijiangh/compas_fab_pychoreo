@@ -122,7 +122,7 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
         diagnosis = options.get('diagnosis', False)
         avoid_collisions = options.get('avoid_collisions', True)
         pos_step_size = options.get('max_step', 0.01)
-        jump_threshold = is_valid_option(options, 'jump_threshold', {jt : math.pi/3 if jt_type == Joint.REVOLUTE else 0.1 \
+        jump_threshold = is_valid_option(options, 'jump_threshold', {jt : math.pi/6 if jt_type == Joint.REVOLUTE else 0.1 \
             for jt, jt_type in zip(ik_joints, joint_types)})
         planner_id = is_valid_option(options, 'planner_id', 'IterativeIK')
         frame_variant_gen = is_valid_option(options, 'frame_variant_generator', None)
@@ -214,8 +214,9 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
 
             if start_configuration is not None and not start_configuration.close_to(jt_traj_pts[0]): # tol=0.0
                 print()
-                cprint('Joint jump from start conf, max diff {} | start conf {}, traj 0 {}'.format(
-                    start_configuration.max_difference(jt_traj_pts[0]), start_configuration.values, jt_traj_pts[0].values), 'red')
+                cprint('Joint jump from start conf, max diff {}'.format(start_configuration.max_difference(jt_traj_pts[0])), 'red')
+                cprint('start conf {}'.format(['{:.4f}'.format(v) for v in start_configuration.values]), 'red')
+                cprint('traj pt 0  {}'.format(['{:.4f}'.format(v) for v in jt_traj_pts[0].values]), 'red')
                 # return None
             # TODO check intermediate joint jump
             trajectory = JointTrajectory(trajectory_points=jt_traj_pts,
