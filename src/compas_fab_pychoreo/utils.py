@@ -4,7 +4,7 @@ from collections.abc import Iterable
 
 ###########################################
 
-def values_as_list(dict_data):
+def values_as_list(dict_data : dict) -> list:
     vals = []
     for _, v in dict_data.items():
         if isinstance(v, Iterable):
