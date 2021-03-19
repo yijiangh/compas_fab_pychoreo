@@ -1,4 +1,4 @@
-from compas_fab.robots.configuration import Configuration
+from itertools import product, combinations
 import pybullet
 from collections import defaultdict
 from itertools import combinations
@@ -9,15 +9,14 @@ from pybullet_planning import BASE_LINK, RED, GREY, YELLOW, BLUE
 from pybullet_planning import get_link_pose, link_from_name, get_disabled_collisions, get_all_links
 from pybullet_planning import set_joint_positions
 from pybullet_planning import joints_from_names, get_joint_positions
-from pybullet_planning import inverse_kinematics
-from pybullet_planning import get_movable_joints  # from pybullet_planning.interfaces.robots.joint
-from pybullet_planning import get_joint_names  # from pybullet_planning.interfaces.robots.joint
-from pybullet_planning import set_pose, get_bodies, remove_body, create_attachment, set_color, get_link_name, get_name
+from pybullet_planning import set_pose, create_attachment, set_color, get_name
 from pybullet_planning import add_fixed_constraint, remove_constraint
-from pybullet_planning import draw_pose, get_body_body_disabled_collisions
+from pybullet_planning import draw_pose
+from pybullet_planning import draw_collision_diagnosis, expand_links, pairwise_link_collision, pairwise_link_collision_info
 
 from compas_fab.backends import PyBulletClient
 from compas_fab.backends.pybullet.const import ConstraintInfo
+from compas_fab.robots.configuration import Configuration
 
 from compas_fab_pychoreo.planner import PyChoreoPlanner
 from compas_fab_pychoreo.utils import wildcard_keys
@@ -27,6 +26,7 @@ from .exceptions import CollisionError
 from .exceptions import InverseKinematicsError
 from .conversions import frame_from_pose
 from .conversions import pose_from_frame
+from .utils import values_as_list
 
 class PyChoreoClient(PyBulletClient):
     """Interface to use pybullet as backend via the **pybullet_plannning**.
@@ -295,13 +295,62 @@ class PyChoreoClient(PyBulletClient):
         joint_values = get_joint_positions(robot_uid, joints)
         return Configuration(values=joint_values, types=joint_types, joint_names=joint_names)
 
-    # def configuration_in_collision(self, *args, **kwargs):
-    def check_collisions(self, *args, **kwargs):
-        return self.planner.check_collisions(*args, **kwargs)
-
     def get_link_frame_from_name(self, robot, link_name):
         robot_uid = robot.attributes['pybullet_uid']
         return frame_from_pose(get_link_pose(robot_uid, link_from_name(robot_uid, link_name)))
+
+    ###########################################################
+
+    def check_collisions(self, *args, **kwargs):
+        return self.planner.check_collisions(*args, **kwargs)
+
+    def check_attachment_collisions(self, options=None):
+        options = options or {}
+        diagnosis = options.get('diagnosis', False)
+        distance_threshold = options.get('distance_threshold', 0.0)
+        max_distance = options.get('max_distance', 0.0)
+
+        obstacles, attachments, extra_disabled_collisions = self._get_collision_checking_setup(options)
+        attached_bodies = [att.child for att in attachments]
+
+        return _check_bodies_collisions(attached_bodies, obstacles,
+            extra_disabled_collisions=extra_disabled_collisions, diagnosis=diagnosis, body_name_from_id=self._name_from_body_id,
+            distance_threshold=distance_threshold, max_distance=max_distance)
+
+    def _get_collision_checking_setup(self, options=None):
+        avoid_collisions = options.get('avoid_collisions', True)
+        if avoid_collisions:
+            wildcards = options.get('collision_object_wildcards') or None
+            if wildcards is None:
+                # consider all of them
+                obstacles = values_as_list(self.collision_objects)
+            else:
+                obstacles = []
+                for wc in wildcards:
+                    names = wildcard_keys(self.collision_objects, wc)
+                    for n in names:
+                        obstacles.extend(self.collision_objects[n])
+            # ! doesn't make sense to have a wildcard selection for attached objects
+            attachments = values_as_list(self.pychoreo_attachments)
+
+            # TODO additional disabled collisions in options
+            extra_disabled_collision_names = values_as_list(self.extra_disabled_collision_links)
+            option_disabled_link_names = options.get('extra_disabled_collisions') or set()
+            extra_disabled_collisions = set()
+            for bpair in list(extra_disabled_collision_names) + list(option_disabled_link_names):
+                b1, b1link_name = bpair[0]
+                b2, b2link_name = bpair[1]
+                b1_links = get_all_links(b1) if b1link_name is None else [link_from_name(b1, b1link_name)]
+                b2_links = get_all_links(b2) if b2link_name is None else [link_from_name(b2, b2link_name)]
+                for b1_link, b2_link in product(b1_links, b2_links):
+                    extra_disabled_collisions.add(
+                        ((b1, b1_link), (b2, b2_link))
+                        )
+        else:
+            # only check joint limits, no collision considered
+            obstacles = []
+            attachments = []
+        return obstacles, attachments, extra_disabled_collisions
 
     ########################################
     # ignored collision info (similar to ROS's Allowed Collision Matrix)
@@ -313,3 +362,32 @@ class PyChoreoClient(PyBulletClient):
             return get_disabled_collisions(robot_uid, self_collision_disabled_link_names)
         else:
             return {}
+
+######################################
+
+def _check_bodies_collisions(moving_bodies : list, obstacles : list,
+        extra_disabled_collisions=None, diagnosis=False, body_name_from_id=None, **kwargs) -> bool:
+    extra_disabled_collisions = extra_disabled_collisions or None
+    # print('{} vs. {}'.format(moving_bodies, obstacles))
+    # * body pairs
+    check_body_pairs = list(product(moving_bodies, obstacles)) + list(combinations(moving_bodies, 2))
+    check_body_link_pairs = []
+    for body1, body2 in check_body_pairs:
+        body1, links1 = expand_links(body1)
+        body2, links2 = expand_links(body2)
+        if body1 == body2:
+            continue
+        bb_link_pairs = product(links1, links2)
+        for bb_links in bb_link_pairs:
+            bbll_pair = ((body1, bb_links[0]), (body2, bb_links[1]))
+            if bbll_pair not in extra_disabled_collisions and bbll_pair[::-1] not in extra_disabled_collisions:
+                check_body_link_pairs.append(bbll_pair)
+    # * body - body check
+    for (body1, link1), (body2, link2) in check_body_link_pairs:
+        if pairwise_link_collision(body1, link1, body2, link2, **kwargs):
+            if diagnosis:
+                cr = pairwise_link_collision_info(body1, link1, body2, link2)
+                draw_collision_diagnosis(cr, body_name_from_id=body_name_from_id)
+            return True
+    return False
+

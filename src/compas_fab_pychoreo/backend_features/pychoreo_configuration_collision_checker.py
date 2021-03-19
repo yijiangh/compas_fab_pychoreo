@@ -1,10 +1,9 @@
-from itertools import product
+from itertools import product, combinations
 from pybullet_planning import get_all_links
 from compas_fab_pychoreo.backend_features.configuration_collision_checker import ConfigurationCollisionChecker
 from compas_fab_pychoreo.utils import is_valid_option, values_as_list, wildcard_keys
 
-from pybullet_planning import set_joint_positions, get_link_pose, get_custom_limits, joints_from_names, link_from_name, \
-    get_collision_fn, get_disabled_collisions, WorldSaver, joint_from_name
+from pybullet_planning import get_custom_limits, joints_from_names, link_from_name, get_collision_fn, joint_from_name
 from pybullet_planning import wait_if_gui, get_body_name, RED, BLUE, set_color
 
 class PyChoreoConfigurationCollisionChecker(ConfigurationCollisionChecker):
@@ -44,55 +43,25 @@ class PyChoreoConfigurationCollisionChecker(ConfigurationCollisionChecker):
         """Returns a `pybullet_planning` collision_fn
         """
         robot_uid = robot.attributes['pybullet_uid']
-        self_collisions = options.get('self_collisions', True)
         custom_limits = options.get('custom_limits', {})
         avoid_collisions = options.get('avoid_collisions', True)
+        self_collisions = options.get('self_collisions', True)
         distance_threshold = options.get('distance_threshold', 0.0)
+        max_distance = options.get('max_distance', 0.0)
         debug = options.get('debug', False)
-
-        if avoid_collisions:
-            wildcards = options.get('collision_object_wildcards') or None
-            if wildcards is None:
-                # consider all of them
-                obstacles = values_as_list(self.client.collision_objects)
-            else:
-                obstacles = []
-                for wc in wildcards:
-                    names = wildcard_keys(self.client.collision_objects, wc)
-                    for n in names:
-                        obstacles.extend(self.client.collision_objects[n])
-            # ! doesn't make sense to have a wildcard selection for attached objects
-            attachments = values_as_list(self.client.pychoreo_attachments)
-
-            # TODO additional disabled collisions in options
-            extra_disabled_collision_names = values_as_list(self.client.extra_disabled_collision_links)
-            option_disabled_link_names = options.get('extra_disabled_collisions') or set()
-            extra_disabled_collisions = set()
-            for bpair in list(extra_disabled_collision_names) + list(option_disabled_link_names):
-                b1, b1link_name = bpair[0]
-                b2, b2link_name = bpair[1]
-                b1_links = get_all_links(b1) if b1link_name is None else [link_from_name(b1, b1link_name)]
-                b2_links = get_all_links(b2) if b2link_name is None else [link_from_name(b2, b2link_name)]
-                for b1_link, b2_link in product(b1_links, b2_links):
-                    extra_disabled_collisions.add(
-                        ((b1, b1_link), (b2, b2_link))
-                        )
-        else:
-            # only check joint limits, no collision considered
-            obstacles = []
-            attachments = []
-            self_collisions = False
 
         # * custom joint limits
         ik_joints = joints_from_names(robot_uid, joint_names)
         pb_custom_limits = get_custom_limits(robot_uid, ik_joints,
             custom_limits={joint_from_name(robot_uid, jn) : lims for jn, lims in custom_limits.items()})
 
+        obstacles, attachments, extra_disabled_collisions = self.client._get_collision_checking_setup(options)
+
         collision_fn = get_collision_fn(robot_uid, ik_joints, obstacles=obstacles,
-                                        attachments=attachments, self_collisions=self_collisions,
+                                        attachments=attachments, self_collisions=avoid_collisions and self_collisions,
                                         disabled_collisions=self.client.get_self_collision_link_ids(robot), # get disabled self-collision links (srdf)
                                         extra_disabled_collisions=extra_disabled_collisions,
                                         custom_limits=pb_custom_limits,
                                         body_name_from_id=self.client._name_from_body_id,
-                                        distance_threshold=distance_threshold)
+                                        distance_threshold=distance_threshold, max_distance=max_distance)
         return collision_fn
