@@ -1,3 +1,4 @@
+import numpy as np
 import time
 import math
 from termcolor import cprint
@@ -37,6 +38,7 @@ def plan_cartesian_motion_from_links(robot, selected_links, target_link, waypoin
                 return None
                 # continue
             set_joint_positions(sub_robot, sub_movable_joints, sub_kinematic_conf)
+            # pos_tolerance=1e-3, ori_tolerance=1e-3*np.pi
             if is_pose_close(get_link_pose(sub_robot, selected_target_link), target_pose, **kwargs):
                 set_joint_positions(robot, selected_movable_joints, sub_kinematic_conf)
                 kinematic_conf = get_configuration(robot)
@@ -122,11 +124,15 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
         diagnosis = options.get('diagnosis', False)
         avoid_collisions = options.get('avoid_collisions', True)
         pos_step_size = options.get('max_step', 0.01)
-        jump_threshold = is_valid_option(options, 'jump_threshold', {jt : math.pi/6 if jt_type == Joint.REVOLUTE else 0.1 \
-            for jt, jt_type in zip(ik_joints, joint_types)})
         planner_id = is_valid_option(options, 'planner_id', 'IterativeIK')
+        # * iterative IK options
+        pos_tolerance = is_valid_option(options, 'pos_tolerance', 1e-3)
+        ori_tolerance = is_valid_option(options, 'ori_tolerance', 1e-3*np.pi)
+        # * ladder graph options
         frame_variant_gen = is_valid_option(options, 'frame_variant_generator', None)
         ik_function = is_valid_option(options, 'ik_function', None)
+        jump_threshold = is_valid_option(options, 'jump_threshold', {jt : math.pi/6 if jt_type == Joint.REVOLUTE else 0.1 \
+            for jt, jt_type in zip(ik_joints, joint_types)})
 
         # * convert to poses and do workspace linear interpolation
         given_poses = [pose_from_frame(frame_WCF) for frame_WCF in frames_WCF]
@@ -150,7 +156,7 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
                 # with HideOutput(not verbose):
                 with HideOutput():
                     path = plan_cartesian_motion_from_links(robot_uid, selected_links, tool_link,
-                        ee_poses, get_sub_conf=False)
+                        ee_poses, get_sub_conf=False, pos_tolerance=pos_tolerance, ori_tolerance=ori_tolerance)
                 if path is None:
                     failure_reason = 'IK plan is not found.'
                 # collision checking is not included in the default Cartesian planning
