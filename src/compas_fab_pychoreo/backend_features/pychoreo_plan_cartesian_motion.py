@@ -219,10 +219,12 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
                 jt_traj_pts.append(jt_traj_pt)
 
             if start_configuration is not None and not start_configuration.close_to(jt_traj_pts[0]): # tol=0.0
-                print()
-                cprint('Joint jump from start conf, max diff {}'.format(start_configuration.max_difference(jt_traj_pts[0])), 'red')
-                cprint('start conf {}'.format(['{:.4f}'.format(v) for v in start_configuration.values]), 'red')
-                cprint('traj pt 0  {}'.format(['{:.4f}'.format(v) for v in jt_traj_pts[0].values]), 'red')
+                if verbose:
+                    print()
+                    cprint('Joint jump from start conf, max diff {}'.format(start_configuration.max_difference(jt_traj_pts[0])), 'red')
+                    cprint('start conf {}'.format(['{:.4f}'.format(v) for v in start_configuration.values]), 'red')
+                    cprint('traj pt 0  {}'.format(['{:.4f}'.format(v) for v in jt_traj_pts[0].values]), 'red')
+                pass
                 # return None
             # TODO check intermediate joint jump
             trajectory = JointTrajectory(trajectory_points=jt_traj_pts,
