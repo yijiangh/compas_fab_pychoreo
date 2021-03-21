@@ -6,6 +6,7 @@ from compas_fab.robots import Configuration, JointTrajectory, JointTrajectoryPoi
 from compas.robots import Joint
 from compas_fab.backends.interfaces import PlanCartesianMotion
 from compas_fab.backends.interfaces import InverseKinematics
+from compas_fab.backends.pybullet.utils import redirect_stdout
 
 from compas_fab_pychoreo.conversions import pose_from_frame, frame_from_pose
 from compas_fab_pychoreo.utils import is_valid_option, values_as_list
@@ -154,7 +155,8 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
             if planner_id == 'IterativeIK':
                 selected_links = [link_from_name(robot_uid, l) for l in robot.get_link_names(group=group)]
                 # with HideOutput(not verbose):
-                with HideOutput():
+                # with HideOutput():
+                with redirect_stdout():
                     path = plan_cartesian_motion_from_links(robot_uid, selected_links, tool_link,
                         ee_poses, get_sub_conf=False, pos_tolerance=pos_tolerance, ori_tolerance=ori_tolerance)
                 if path is None:
