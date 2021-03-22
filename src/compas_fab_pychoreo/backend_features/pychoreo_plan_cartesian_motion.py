@@ -154,11 +154,10 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
 
             if planner_id == 'IterativeIK':
                 selected_links = [link_from_name(robot_uid, l) for l in robot.get_link_names(group=group)]
-                # with HideOutput(not verbose):
                 # with HideOutput():
-                with redirect_stdout():
-                    path = plan_cartesian_motion_from_links(robot_uid, selected_links, tool_link,
-                        ee_poses, get_sub_conf=False, pos_tolerance=pos_tolerance, ori_tolerance=ori_tolerance)
+                # with redirect_stdout():
+                path = plan_cartesian_motion_from_links(robot_uid, selected_links, tool_link,
+                    ee_poses, get_sub_conf=False, pos_tolerance=pos_tolerance, ori_tolerance=ori_tolerance)
                 if path is None:
                     failure_reason = 'IK plan is not found.'
                 # collision checking is not included in the default Cartesian planning
