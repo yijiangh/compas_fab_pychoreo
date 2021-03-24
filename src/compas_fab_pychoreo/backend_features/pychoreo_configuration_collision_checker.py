@@ -34,7 +34,7 @@ class PyChoreoConfigurationCollisionChecker(ConfigurationCollisionChecker):
             True if in collision, False otherwise
         """
         options = options or {}
-        assert len(configuration.joint_names) == len(configuration.values)
+        assert len(configuration.joint_names) == len(configuration.values), '{} - {}'.format(configuration.joint_names, configuration.values)
         diagnosis = options.get('diagnosis', False)
         collision_fn = self._get_collision_fn(robot, configuration.joint_names, options)
         return collision_fn(configuration.values, diagnosis=diagnosis)
