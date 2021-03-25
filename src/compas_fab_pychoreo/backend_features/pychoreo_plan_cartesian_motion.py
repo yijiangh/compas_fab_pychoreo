@@ -9,9 +9,9 @@ from compas_fab.backends.interfaces import InverseKinematics
 from compas_fab.backends.pybullet.utils import redirect_stdout
 
 from compas_fab_pychoreo.conversions import pose_from_frame, frame_from_pose
-from compas_fab_pychoreo.utils import is_valid_option, values_as_list
+from compas_fab_pychoreo.utils import is_valid_option, values_as_list, compare_configurations
 from compas_fab_pychoreo.backend_features.pychoreo_configuration_collision_checker import PyChoreoConfigurationCollisionChecker
-from pybullet_planning import WorldSaver, joints_from_names, plan_cartesian_motion, \
+from pybullet_planning import WorldSaver, joints_from_names, joint_from_name, \
     link_from_name, interpolate_poses, plan_cartesian_motion_lg, get_labeled_configuration
 
 from pybullet_planning import HideOutput
@@ -98,9 +98,9 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
               points. If the distance is found to be above this threshold, the
               path computation fails. It must be specified in relation to max_step.
               If this threshold is ``0``, 'jumps' might occur, resulting in an invalid
-              cartesian path. Defaults to :math:`\\pi / 2`.
+              cartesian path.
+              Defaults to :math:`\\pi / 6` for revolute or continuous joints, 0.1 for prismatic joints.
 
-              # TODO: jump_threshold
               # TODO: JointConstraint
 
         Returns
@@ -126,14 +126,16 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
         avoid_collisions = options.get('avoid_collisions', True)
         pos_step_size = options.get('max_step', 0.01)
         planner_id = is_valid_option(options, 'planner_id', 'IterativeIK')
+        jump_threshold = is_valid_option(options, 'jump_threshold', {jt_name : math.pi/6 \
+            if jt_type in [Joint.REVOLUTE, Joint.CONTINUOUS] else 0.1 \
+            for jt_name, jt_type in zip(joint_names, joint_types)})
+        jump_threshold_from_joint = {joint_from_name(robot_uid, jt_name) : j_diff for jt_name, j_diff in jump_threshold.items()}
         # * iterative IK options
         pos_tolerance = is_valid_option(options, 'pos_tolerance', 1e-3)
         ori_tolerance = is_valid_option(options, 'ori_tolerance', 1e-3*np.pi)
         # * ladder graph options
         frame_variant_gen = is_valid_option(options, 'frame_variant_generator', None)
         ik_function = is_valid_option(options, 'ik_function', None)
-        jump_threshold = is_valid_option(options, 'jump_threshold', {jt : math.pi/6 if jt_type == Joint.REVOLUTE else 0.1 \
-            for jt, jt_type in zip(ik_joints, joint_types)})
 
         # * convert to poses and do workspace linear interpolation
         given_poses = [pose_from_frame(frame_WCF) for frame_WCF in frames_WCF]
@@ -188,7 +190,7 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
                     sample_ee_fn = None
 
                 path, cost = plan_cartesian_motion_lg(robot_uid, ik_joints, ee_poses, sample_ik_fn, collision_fn, \
-                    jump_threshold=jump_threshold, sample_ee_fn=sample_ee_fn)
+                    jump_threshold=jump_threshold_from_joint, sample_ee_fn=sample_ee_fn)
 
                 if verbose:
                     print('Ladder graph cost: {}'.format(cost))
@@ -219,12 +221,12 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
                 jt_traj_pt.time_from_start = Duration(i*1,0)
                 jt_traj_pts.append(jt_traj_pt)
 
-            if start_configuration is not None and not start_configuration.close_to(jt_traj_pts[0]): # tol=0.0
-                if verbose:
-                    print()
-                    cprint('Joint jump from start conf, max diff {}'.format(start_configuration.max_difference(jt_traj_pts[0])), 'red')
-                    cprint('start conf {}'.format(['{:.4f}'.format(v) for v in start_configuration.values]), 'red')
-                    cprint('traj pt 0  {}'.format(['{:.4f}'.format(v) for v in jt_traj_pts[0].values]), 'red')
+            if start_configuration is not None and not compare_configurations(start_configuration, jt_traj_pts[0], jump_threshold, verbose=verbose):
+                # if verbose:
+                #     print()
+                #     cprint('Joint jump from start conf, max diff {}'.format(start_configuration.max_difference(jt_traj_pts[0])), 'red')
+                #     cprint('start conf {}'.format(['{:.4f}'.format(v) for v in start_configuration.values]), 'red')
+                #     cprint('traj pt 0  {}'.format(['{:.4f}'.format(v) for v in jt_traj_pts[0].values]), 'red')
                 pass
                 # return None
             # TODO check intermediate joint jump

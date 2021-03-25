@@ -1,6 +1,7 @@
 import logging
 import re
 from collections.abc import Iterable
+from compas.robots import Joint
 
 ###########################################
 
@@ -40,3 +41,18 @@ def wildcard_keys(data, wildcard):
     return matched_keys
 
 ############################################
+
+def compare_configurations(conf1, conf2, diff_tol_from_joint_names, fallback_tol=1e-3, verbose=True):
+    joint_names = conf1.joint_names
+    is_diff = False
+    for i, diff in enumerate(conf1.iter_differences(conf2)):
+        # cprint('Joint #{} diff: {}'.format(joint_names[i], diff), 'yellow')
+        tol = diff_tol_from_joint_names[joint_names[i]] if joint_names[i] in diff_tol_from_joint_names \
+            else fallback_tol
+        if abs(diff) > tol:
+            if verbose:
+                print('Joint #{} (revolution) jump: {:.4f} | tol: {:.4f}'.format(joint_names[i],
+                    abs(diff), tol))
+            is_diff = True
+    return is_diff
+
