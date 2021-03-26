@@ -43,7 +43,7 @@ def wildcard_keys(data, wildcard):
 ############################################
 
 def compare_configurations(conf1, conf2, diff_tol_from_joint_names, fallback_tol=1e-3, verbose=True):
-    joint_names = conf1.joint_names
+    joint_names = conf1.joint_names or conf2.joint_names
     is_diff = False
     for i, diff in enumerate(conf1.iter_differences(conf2)):
         # cprint('Joint #{} diff: {}'.format(joint_names[i], diff), 'yellow')
