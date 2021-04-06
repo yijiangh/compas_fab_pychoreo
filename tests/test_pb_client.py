@@ -59,7 +59,7 @@ def compute_trajectory_cost(trajectory, init_conf_val=np.zeros(6)):
 
 @pytest.mark.collision_check_abb
 @pytest.mark.parametrize("tool_type", [
-    # ('static'),
+    ('static'),
     ('actuated'),
     ])
 def test_collision_checker(abb_irb4600_40_255_setup, itj_TC_g1_cms, itj_beam_cm, column_obstacle_cm, base_plate_cm,
@@ -178,12 +178,13 @@ def test_collision_checker(abb_irb4600_40_255_setup, itj_TC_g1_cms, itj_beam_cm,
         vals = [-0.12217304763960307, -0.73303828583761843, 0.83775804095727824, -2.4609142453120048, 1.2391837689159739, -0.85521133347722145]
         conf1 = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
         assert not client.check_collisions(robot, conf1, options={'diagnosis':diagnosis})
+        wait_if_gui()
 
         vals = [-0.12217304763960307, -0.73303828583761843, 0.83775804095727824, -2.4958208303518914, -1.5533430342749532, -0.85521133347722145]
         conf2 = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
         assert not client.check_collisions(robot, conf2, options={'diagnosis':diagnosis})
+        wait_if_gui()
 
-        print(client._name_from_body_id)
         assert client.check_sweeping_collisions(robot, conf1, conf2, options={'diagnosis':diagnosis})
 
         wait_if_gui("Finished.")

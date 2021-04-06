@@ -4,7 +4,7 @@ from collections import defaultdict
 from itertools import combinations
 from termcolor import cprint
 
-from pybullet_planning import HideOutput, CLIENTS, load_pybullet
+from pybullet_planning import HideOutput, CLIENTS, load_pybullet, INFO_FROM_BODY, ModelInfo
 from pybullet_planning import BASE_LINK, RED, GREY, YELLOW, BLUE
 from pybullet_planning import get_link_pose, link_from_name, get_disabled_collisions, get_all_links
 from pybullet_planning import set_joint_positions
@@ -77,6 +77,7 @@ class PyChoreoClient(PyBulletClient):
         name = collision_mesh.id
         for body in self.collision_objects[name]:
             set_color(body, color)
+            # INFO_FROM_BODY[self.client.client_id, body] = ModelInfo(None, path, False, 1.0)
 
     def add_tool_from_urdf(self, tool_name, urdf_file):
         # TODO return compas_fab Tool class
@@ -84,6 +85,7 @@ class PyChoreoClient(PyBulletClient):
         with HideOutput(not self.verbose):
             tool_robot = load_pybullet(urdf_file, fixed_base=False)
         self.collision_objects[tool_name] = [tool_robot]
+        # INFO_FROM_BODY[self.client.client_id, tool_robot] = ModelInfo(tool_name, urdf_file, False, 1.0)
 
     def add_attached_collision_mesh(self, attached_collision_mesh, options=None):
         """Adds an attached collision object to the planning scene, the grasp pose is set according to the

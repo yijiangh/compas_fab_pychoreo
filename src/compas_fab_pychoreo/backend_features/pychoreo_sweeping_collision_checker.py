@@ -9,7 +9,7 @@ from pybullet_planning import get_custom_limits, joints_from_names, link_from_na
     draw_collision_diagnosis, BASE_LINK, get_num_links
 from pybullet_planning import vertices_from_rigid, Ray, batch_ray_collision, draw_ray
 
-# from pybullet_planning import wait_if_gui, get_body_name, RED, BLUE, set_color,
+from pybullet_planning import wait_if_gui, get_body_name, RED, BLUE, set_color, add_line, apply_affine, get_pose
 
 def get_attachment_sweeping_collision_fn(body, joints, obstacles=[],
                     attachments=[],
@@ -25,29 +25,35 @@ def get_attachment_sweeping_collision_fn(body, joints, obstacles=[],
             attachment.assign()
         for attached_body in attached_bodies:
             attached_body, body_links = expand_links(attached_body)
+            world_from_body = get_pose(attached_body)
             for body_link in body_links:
                 if get_num_links(attached_body) != 0 and body_link == BASE_LINK:
                     continue
-                lines_from_body[attached_body].append(vertices_from_rigid(attached_body, body_link))
+                updated_vertices = apply_affine(world_from_body, vertices_from_rigid(attached_body, body_link))
+                lines_from_body[attached_body].append(updated_vertices)
 
         set_joint_positions(body, joints, q2)
         for attachment in attachments:
             attachment.assign()
         for attached_body in attached_bodies:
             attached_body, body_links = expand_links(attached_body)
+            world_from_body = get_pose(attached_body)
             for body_link in body_links:
                 if get_num_links(attached_body) != 0 and body_link == BASE_LINK:
                     continue
-                lines_from_body[attached_body].append(vertices_from_rigid(attached_body, body_link))
+                updated_vertices = apply_affine(world_from_body, vertices_from_rigid(attached_body, body_link))
+                lines_from_body[attached_body].append(updated_vertices)
 
         rays = []
         for lines in lines_from_body.values():
             for start, end in zip(lines[0], lines[1]):
                 rays.append(Ray(start, end))
+                add_line(start, end)
 
         # * body - body check
         for ray, ray_result in zip(rays, batch_ray_collision(rays)):
             if ray_result.objectUniqueId in obstacles:
+                print(ray_result)
                 if diagnosis:
                     draw_ray(ray, ray_result)
                 return True
