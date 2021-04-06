@@ -304,6 +304,9 @@ class PyChoreoClient(PyBulletClient):
     def check_collisions(self, *args, **kwargs):
         return self.planner.check_collisions(*args, **kwargs)
 
+    def check_sweeping_collisions(self, *args, **kwargs):
+        return self.planner.check_sweeping_collisions(*args, **kwargs)
+
     def check_attachment_collisions(self, options=None):
         options = options or {}
         diagnosis = options.get('diagnosis', False)
