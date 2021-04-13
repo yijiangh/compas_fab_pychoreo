@@ -5,6 +5,7 @@ from compas_fab.backends.interfaces.client import PlannerInterface
 
 from compas_fab_pychoreo.backend_features.pychoreo_inverse_kinematics import PyChoreoInverseKinematics
 from compas_fab_pychoreo.backend_features.pychoreo_configuration_collision_checker import PyChoreoConfigurationCollisionChecker
+from compas_fab_pychoreo.backend_features.pychoreo_sweeping_collision_checker import PyChoreoSweepingCollisionChecker
 from compas_fab_pychoreo.backend_features.pychoreo_plan_cartesian_motion import PyChoreoPlanCartesianMotion
 from compas_fab_pychoreo.backend_features.pychoreo_plan_motion import PyChoreoPlanMotion
 
@@ -40,6 +41,9 @@ class PyChoreoPlanner(PlannerInterface):
     # def configuration_in_collision(self, *args, **kwargs):
     def check_collisions(self, *args, **kwargs):
         return PyChoreoConfigurationCollisionChecker(self.client)(*args, **kwargs)
+
+    def check_sweeping_collisions(self, *args, **kwargs):
+        return PyChoreoSweepingCollisionChecker(self.client)(*args, **kwargs)
 
     ###################################################
 
