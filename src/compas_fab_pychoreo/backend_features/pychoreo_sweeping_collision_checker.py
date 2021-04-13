@@ -25,11 +25,8 @@ def get_attachment_sweeping_collision_fn(body, joints, obstacles=[],
             attachment.assign()
         for attached_body in attached_bodies:
             attached_body, body_links = expand_links(attached_body)
-            world_from_body = get_pose(attached_body)
             for body_link in body_links:
-                if get_num_links(attached_body) != 0 and body_link == BASE_LINK:
-                    continue
-                updated_vertices = apply_affine(world_from_body, vertices_from_rigid(attached_body, body_link))
+                updated_vertices = vertices_from_rigid(attached_body, body_link)
                 lines_from_body[attached_body].append(updated_vertices)
 
         set_joint_positions(body, joints, q2)
@@ -37,23 +34,20 @@ def get_attachment_sweeping_collision_fn(body, joints, obstacles=[],
             attachment.assign()
         for attached_body in attached_bodies:
             attached_body, body_links = expand_links(attached_body)
-            world_from_body = get_pose(attached_body)
             for body_link in body_links:
-                if get_num_links(attached_body) != 0 and body_link == BASE_LINK:
-                    continue
-                updated_vertices = apply_affine(world_from_body, vertices_from_rigid(attached_body, body_link))
+                updated_vertices = vertices_from_rigid(attached_body, body_link)
                 lines_from_body[attached_body].append(updated_vertices)
 
         rays = []
         for lines in lines_from_body.values():
             for start, end in zip(lines[0], lines[1]):
                 rays.append(Ray(start, end))
-                add_line(start, end)
+                # if diagnosis:
+                #     add_line(start, end)
 
         # * body - body check
         for ray, ray_result in zip(rays, batch_ray_collision(rays)):
             if ray_result.objectUniqueId in obstacles:
-                print(ray_result)
                 if diagnosis:
                     draw_ray(ray, ray_result)
                 return True
@@ -103,10 +97,11 @@ class PyChoreoSweepingCollisionChecker(SweepingCollisionChecker):
         distance_threshold = options.get('distance_threshold', 0.0)
         max_distance = options.get('max_distance', 0.0)
         debug = options.get('debug', False)
+        line_width = options.get('line_width', 1)
 
         # * custom joint limits
         ik_joints = joints_from_names(robot_uid, joint_names)
         obstacles, attachments, extra_disabled_collisions = self.client._get_collision_checking_setup(options)
         sweeping_collision_fn = get_attachment_sweeping_collision_fn(robot_uid, ik_joints, obstacles=obstacles,
-                                        attachments=attachments)
+                                        attachments=attachments, width=line_width)
         return sweeping_collision_fn
