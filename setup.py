@@ -13,11 +13,8 @@ from setuptools.command.install import install
 
 
 requirements = [
-    # Until COMPAS reaches 1.0, we pin major.minor and allow patch version updates
-    # 'compas>=0.16.9',
-    # 'compas_fab>=0.12.0',
-    'compas>=0.17.2,<0.18',
-    'compas_fab>=0.13.1',
+    'compas>=1.0,<2.0',
+    'compas_fab>=0.16,<0.17',
     'pybullet_planning>=0.5.1',
     'ikfast_pybind>=0.1.0',
     'termcolor',

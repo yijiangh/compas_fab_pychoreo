@@ -4,11 +4,10 @@ import pytest
 from compas.geometry import Frame
 from compas.datastructures import Mesh
 from compas.robots import RobotModel
-from compas.robots import LocalPackageMeshLoader
-from compas_fab.robots import Robot
 from compas_fab.robots import RobotSemantics
 from compas_fab.robots import Tool
-from compas_fab.robots import Configuration, AttachedCollisionMesh, CollisionMesh
+from compas_fab.robots import CollisionMesh
+from compas_fab_pychoreo.conversions import transformation_from_pose, pose_from_transformation
 
 def parse_collision_mesh_from_path(dir_path, filename, scale=1e-3):
     file_path = os.path.join(dir_path, filename)
@@ -24,12 +23,12 @@ def parse_collision_mesh_from_path(dir_path, filename, scale=1e-3):
     return cm
 
 def parse_collision_meshes_from_dir(dir_path, scale=1e-3):
-    cms = []
+    cm_from_name = {}
     for filename in sorted(os.listdir(dir_path)):
         cm = parse_collision_mesh_from_path(dir_path, filename, scale)
         if cm is not None:
-            cms.append(cm)
-    return cms
+            cm_from_name[cm.id] = cm
+    return cm_from_name
 
 ########################################
 
@@ -69,19 +68,53 @@ def rfl_setup():
     return urdf_filename, semantics
 
 @pytest.fixture
-def itj_TC_PG500_cms():
+def itj_TC_g1_cms():
     HERE = os.path.dirname(__file__)
-    tc_dir_path = os.path.abspath(os.path.join(HERE, "..", "data", 'itj_TC'))
-    cms = parse_collision_meshes_from_dir(tc_dir_path)
-    pg1000_dir_path = os.path.abspath(os.path.join(HERE, "..", "data", 'itj_PG500'))
-    cms.extend(parse_collision_meshes_from_dir(pg1000_dir_path))
-    return cms
+    tc_dir_path = os.path.abspath(os.path.join(HERE, "..", "data", 'TC_static'))
+    cm_from_name = parse_collision_meshes_from_dir(tc_dir_path)
+    g1_dir_path = os.path.abspath(os.path.join(HERE, "..", "data", 'g1_static'))
+    cm_from_name.update(parse_collision_meshes_from_dir(g1_dir_path))
+    return cm_from_name
+
+@pytest.fixture
+def itj_tool_changer_urdf_path():
+    HERE = os.path.dirname(__file__)
+    urdf_path = os.path.abspath(os.path.join(HERE, "..", "data", 'TC3_Igus', 'urdf', 'TC3_Igus.urdf'))
+    return urdf_path
+
+@pytest.fixture
+def itj_g1_urdf_path():
+    HERE = os.path.dirname(__file__)
+    urdf_path = os.path.abspath(os.path.join(HERE, "..", "data", 'g1', 'urdf', 'g1.urdf'))
+    return urdf_path
 
 @pytest.fixture
 def itj_beam_cm():
     HERE = os.path.dirname(__file__)
     data_dir = os.path.abspath(os.path.join(HERE, "..", "data"))
     return parse_collision_mesh_from_path(data_dir, "itj_beam_b2.obj")
+
+##########################################
+
+@pytest.fixture
+def itj_tool_changer_grasp_transf():
+    # gripper_from_object
+    grasp_pose = ((0, 0, 0), (0, 0, 0, 1))
+    return transformation_from_pose(grasp_pose)
+
+@pytest.fixture
+def itj_gripper_grasp_transf():
+    # gripper_from_object
+    grasp_pose = ((0, 0, 0.0663), (0, 0, 0, 1))
+    return transformation_from_pose(grasp_pose)
+
+@pytest.fixture
+def itj_beam_grasp_transf():
+    # gripper_from_object
+    grasp_pose = ((0, 0, 0.0), (0, 0, 0, 1))
+    return transformation_from_pose(grasp_pose)
+
+##########################################
 
 @pytest.fixture
 def base_plate_cm():
