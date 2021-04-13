@@ -18,4 +18,4 @@ $ git submodule update --init --recursive
 
 ## Documentation
 
-A development journal can be found [here](https://docs.google.com/document/d/1iWSzxXZkS72vfJJMGflXAZhpGFig4QMZsQWk8Bve9YA/edit?usp=sharing).
+<!-- A development journal can be found [here](https://docs.google.com/document/d/1iWSzxXZkS72vfJJMGflXAZhpGFig4QMZsQWk8Bve9YA/edit?usp=sharing). -->

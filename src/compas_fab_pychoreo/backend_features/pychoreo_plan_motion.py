@@ -1,4 +1,5 @@
 import time
+from termcolor import cprint
 from compas_fab.backends.interfaces import PlanMotion
 from compas_fab.backends.interfaces import InverseKinematics
 from compas_fab.robots import JointTrajectory, Duration, JointTrajectoryPoint, Configuration
@@ -57,13 +58,16 @@ class PyChoreoPlanMotion(PlanMotion):
         robot_uid = robot.attributes['pybullet_uid']
 
         # * parse options
-        diagnosis = is_valid_option(options, 'diagnosis', False)
-        custom_limits = is_valid_option(options, 'custom_limits', {})
-        resolutions = is_valid_option(options, 'resolutions', 0.1)
-        weights = is_valid_option(options, 'weights', None)
-        # # TODO: compute default joint weight as np.reciprocal(joint velocity bound) from URDF
-        # JOINT_WEIGHTS = np.reciprocal([6.28318530718, 5.23598775598, 6.28318530718,
-        #                        6.6497044501, 6.77187749774, 10.7337748998]) # sec / radian
+        verbose = is_valid_option(options, 'verbose', False)
+        diagnosis = options.get('diagnosis', False)
+        custom_limits = options.get('custom_limits') or {}
+        resolutions = options.get('resolutions') or 0.1
+        weights = options.get('weights') or None
+        rrt_restarts = options.get('rrt_restarts', 2)
+        rrt_iterations = options.get('rrt_iterations', 20)
+        smooth_iterations = options.get('smooth_iterations', 20)
+        # TODO: auto compute joint weight
+        # print('plan motion options: ', options)
 
         # * convert link/joint names to pybullet indices
         joint_names = robot.get_configurable_joint_names(group=group)
@@ -71,12 +75,12 @@ class PyChoreoPlanMotion(PlanMotion):
         joint_types = robot.get_joint_types_by_names(joint_names)
         pb_custom_limits = get_custom_limits(robot_uid, ik_joints,
             custom_limits={joint_from_name(robot_uid, jn) : lims for jn, lims in custom_limits.items()})
+        # print('pb custom limits: ', list(pb_custom_limits))
 
         with WorldSaver():
-            # set to start conf
             if start_configuration is not None:
-                start_conf_vals = start_configuration.values
-                set_joint_positions(robot_uid, ik_joints, start_conf_vals)
+                # * set to start conf
+                self.client.set_robot_configuration(robot, start_configuration)
             sample_fn = get_sample_fn(robot_uid, ik_joints, custom_limits=pb_custom_limits)
             distance_fn = get_distance_fn(robot_uid, ik_joints, weights=weights)
             extend_fn = get_extend_fn(robot_uid, ik_joints, resolutions=resolutions)
@@ -89,12 +93,14 @@ class PyChoreoPlanMotion(PlanMotion):
 
             if not check_initial_end(start_conf, end_conf, collision_fn, diagnosis=diagnosis):
                 return None
-            path = birrt(start_conf, end_conf, distance_fn, sample_fn, extend_fn, collision_fn)
+            path = birrt(start_conf, end_conf, distance_fn, sample_fn, extend_fn, collision_fn,
+                restarts=rrt_restarts, iterations=rrt_iterations, smooth=smooth_iterations)
             #return plan_lazy_prm(start_conf, end_conf, sample_fn, extend_fn, collision_fn)
 
         if path is None:
             # TODO use LOG
-            print('No free motion found!')
+            if verbose:
+                cprint('No free motion found!', 'red')
             return None
         else:
             jt_traj_pts = []

@@ -18,7 +18,7 @@ from pybullet_planning import link_from_name, get_link_pose, draw_pose, get_bodi
     joints_from_names, quat_angle_between, get_collision_fn, create_obj, unit_pose, set_camera_pose
 from pybullet_planning import wait_if_gui, wait_for_duration
 from pybullet_planning import plan_cartesian_motion, plan_cartesian_motion_lg
-from pybullet_planning import randomize, elapsed_time, GREY
+from pybullet_planning import randomize, elapsed_time, GREY, LockRenderer
 
 # from compas_fab.backends import PyBulletClient
 from compas_fab_pychoreo.client import PyChoreoClient
@@ -34,19 +34,14 @@ def to_rlf_robot_full_conf(robot11_confval, robot12_confval, scale=1e-3):
                        0, 0, 0, 0, 0, 0]
     return Configuration(
         values = (
-            # robot11[0],
-            # robot11[1], robot11[2],
-            # rad(robot11[3]), rad(robot11[4]), rad(robot11[5]), rad(robot11[6]), rad(robot11[7]), rad(robot11[8]),
             *[robot11_confval[i]*scale for i in range(0, 3)],
             *[rad(robot11_confval[i]) for i in range(3, 9)],
-            # robot12[0], robot12[1],
-            # rad(robot12[2]), rad(robot12[3]), rad(robot12[4]), rad(robot12[5]), rad(robot12[6]), rad(robot12[7]),
             *[robot12_confval[i]*scale for i in range(0, 2)],
             *[rad(robot12_confval[i]) for i in range(2, 8)],
             # below fixed
-            *[robot21_confval[i]*scale for i in range(0, 3)],
+            *[robot21_confval[i]*1e-3 for i in range(0, 3)],
             *[rad(robot21_confval[i]) for i in range(3, 9)],
-            *[robot22_confval[i]*scale for i in range(0, 2)],
+            *[robot22_confval[i]*1e-3 for i in range(0, 2)],
             *[rad(robot22_confval[i]) for i in range(2, 8)],
             ),
         types = (
@@ -87,14 +82,15 @@ def rfl_camera(scale=1e-3):
 #####################################
 
 @pytest.mark.collision_check_rfl
-def test_collision_checker(rfl_setup, itj_TC_PG500_cms, itj_beam_cm, viewer, diagnosis):
+def test_collision_checker(rfl_setup, itj_beam_cm, viewer, diagnosis):
     # modified from https://github.com/yijiangh/pybullet_planning/blob/dev/tests/test_collisions.py
     urdf_filename, semantics = rfl_setup
-    move_group = 'robot12_eaYZ'
+    move_group = 'robot11_eaXYZ' # 'robot12_eaYZ'
 
     with PyChoreoClient(viewer=viewer) as client:
         cprint(urdf_filename, 'green')
-        robot = client.load_robot(urdf_filename)
+        with LockRenderer():
+            robot = client.load_robot(urdf_filename)
         robot.semantics = semantics
         robot_uid = client.get_robot_pybullet_uid(robot)
 
@@ -103,8 +99,8 @@ def test_collision_checker(rfl_setup, itj_TC_PG500_cms, itj_beam_cm, viewer, dia
         flange_link_name = robot.get_end_effector_link_name(group=move_group)
 
         ee_touched_link_names = ['robot12_tool0', 'robot12_link_6']
-        ee_acms = [AttachedCollisionMesh(ee_cm, flange_link_name, ee_touched_link_names) for ee_cm in itj_TC_PG500_cms]
-        beam_acm = AttachedCollisionMesh(itj_beam_cm, flange_link_name, ee_touched_link_names)
+        # ee_acms = [AttachedCollisionMesh(ee_cm, flange_link_name, ee_touched_link_names) for ee_cm in itj_TC_PG500_cms]
+        # beam_acm = AttachedCollisionMesh(itj_beam_cm, flange_link_name, ee_touched_link_names)
 
         draw_pose(unit_pose(), length=1.)
 
@@ -112,27 +108,42 @@ def test_collision_checker(rfl_setup, itj_TC_PG500_cms, itj_beam_cm, viewer, dia
         set_camera_pose(cam['target'], cam['location'])
 
         ik_joints = joints_from_names(robot_uid, ik_joint_names)
-        # tool_link = link_from_name(client.robot_uid, tool_link_name)
-        # robot_base_link = link_from_name(client.robot_uid, base_link_name)
+        flange_link = link_from_name(robot_uid, flange_link_name)
+        # robot_base_link = link_from_name(robot_uid, base_link_name)
 
-        r11_start_conf_vals = np.array([22700.0, 0.0, -4900.0, 0.0, -80.0, 65.0, 65.0, 20.0, -20.0])
-        r12_start_conf_vals = np.array([-4056.0883789999998, -4000.8486330000001, 0.0, -22.834741999999999, -30.711554, 0.0, 57.335655000000003, 0.0])
+        r11_start_conf_vals = np.array([22700.0, 0.0, -4900.0, \
+            0.0, -80.0, 65.0, 65.0, 20.0, -20.0])
+        r12_start_conf_vals = np.array([-4056.0883789999998, -4000.8486330000001, \
+            0.0, -22.834741999999999, -30.711554, 0.0, 57.335655000000003, 0.0])
         full_start_conf = to_rlf_robot_full_conf(r11_start_conf_vals, r12_start_conf_vals)
         # full_joints = joints_from_names(robot_uid, full_start_conf.joint_names)
 
         client.set_robot_configuration(robot, full_start_conf)
 
         # # * add attachment
-        for ee_acm in ee_acms:
-            client.add_attached_collision_mesh(ee_acm, options={'robot' : robot, 'mass': 1})
-        client.add_attached_collision_mesh(beam_acm, options={'robot' : robot, 'mass': 1})
+        # for ee_acm in ee_acms:
+        #     client.add_attached_collision_mesh(ee_acm, options={'robot' : robot, 'mass': 1})
+        # client.add_attached_collision_mesh(beam_acm, options={'robot' : robot, 'mass': 1})
 
         # safe start conf
-        start_confval = np.hstack([r12_start_conf_vals[:2]*1e-3, np.radians(r12_start_conf_vals[2:])])
+        start_confval = np.hstack([r11_start_conf_vals[:3]*1e-3, np.radians(r11_start_conf_vals[3:])])
         conf = Configuration(values=start_confval.tolist(), types=ik_joint_types, joint_names=ik_joint_names)
         assert not client.check_collisions(robot, conf, options={'diagnosis':diagnosis})
 
         # TODO add more tests
+        from pybullet_planning import get_link_subtree, prune_fixed_joints, clone_body, get_movable_joints, get_all_links, \
+            set_color, child_link_from_joint
+        first_joint = ik_joints[0]
+        target_link = flange_link
+
+        # selected_links = get_link_subtree(robot_uid, first_joint) # TODO: child_link_from_joint?
+        selected_links = [child_link_from_joint(joint) for joint in ik_joints]
+
+        selected_movable_joints = prune_fixed_joints(robot_uid, selected_links)
+        assert(target_link in selected_links)
+        selected_target_link = selected_links.index(target_link)
+        sub_robot = clone_body(robot_uid, links=selected_links, visual=True, collision=True) # TODO: joint limits
+        sub_movable_joints = get_movable_joints(sub_robot)
 
         # conf = Configuration(values=[0.]*6, types=ik_joint_types, joint_names=ik_joint_names)
         # assert not client.configuration_in_collision(conf, group=move_group, options={'diagnosis':True})
