@@ -4,3 +4,6 @@
 [submodule "data/robots/rfl_description"]
 	path = data/robots/rfl_description
 	url = https://github.com/yijiangh/rfl_description.git
+[submodule "external/pybullet_planning"]
+	path = external/pybullet_planning
+	url = https://github.com/yijiangh/pybullet_planning.git
