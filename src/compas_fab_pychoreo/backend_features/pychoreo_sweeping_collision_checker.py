@@ -4,9 +4,10 @@ from pybullet_planning import get_all_links
 from compas_fab_pychoreo.backend_features.sweeping_collision_checker import SweepingCollisionChecker
 from compas_fab_pychoreo.utils import is_valid_option, values_as_list, wildcard_keys
 
+import pybullet_planning as pp
 from pybullet_planning import get_custom_limits, joints_from_names, link_from_name, get_collision_fn, joint_from_name, \
     expand_links, set_joint_positions, get_custom_limits, get_self_link_pairs, get_moving_links, \
-    draw_collision_diagnosis, BASE_LINK, get_num_links
+    draw_collision_diagnosis, BASE_LINK, get_num_links, LockRenderer, WorldSaver, draw_point
 from pybullet_planning import vertices_from_rigid, Ray, batch_ray_collision, draw_ray
 
 from pybullet_planning import wait_if_gui, get_body_name, RED, BLUE, set_color, add_line, apply_affine, get_pose
@@ -16,41 +17,61 @@ def get_attachment_sweeping_collision_fn(body, joints, obstacles=[],
                     extra_disabled_collisions={},
                     body_name_from_id=None, **kwargs):
     attached_bodies = [attachment.child for attachment in attachments]
+    vertices_from_body = defaultdict(list)
+    for attached_body in attached_bodies:
+        attached_body, body_links = expand_links(attached_body)
+        for body_link in body_links:
+            local_from_vertices = vertices_from_rigid(attached_body, body_link)
+            vertices_from_body[attached_body].extend(local_from_vertices)
+            # print('=====')
+            # print("{} - link {} - pose: {}".format(attached_body, body_link, get_pose(attached_body)))
+            # datas = pp.get_collision_data(attached_body, body_link)
+            # for data in datas:
+            #     print(data)
+            #     print('data pose:', pp.get_data_pose(data))
+            #     print('link pose:', pp.get_link_pose(attached_body, body_link))
 
     def sweeping_collision_fn(q1, q2, diagnosis=False):
-        lines_from_body = defaultdict(list)
         # * set body & attachment positions
+        line_from_body = defaultdict(list)
         set_joint_positions(body, joints, q1)
         for attachment in attachments:
             attachment.assign()
-        for attached_body in attached_bodies:
-            attached_body, body_links = expand_links(attached_body)
-            for body_link in body_links:
-                updated_vertices = vertices_from_rigid(attached_body, body_link)
-                lines_from_body[attached_body].append(updated_vertices)
+            updated_vertices = apply_affine(get_pose(attachment.child), vertices_from_body[attachment.child])
+            line_from_body[attachment.child].append(updated_vertices)
+            if diagnosis:
+                with LockRenderer():
+                    for pt in updated_vertices:
+                        draw_point(pt)
 
         set_joint_positions(body, joints, q2)
         for attachment in attachments:
             attachment.assign()
-        for attached_body in attached_bodies:
-            attached_body, body_links = expand_links(attached_body)
-            for body_link in body_links:
-                updated_vertices = vertices_from_rigid(attached_body, body_link)
-                lines_from_body[attached_body].append(updated_vertices)
+            updated_vertices = apply_affine(get_pose(attachment.child), vertices_from_body[attachment.child])
+            line_from_body[attachment.child].append(updated_vertices)
+            if diagnosis:
+                with LockRenderer():
+                    for pt in updated_vertices:
+                        draw_point(pt)
 
         rays = []
-        for lines in lines_from_body.values():
+        for lines in line_from_body.values():
             for start, end in zip(lines[0], lines[1]):
                 rays.append(Ray(start, end))
-                # if diagnosis:
-                #     add_line(start, end)
+
+        if diagnosis:
+            with LockRenderer():
+                for ray in rays:
+                    add_line(ray.start, ray.end)
 
         # * body - body check
-        for ray, ray_result in zip(rays, batch_ray_collision(rays)):
-            if ray_result.objectUniqueId in obstacles:
-                if diagnosis:
-                    draw_ray(ray, ray_result)
-                return True
+        with WorldSaver():
+            # ! there is a step_simulation call within batch_ray_collision!
+            for ray, ray_result in zip(rays, batch_ray_collision(rays)):
+                if ray_result.objectUniqueId in obstacles:
+                    if diagnosis:
+                        draw_ray(ray, ray_result, **kwargs)
+                    return True
         return False
 
     return sweeping_collision_fn

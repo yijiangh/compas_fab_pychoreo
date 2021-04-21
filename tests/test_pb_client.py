@@ -67,6 +67,8 @@ def test_collision_checker(abb_irb4600_40_255_setup, itj_TC_g1_cms, itj_beam_cm,
     itj_tool_changer_urdf_path, itj_g1_urdf_path,
     viewer, diagnosis):
     # modified from https://github.com/yijiangh/pybullet_planning/blob/dev/tests/test_collisions.py
+    sweep_collision_only = False
+
     urdf_filename, semantics = abb_irb4600_40_255_setup
 
     move_group = 'bare_arm'
@@ -118,28 +120,29 @@ def test_collision_checker(abb_irb4600_40_255_setup, itj_TC_g1_cms, itj_beam_cm,
                 joint_names=['joint_gripper_jaw_l', 'joint_gripper_jaw_r'])
             for b in tool_bodies:
                 client._set_body_configuration(b, tool_conf)
-            wait_if_gui('Open')
+            # wait_if_gui('Open Gripper')
 
             tool_conf = Configuration(values=[0.0008, 0.0008], types=[Joint.PRISMATIC, Joint.PRISMATIC],
                 joint_names=['joint_gripper_jaw_l', 'joint_gripper_jaw_r'])
             for b in tool_bodies:
                 client._set_body_configuration(b, tool_conf)
-            wait_if_gui('Close')
+            # wait_if_gui('Close Gripper')
 
-        cprint('safe start conf', 'green')
-        conf = Configuration(values=[0.]*6, types=ik_joint_types, joint_names=ik_joint_names)
-        assert not client.check_collisions(robot, conf, options={'diagnosis':diagnosis})
+        if not sweep_collision_only:
+            cprint('safe start conf', 'green')
+            conf = Configuration(values=[0.]*6, types=ik_joint_types, joint_names=ik_joint_names)
+            assert not client.check_collisions(robot, conf, options={'diagnosis':diagnosis})
 
-        cprint('joint over limit', 'cyan')
-        conf = Configuration(values=[0., 0., 1.5, 0, 0, 0], types=ik_joint_types, joint_names=ik_joint_names)
-        assert client.check_collisions(robot, conf, options={'diagnosis':diagnosis})
+            cprint('joint over limit', 'cyan')
+            conf = Configuration(values=[0., 0., 1.5, 0, 0, 0], types=ik_joint_types, joint_names=ik_joint_names)
+            assert client.check_collisions(robot, conf, options={'diagnosis':diagnosis})
 
-        cprint('attached gripper-obstacle collision - column', 'cyan')
-        vals = [-0.33161255787892263, -0.43633231299858238, 0.43633231299858238, -1.0471975511965976, 0.087266462599716474, 0.0]
-        # conf = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
-        # client.set_robot_configuration(robot, conf)
-        # wait_if_gui()
-        assert client.check_collisions(robot, conf, options={'diagnosis':diagnosis})
+            cprint('attached gripper-obstacle collision - column', 'cyan')
+            vals = [-0.33161255787892263, -0.43633231299858238, 0.43633231299858238, -1.0471975511965976, 0.087266462599716474, 0.0]
+            # conf = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
+            # client.set_robot_configuration(robot, conf)
+            # wait_if_gui()
+            assert client.check_collisions(robot, conf, options={'diagnosis':diagnosis})
 
         #* attach beam
         client.add_collision_mesh(itj_beam_cm)
@@ -150,29 +153,33 @@ def test_collision_checker(abb_irb4600_40_255_setup, itj_TC_g1_cms, itj_beam_cm,
             flange_link_name, touch_links=[]), options={'robot' : robot})
         # wait_if_gui('beam attached.')
 
-        cprint('attached beam-robot body self collision', 'cyan')
-        vals = [0.73303828583761843, -0.59341194567807209, 0.54105206811824214, -0.17453292519943295, 1.064650843716541, 1.7278759594743862]
-        conf = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
-        assert client.check_collisions(robot, conf, options={'diagnosis':diagnosis})
+        if diagnosis:
+            client._print_object_summary()
 
-        cprint('attached beam-obstacle collision - column', 'cyan')
-        vals = [0.087266462599716474, -0.19198621771937624, 0.20943951023931956, 0.069813170079773182, 1.2740903539558606, 0.069813170079773182]
-        conf = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
-        assert client.check_collisions(robot, conf, options={'diagnosis':diagnosis})
+        if not sweep_collision_only:
+            cprint('attached beam-robot body self collision', 'cyan')
+            vals = [0.73303828583761843, -0.59341194567807209, 0.54105206811824214, -0.17453292519943295, 1.064650843716541, 1.7278759594743862]
+            conf = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
+            assert client.check_collisions(robot, conf, options={'diagnosis':diagnosis})
 
-        cprint('attached beam-obstacle collision - ground', 'cyan')
-        vals = [-0.017453292519943295, 0.6108652381980153, 0.20943951023931956, 1.7627825445142729, 1.2740903539558606, 0.069813170079773182]
-        conf = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
-        assert client.check_collisions(robot, conf, options={'diagnosis':diagnosis})
+            cprint('attached beam-obstacle collision - column', 'cyan')
+            vals = [0.087266462599716474, -0.19198621771937624, 0.20943951023931956, 0.069813170079773182, 1.2740903539558606, 0.069813170079773182]
+            conf = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
+            assert client.check_collisions(robot, conf, options={'diagnosis':diagnosis})
 
-        cprint('robot link-obstacle collision - column', 'cyan')
-        vals = [-0.41887902047863912, 0.20943951023931956, 0.20943951023931956, 1.7627825445142729, 1.2740903539558606, 0.069813170079773182]
-        conf = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
-        assert client.check_collisions(robot, conf, options={'diagnosis':diagnosis})
-        cprint('robot link-obstacle collision - ground', 'cyan')
-        vals = [0.33161255787892263, 1.4660765716752369, 0.27925268031909273, 0.17453292519943295, 0.22689280275926285, 0.54105206811824214]
-        conf = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
-        assert client.check_collisions(robot, conf, options={'diagnosis':diagnosis})
+            cprint('attached beam-obstacle collision - ground', 'cyan')
+            vals = [-0.017453292519943295, 0.6108652381980153, 0.20943951023931956, 1.7627825445142729, 1.2740903539558606, 0.069813170079773182]
+            conf = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
+            assert client.check_collisions(robot, conf, options={'diagnosis':diagnosis})
+
+            cprint('robot link-obstacle collision - column', 'cyan')
+            vals = [-0.41887902047863912, 0.20943951023931956, 0.20943951023931956, 1.7627825445142729, 1.2740903539558606, 0.069813170079773182]
+            conf = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
+            assert client.check_collisions(robot, conf, options={'diagnosis':diagnosis})
+            cprint('robot link-obstacle collision - ground', 'cyan')
+            vals = [0.33161255787892263, 1.4660765716752369, 0.27925268031909273, 0.17453292519943295, 0.22689280275926285, 0.54105206811824214]
+            conf = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
+            assert client.check_collisions(robot, conf, options={'diagnosis':diagnosis})
 
         cprint('Sweeping collision', 'cyan')
         vals = [-0.12217304763960307, -0.73303828583761843, 0.83775804095727824, -2.4609142453120048, 1.2391837689159739, -0.85521133347722145]
