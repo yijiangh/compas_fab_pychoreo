@@ -192,7 +192,7 @@ def test_collision_checker(abb_irb4600_40_255_setup, itj_TC_g1_cms, itj_beam_cm,
         assert not client.check_collisions(robot, conf2, options={'diagnosis':diagnosis})
         # wait_if_gui()
 
-        assert client.check_sweeping_collisions(robot, conf1, conf2, options={'diagnosis':diagnosis, 'line_width':3.0})
+        assert client.check_sweeping_collisions(robot, conf1, conf2, options={'diagnosis':diagnosis})
 
         wait_if_gui("Finished.")
 
