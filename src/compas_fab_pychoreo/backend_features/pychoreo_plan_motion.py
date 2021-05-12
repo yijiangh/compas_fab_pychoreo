@@ -65,7 +65,8 @@ class PyChoreoPlanMotion(PlanMotion):
         weights = options.get('weights') or None
         rrt_restarts = options.get('rrt_restarts', 2)
         rrt_iterations = options.get('rrt_iterations', 20)
-        smooth_iterations = options.get('smooth_iterations', 20)
+        smooth_iterations = options.get('smooth_iterations', 100)
+        print('smooth_iterations: ', smooth_iterations)
         # TODO: auto compute joint weight
         # print('plan motion options: ', options)
 
