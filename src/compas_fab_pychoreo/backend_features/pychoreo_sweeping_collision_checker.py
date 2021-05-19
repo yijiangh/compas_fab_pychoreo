@@ -1,4 +1,3 @@
-from external.compas_fab_pychoreo.external.pybullet_planning.src.pybullet_planning.interfaces.env_manager.simulation import has_gui
 import numpy as np
 from collections import defaultdict
 from itertools import product, combinations
@@ -12,7 +11,7 @@ from pybullet_planning import get_custom_limits, joints_from_names, link_from_na
     draw_collision_diagnosis, BASE_LINK, get_num_links, LockRenderer, WorldSaver, draw_point
 from pybullet_planning import vertices_from_rigid, Ray, batch_ray_collision, draw_ray, set_camera_pose, draw_ray_result_diagnosis
 
-from pybullet_planning import wait_if_gui, get_body_name, RED, BLUE, set_color, add_line, apply_affine, get_pose
+from pybullet_planning import wait_if_gui, get_body_name, RED, BLUE, set_color, add_line, apply_affine, get_pose, has_gui
 
 def get_attachment_sweeping_collision_fn(robot_body, joints, obstacles=[],
                     attachments=[],
@@ -53,6 +52,7 @@ def get_attachment_sweeping_collision_fn(robot_body, joints, obstacles=[],
                         # add_line(start, end)
 
         # * ray - body check
+        # ! TODO check if AABB is updated: https://github.com/bulletphysics/bullet3/pull/2900
         check_bodies = obstacles
         # print('obstacles: ', obstacles)
         with WorldSaver():
@@ -104,14 +104,14 @@ class PyChoreoSweepingCollisionChecker(SweepingCollisionChecker):
         options = options or {}
         assert len(configuration_1.joint_names) == len(configuration_2.joint_names), '{} - {}'.format(
                 configuration_1.joint_names, configuration_2.joint_names)
-        assert len(configuration_1.joint_names) == len(configuration_1.values), '{} - {}'.format(
-                configuration_1.joint_names, configuration_1.values)
+        assert len(configuration_1.joint_names) == len(configuration_1.joint_values), '{} - {}'.format(
+                configuration_1.joint_names, configuration_1.joint_values)
         diagnosis = options.get('diagnosis', False)
         sweeping_collision_fn = self._get_sweeping_collision_fn(robot, configuration_1.joint_names, options)
-        return sweeping_collision_fn(configuration_1.values, configuration_2.values, diagnosis=diagnosis)
+        return sweeping_collision_fn(configuration_1.joint_values, configuration_2.joint_values, diagnosis=diagnosis)
 
     def _get_sweeping_collision_fn(self, robot, joint_names, options=None):
-        robot_uid = robot.attributes['pybullet_uid']
+        robot_uid = self.client.get_robot_pybullet_uid(robot)
         avoid_collisions = options.get('avoid_collisions', True)
         self_collisions = options.get('self_collisions', True)
         distance_threshold = options.get('distance_threshold', 0.0)

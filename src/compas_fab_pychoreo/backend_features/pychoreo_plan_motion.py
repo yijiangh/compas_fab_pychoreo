@@ -55,7 +55,7 @@ class PyChoreoPlanMotion(PlanMotion):
         :class:`compas_fab.robots.JointTrajectory`
             The calculated trajectory.
         """
-        robot_uid = robot.attributes['pybullet_uid']
+        robot_uid = self.client.get_robot_pybullet_uid(robot)
 
         # * parse options
         verbose = is_valid_option(options, 'verbose', False)

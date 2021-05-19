@@ -13,8 +13,8 @@ from setuptools.command.install import install
 
 
 requirements = [
-    'compas>=1.0,<2.0',
-    'compas_fab>=0.16,<0.17',
+    'compas>=1.5.0,<2.0',
+    'compas_fab>=0.18,<0.19',
     'pybullet_planning>=0.5.1',
     'ikfast_pybind>=0.1.0',
     'termcolor',

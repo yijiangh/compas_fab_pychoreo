@@ -34,15 +34,16 @@ class PyChoreoConfigurationCollisionChecker(ConfigurationCollisionChecker):
             True if in collision, False otherwise
         """
         options = options or {}
-        assert len(configuration.joint_names) == len(configuration.values), '{} - {}'.format(configuration.joint_names, configuration.values)
+        assert len(configuration.joint_names) == len(configuration.joint_values), '{} - {}'.format(
+            configuration.joint_names, configuration.joint_values)
         diagnosis = options.get('diagnosis', False)
         collision_fn = self._get_collision_fn(robot, configuration.joint_names, options)
-        return collision_fn(configuration.values, diagnosis=diagnosis)
+        return collision_fn(configuration.joint_values, diagnosis=diagnosis)
 
     def _get_collision_fn(self, robot, joint_names, options=None):
         """Returns a `pybullet_planning` collision_fn
         """
-        robot_uid = robot.attributes['pybullet_uid']
+        robot_uid = self.client.get_robot_pybullet_uid(robot)
         custom_limits = options.get('custom_limits', {})
         avoid_collisions = options.get('avoid_collisions', True)
         self_collisions = options.get('self_collisions', True)

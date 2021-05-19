@@ -108,7 +108,7 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
         :class:`compas_fab.robots.JointTrajectory`
             The calculated trajectory.
         """
-        robot_uid = robot.attributes['pybullet_uid']
+        robot_uid = self.client.get_robot_pybullet_uid(robot)
 
         # * convert link/joint names to pybullet indices
         base_link_name = robot.get_base_link_name(group=group)

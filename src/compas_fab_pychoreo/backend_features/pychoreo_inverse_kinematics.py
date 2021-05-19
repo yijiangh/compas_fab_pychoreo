@@ -60,7 +60,7 @@ class PyChoreoInverseKinematics(InverseKinematics):
         # return_closest_to_start = is_valid_option(options, 'return_closest_to_start', False)
         # cull = is_valid_option(options, 'cull', True)
 
-        robot_uid = robot.attributes['pybullet_uid']
+        robot_uid = self.client.get_robot_pybullet_uid(robot)
         ik_joint_names = robot.get_configurable_joint_names(group=group)
         ik_joints = joints_from_names(robot_uid, ik_joint_names)
         tool_link_name = robot.get_end_effector_link_name(group=group)

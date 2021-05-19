@@ -7,14 +7,12 @@ import random
 from termcolor import cprint
 from itertools import product
 
-import cProfile
-import pstats
-
 from compas.datastructures import Mesh
 from compas.geometry import Frame, Transformation
 from compas.robots import Joint
 from compas_fab.robots import Configuration, AttachedCollisionMesh, CollisionMesh, JointConstraint
 
+import pybullet_planning as pp
 from pybullet_planning import link_from_name, get_link_pose, draw_pose, get_bodies, multiply, Pose, Euler, set_joint_positions, \
     joints_from_names, quat_angle_between, get_collision_fn, create_obj, unit_pose
 from pybullet_planning import wait_if_gui, wait_for_duration, remove_all_debug
@@ -59,7 +57,7 @@ def compute_trajectory_cost(trajectory, init_conf_val=np.zeros(6)):
 
 @pytest.mark.collision_check_abb
 @pytest.mark.parametrize("tool_type", [
-    ('static'),
+    # ('static'),
     ('actuated'),
     ])
 def test_collision_checker(abb_irb4600_40_255_setup, itj_TC_g1_cms, itj_beam_cm, column_obstacle_cm, base_plate_cm,
@@ -67,7 +65,7 @@ def test_collision_checker(abb_irb4600_40_255_setup, itj_TC_g1_cms, itj_beam_cm,
     itj_tool_changer_urdf_path, itj_g1_urdf_path,
     viewer, diagnosis):
     # modified from https://github.com/yijiangh/pybullet_planning/blob/dev/tests/test_collisions.py
-    sweep_collision_only = False
+    sweep_collision_only = True
 
     urdf_filename, semantics = abb_irb4600_40_255_setup
 
@@ -90,6 +88,7 @@ def test_collision_checker(abb_irb4600_40_255_setup, itj_TC_g1_cms, itj_beam_cm,
             # * add static obstacles
             client.add_collision_mesh(base_plate_cm)
             client.add_collision_mesh(column_obstacle_cm)
+        wait_if_gui()
 
         ik_joint_names = robot.get_configurable_joint_names(group=move_group)
         ik_joint_types = robot.get_joint_types_by_names(ik_joint_names)
@@ -116,13 +115,13 @@ def test_collision_checker(abb_irb4600_40_255_setup, itj_TC_g1_cms, itj_beam_cm,
         if tool_type == 'actuated':
             # lower 0.0008 upper 0.01
             tool_bodies = client._get_bodies('^{}'.format('itj_PG500'))
-            tool_conf = Configuration(values=[0.01, 0.01], types=[Joint.PRISMATIC, Joint.PRISMATIC],
+            tool_conf = Configuration(joint_values=[0.01, 0.01], joint_types=[Joint.PRISMATIC, Joint.PRISMATIC],
                 joint_names=['joint_gripper_jaw_l', 'joint_gripper_jaw_r'])
             for b in tool_bodies:
                 client._set_body_configuration(b, tool_conf)
             # wait_if_gui('Open Gripper')
 
-            tool_conf = Configuration(values=[0.0008, 0.0008], types=[Joint.PRISMATIC, Joint.PRISMATIC],
+            tool_conf = Configuration(joint_values=[0.0008, 0.0008], joint_types=[Joint.PRISMATIC, Joint.PRISMATIC],
                 joint_names=['joint_gripper_jaw_l', 'joint_gripper_jaw_r'])
             for b in tool_bodies:
                 client._set_body_configuration(b, tool_conf)
@@ -130,16 +129,16 @@ def test_collision_checker(abb_irb4600_40_255_setup, itj_TC_g1_cms, itj_beam_cm,
 
         if not sweep_collision_only:
             cprint('safe start conf', 'green')
-            conf = Configuration(values=[0.]*6, types=ik_joint_types, joint_names=ik_joint_names)
+            conf = Configuration([0.]*6, ik_joint_types, ik_joint_names)
             assert not client.check_collisions(robot, conf, options={'diagnosis':diagnosis})
 
             cprint('joint over limit', 'cyan')
-            conf = Configuration(values=[0., 0., 1.5, 0, 0, 0], types=ik_joint_types, joint_names=ik_joint_names)
+            conf = Configuration([0., 0., 1.5, 0, 0, 0], ik_joint_types, ik_joint_names)
             assert client.check_collisions(robot, conf, options={'diagnosis':diagnosis})
 
             cprint('attached gripper-obstacle collision - column', 'cyan')
             vals = [-0.33161255787892263, -0.43633231299858238, 0.43633231299858238, -1.0471975511965976, 0.087266462599716474, 0.0]
-            # conf = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
+            # conf = Configuration(vals, ik_joint_types, ik_joint_names)
             # client.set_robot_configuration(robot, conf)
             # wait_if_gui()
             assert client.check_collisions(robot, conf, options={'diagnosis':diagnosis})
@@ -151,7 +150,7 @@ def test_collision_checker(abb_irb4600_40_255_setup, itj_TC_g1_cms, itj_beam_cm,
         client.set_object_frame('^{}$'.format('itj_beam_b2'), Frame.from_transformation(tool0_tf*tool0_from_beam_base))
         client.add_attached_collision_mesh(AttachedCollisionMesh(CollisionMesh(None, 'itj_beam_b2'),
             flange_link_name, touch_links=[]), options={'robot' : robot})
-        # wait_if_gui('beam attached.')
+        wait_if_gui('beam attached.')
 
         if diagnosis:
             client._print_object_summary()
@@ -159,36 +158,36 @@ def test_collision_checker(abb_irb4600_40_255_setup, itj_TC_g1_cms, itj_beam_cm,
         if not sweep_collision_only:
             cprint('attached beam-robot body self collision', 'cyan')
             vals = [0.73303828583761843, -0.59341194567807209, 0.54105206811824214, -0.17453292519943295, 1.064650843716541, 1.7278759594743862]
-            conf = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
+            conf = Configuration(vals, ik_joint_types, ik_joint_names)
             assert client.check_collisions(robot, conf, options={'diagnosis':diagnosis})
 
             cprint('attached beam-obstacle collision - column', 'cyan')
             vals = [0.087266462599716474, -0.19198621771937624, 0.20943951023931956, 0.069813170079773182, 1.2740903539558606, 0.069813170079773182]
-            conf = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
+            conf = Configuration(vals, ik_joint_types, ik_joint_names)
             assert client.check_collisions(robot, conf, options={'diagnosis':diagnosis})
 
             cprint('attached beam-obstacle collision - ground', 'cyan')
             vals = [-0.017453292519943295, 0.6108652381980153, 0.20943951023931956, 1.7627825445142729, 1.2740903539558606, 0.069813170079773182]
-            conf = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
+            conf = Configuration(vals, ik_joint_types, ik_joint_names)
             assert client.check_collisions(robot, conf, options={'diagnosis':diagnosis})
 
             cprint('robot link-obstacle collision - column', 'cyan')
             vals = [-0.41887902047863912, 0.20943951023931956, 0.20943951023931956, 1.7627825445142729, 1.2740903539558606, 0.069813170079773182]
-            conf = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
+            conf = Configuration(vals, ik_joint_types, ik_joint_names)
             assert client.check_collisions(robot, conf, options={'diagnosis':diagnosis})
             cprint('robot link-obstacle collision - ground', 'cyan')
             vals = [0.33161255787892263, 1.4660765716752369, 0.27925268031909273, 0.17453292519943295, 0.22689280275926285, 0.54105206811824214]
-            conf = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
+            conf = Configuration(vals, ik_joint_types, ik_joint_names)
             assert client.check_collisions(robot, conf, options={'diagnosis':diagnosis})
 
         cprint('Sweeping collision', 'cyan')
         vals = [-0.12217304763960307, -0.73303828583761843, 0.83775804095727824, -2.4609142453120048, 1.2391837689159739, -0.85521133347722145]
-        conf1 = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
+        conf1 = Configuration(vals, ik_joint_types, ik_joint_names)
         assert not client.check_collisions(robot, conf1, options={'diagnosis':diagnosis})
         # wait_if_gui()
 
         vals = [-0.12217304763960307, -0.73303828583761843, 0.83775804095727824, -2.4958208303518914, -1.5533430342749532, -0.85521133347722145]
-        conf2 = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
+        conf2 = Configuration(vals, ik_joint_types, ik_joint_names)
         assert not client.check_collisions(robot, conf2, options={'diagnosis':diagnosis})
         # wait_if_gui()
 
@@ -499,26 +498,3 @@ def test_ik(fixed_waam_setup, viewer, ik_engine):
             wait_if_gui('FK - IK agrees.')
         cprint('{} | Success {}/{} | Average ik time: {} | avg over {} calls.'.format(ik_engine, len(ee_poses)-failure_cnt, len(ee_poses),
             ik_time/len(ee_poses), len(ee_poses)), 'cyan')
-
-###################################################
-
-@pytest.mark.client
-def test_client(fixed_waam_setup, viewer):
-    # https://github.com/gramaziokohler/algorithmic_details/blob/e1d5e24a34738822638a157ca29a98afe05beefd/src/algorithmic_details/accessibility/reachability_map.py#L208-L231
-    urdf_filename, semantics, _ = fixed_waam_setup
-    move_group = 'robotA'
-
-    with PyChoreoClient(viewer=viewer) as client:
-        robot = client.load_robot(urdf_filename)
-        robot.semantics = semantics
-        robot_uid = client.get_robot_pybullet_uid(robot)
-        tool_link_name = robot.get_end_effector_link_name(group=move_group)
-
-        # * draw EE pose
-        tool_link = link_from_name(robot_uid, tool_link_name)
-        tcp_pose = get_link_pose(robot_uid, tool_link)
-        draw_pose(tcp_pose)
-
-        assert robot_uid in get_bodies()
-
-        wait_if_gui()

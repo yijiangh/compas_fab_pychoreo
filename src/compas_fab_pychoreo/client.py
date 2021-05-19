@@ -60,12 +60,13 @@ class PyChoreoClient(PyBulletClient):
         CLIENTS[self.client_id] = True if self.connection_type == 'gui' else None
 
     def get_robot_pybullet_uid(self, robot):
-        return robot.attributes['pybullet_uid']
+        pb_client = super(PyChoreoClient, self)
+        return pb_client.get_uid(pb_client.get_cached_robot(robot))
 
-    def load_robot(self, urdf_file):
+    def load_robot(self, urdf_file, resource_loaders=None):
         # PyBulletClient's redirect_stdout does not seem to work...
         with HideOutput(not self.verbose):
-            robot = super(PyChoreoClient, self).load_robot(urdf_file)
+            robot = super(PyChoreoClient, self).load_robot(urdf_file, resource_loaders)
         return robot
 
     ###########################################################
@@ -112,7 +113,7 @@ class PyChoreoClient(PyBulletClient):
         color = options.get('color', None)
         attached_child_link_name = options.get('attached_child_link_name', None)
 
-        robot_uid = robot.attributes['pybullet_uid']
+        robot_uid = self.get_robot_pybullet_uid(robot)
         name = attached_collision_mesh.collision_mesh.id
         attached_bodies = []
         # ! mimic ROS' behavior: collision object with same name is replaced
@@ -277,7 +278,7 @@ class PyChoreoClient(PyBulletClient):
         # I think it's better to leave them "as-is"
         # https://github.com/compas-dev/compas_fab/blob/master/src/compas_fab/backends/pybullet/client.py#L402
         # super(PyChoreoClient, self).set_robot_configuration(robot, configuration, group=group)
-        robot_uid = robot.attributes['pybullet_uid']
+        robot_uid = self.get_robot_pybullet_uid(robot)
         # TODO if joint_names are specified within configuration, take intersection
         # group_joint_names = robot.get_configurable_joint_names(group=group)
         self._set_body_configuration(robot_uid, configuration)
@@ -290,7 +291,7 @@ class PyChoreoClient(PyBulletClient):
         set_joint_positions(body_id, joints, configuration.values)
 
     def get_robot_configuration(self, robot, group):
-        robot_uid = robot.attributes['pybullet_uid']
+        robot_uid = self.get_robot_pybullet_uid(robot)
         joint_names = robot.get_configurable_joint_names(group=group)
         joints = joints_from_names(robot_uid, joint_names)
         joint_types = robot.get_joint_types_by_names(joint_names)
@@ -298,7 +299,7 @@ class PyChoreoClient(PyBulletClient):
         return Configuration(values=joint_values, types=joint_types, joint_names=joint_names)
 
     def get_link_frame_from_name(self, robot, link_name):
-        robot_uid = robot.attributes['pybullet_uid']
+        robot_uid = self.get_robot_pybullet_uid(robot)
         return frame_from_pose(get_link_pose(robot_uid, link_from_name(robot_uid, link_name)))
 
     ###########################################################
@@ -362,7 +363,7 @@ class PyChoreoClient(PyBulletClient):
     def get_self_collision_link_ids(self, robot):
         # return set of 2-int pair
         if robot.semantics is not None:
-            robot_uid = robot.attributes['pybullet_uid']
+            robot_uid = self.get_robot_pybullet_uid(robot)
             self_collision_disabled_link_names = robot.semantics.disabled_collisions
             return get_disabled_collisions(robot_uid, self_collision_disabled_link_names)
         else:
