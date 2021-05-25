@@ -1,5 +1,8 @@
+import os
+import shutil
+import tempfile
+
 from itertools import product, combinations
-import pybullet
 from collections import defaultdict
 from itertools import combinations
 from termcolor import cprint
@@ -15,12 +18,11 @@ from pybullet_planning import draw_pose
 from pybullet_planning import draw_collision_diagnosis, expand_links, pairwise_link_collision, pairwise_link_collision_info
 
 from compas_fab.backends import PyBulletClient
-from compas_fab.backends.pybullet.const import ConstraintInfo
+from compas_fab.backends.pybullet.const import ConstraintInfo, STATIC_MASS
 from compas_fab.robots.configuration import Configuration
 
 from compas_fab_pychoreo.planner import PyChoreoPlanner
 from compas_fab_pychoreo.utils import wildcard_keys
-from compas_fab.backends.pybullet.const import STATIC_MASS
 
 from .exceptions import CollisionError
 from .exceptions import InverseKinematicsError
@@ -79,6 +81,20 @@ class PyChoreoClient(PyBulletClient):
         for body in self.collision_objects[name]:
             set_color(body, color)
             # INFO_FROM_BODY[self.client.client_id, body] = ModelInfo(None, path, False, 1.0)
+
+    def convert_mesh_to_body(self, mesh, frame, _name=None, concavity=False, mass=STATIC_MASS):
+        # ! override the pybyllet client behavior
+        # ! see: https://github.com/compas-dev/compas_fab/issues/305
+        tmp_dir = tempfile.mkdtemp()
+        tmp_obj_path = os.path.join(tmp_dir, 'temp.obj')
+        try:
+            mesh.to_obj(tmp_obj_path)
+            tmp_obj_path = self._handle_concavity(tmp_obj_path, tmp_dir, concavity, mass)
+            pyb_body_id = self.body_from_obj(tmp_obj_path, concavity=concavity, mass=mass)
+            self._set_base_frame(frame, pyb_body_id)
+        finally:
+            shutil.rmtree(tmp_dir)
+        return pyb_body_id
 
     def add_tool_from_urdf(self, tool_name, urdf_file):
         # TODO return compas_fab Tool class
