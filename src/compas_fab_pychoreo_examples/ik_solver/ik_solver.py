@@ -39,7 +39,7 @@ class InverseKinematicsSolver(object):
         """
         j1, j2, j3, j4, j5, j6 = self.joints
         for i, c in enumerate(configurations):
-            a1, a2, a3, a4, a5, a6 = c.values
+            a1, a2, a3, a4, a5, a6 = c.joint_values
             try:
                 a1 = fit_within_bounds(a1, j1.limit.lower, j1.limit.upper)
                 a2 = fit_within_bounds(a2, j2.limit.lower, j2.limit.upper)
@@ -47,7 +47,7 @@ class InverseKinematicsSolver(object):
                 a4 = fit_within_bounds(a4, j4.limit.lower, j4.limit.upper)
                 a5 = fit_within_bounds(a5, j5.limit.lower, j5.limit.upper)
                 a6 = fit_within_bounds(a6, j6.limit.lower, j6.limit.upper)
-                configurations[i].values = [a1, a2, a3, a4, a5, a6]
+                configurations[i].joint_values = [a1, a2, a3, a4, a5, a6]
             except AssertionError:
                 configurations[i] = None
         return configurations

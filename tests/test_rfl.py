@@ -14,6 +14,7 @@ import pstats
 from compas.datastructures import Mesh
 from compas_fab.robots import Configuration, AttachedCollisionMesh, CollisionMesh
 
+import pybullet_planning as pp
 from pybullet_planning import link_from_name, get_link_pose, draw_pose, get_bodies, multiply, Pose, Euler, set_joint_positions, \
     joints_from_names, quat_angle_between, get_collision_fn, create_obj, unit_pose, set_camera_pose
 from pybullet_planning import wait_if_gui, wait_for_duration
@@ -33,7 +34,7 @@ def to_rlf_robot_full_conf(robot11_confval, robot12_confval, scale=1e-3):
     robot22_confval = [-12237, -4915,
                        0, 0, 0, 0, 0, 0]
     return Configuration(
-        values = (
+        joint_values = (
             *[robot11_confval[i]*scale for i in range(0, 3)],
             *[rad(robot11_confval[i]) for i in range(3, 9)],
             *[robot12_confval[i]*scale for i in range(0, 2)],
@@ -44,7 +45,7 @@ def to_rlf_robot_full_conf(robot11_confval, robot12_confval, scale=1e-3):
             *[robot22_confval[i]*1e-3 for i in range(0, 2)],
             *[rad(robot22_confval[i]) for i in range(2, 8)],
             ),
-        types = (
+        joint_types = (
             2,
             2, 2,
             0, 0, 0, 0, 0, 0,
@@ -109,14 +110,12 @@ def test_collision_checker(rfl_setup, itj_beam_cm, viewer, diagnosis):
 
         ik_joints = joints_from_names(robot_uid, ik_joint_names)
         flange_link = link_from_name(robot_uid, flange_link_name)
-        # robot_base_link = link_from_name(robot_uid, base_link_name)
 
         r11_start_conf_vals = np.array([22700.0, 0.0, -4900.0, \
             0.0, -80.0, 65.0, 65.0, 20.0, -20.0])
         r12_start_conf_vals = np.array([-4056.0883789999998, -4000.8486330000001, \
             0.0, -22.834741999999999, -30.711554, 0.0, 57.335655000000003, 0.0])
         full_start_conf = to_rlf_robot_full_conf(r11_start_conf_vals, r12_start_conf_vals)
-        # full_joints = joints_from_names(robot_uid, full_start_conf.joint_names)
 
         client.set_robot_configuration(robot, full_start_conf)
 
@@ -127,8 +126,10 @@ def test_collision_checker(rfl_setup, itj_beam_cm, viewer, diagnosis):
 
         # safe start conf
         start_confval = np.hstack([r11_start_conf_vals[:3]*1e-3, np.radians(r11_start_conf_vals[3:])])
-        conf = Configuration(values=start_confval.tolist(), types=ik_joint_types, joint_names=ik_joint_names)
+        conf = Configuration(joint_values=start_confval.tolist(), joint_types=ik_joint_types, joint_names=ik_joint_names)
         assert not client.check_collisions(robot, conf, options={'diagnosis':diagnosis})
+
+        wait_if_gui()
 
         # TODO add more tests
         from pybullet_planning import get_link_subtree, prune_fixed_joints, clone_body, get_movable_joints, get_all_links, \
@@ -136,14 +137,17 @@ def test_collision_checker(rfl_setup, itj_beam_cm, viewer, diagnosis):
         first_joint = ik_joints[0]
         target_link = flange_link
 
-        # selected_links = get_link_subtree(robot_uid, first_joint) # TODO: child_link_from_joint?
-        selected_links = [child_link_from_joint(joint) for joint in ik_joints]
+        selected_links = get_link_subtree(robot_uid, first_joint) # TODO: child_link_from_joint?
+        # selected_links = [child_link_from_joint(joint) for joint in ik_joints] + [target_link]
+        # selected_movable_joints = prune_fixed_joints(robot_uid, selected_links)
 
-        selected_movable_joints = prune_fixed_joints(robot_uid, selected_links)
-        assert(target_link in selected_links)
+        # print([pp.get_link_name(robot_uid, l) for l in selected_links])
+        # print([pp.get_link_name(robot_uid, l) for l in [target_link]])
+
+        # ! this will clone both robot11 and robot12
         selected_target_link = selected_links.index(target_link)
         sub_robot = clone_body(robot_uid, links=selected_links, visual=True, collision=True) # TODO: joint limits
-        sub_movable_joints = get_movable_joints(sub_robot)
+        # sub_movable_joints = get_movable_joints(sub_robot)
 
         # conf = Configuration(values=[0.]*6, types=ik_joint_types, joint_names=ik_joint_names)
         # assert not client.configuration_in_collision(conf, group=move_group, options={'diagnosis':True})

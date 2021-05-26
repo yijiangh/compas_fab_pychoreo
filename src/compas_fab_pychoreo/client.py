@@ -304,7 +304,7 @@ class PyChoreoClient(PyBulletClient):
 
     def _set_body_configuration(self, body_id, configuration):
         joints = joints_from_names(body_id, configuration.joint_names)
-        set_joint_positions(body_id, joints, configuration.values)
+        set_joint_positions(body_id, joints, configuration.joint_values)
 
     def get_robot_configuration(self, robot, group):
         robot_uid = self.get_robot_pybullet_uid(robot)
@@ -312,7 +312,7 @@ class PyChoreoClient(PyBulletClient):
         joints = joints_from_names(robot_uid, joint_names)
         joint_types = robot.get_joint_types_by_names(joint_names)
         joint_values = get_joint_positions(robot_uid, joints)
-        return Configuration(values=joint_values, types=joint_types, joint_names=joint_names)
+        return Configuration(joint_values=joint_values, joint_types=joint_types, joint_names=joint_names)
 
     def get_link_frame_from_name(self, robot, link_name):
         robot_uid = self.get_robot_pybullet_uid(robot)

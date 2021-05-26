@@ -66,7 +66,6 @@ class PyChoreoPlanMotion(PlanMotion):
         rrt_restarts = options.get('rrt_restarts', 2)
         rrt_iterations = options.get('rrt_iterations', 20)
         smooth_iterations = options.get('smooth_iterations', 100)
-        print('smooth_iterations: ', smooth_iterations)
         # TODO: auto compute joint weight
         # print('plan motion options: ', options)
 
@@ -106,8 +105,7 @@ class PyChoreoPlanMotion(PlanMotion):
         else:
             jt_traj_pts = []
             for i, conf in enumerate(path):
-                # c_conf = Configuration(values=conf, types=joint_types, joint_names=joint_names)
-                jt_traj_pt = JointTrajectoryPoint(values=conf, types=joint_types, time_from_start=Duration(i*1,0))
+                jt_traj_pt = JointTrajectoryPoint(joint_values=conf, joint_types=joint_types, time_from_start=Duration(i*1,0))
                 # TODO why don't we have a `joint_names` input for JointTrajectoryPoint?
                 # https://github.com/compas-dev/compas_fab/blob/master/src/compas_fab/robots/trajectory.py#L64
                 jt_traj_pt.joint_names = joint_names

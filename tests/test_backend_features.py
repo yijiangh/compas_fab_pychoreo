@@ -13,17 +13,15 @@ from compas.robots import Joint
 from compas_fab.robots import Configuration, AttachedCollisionMesh, CollisionMesh, JointConstraint
 
 import pybullet_planning as pp
-from pybullet_planning import link_from_name, get_link_pose, draw_pose, get_bodies, multiply, Pose, Euler, set_joint_positions, \
-    joints_from_names, quat_angle_between, get_collision_fn, create_obj, unit_pose
+from pybullet_planning import link_from_name, get_link_pose, draw_pose, get_bodies, multiply, Pose, Euler, \
+    joints_from_names, quat_angle_between, unit_pose
 from pybullet_planning import wait_if_gui, wait_for_duration, remove_all_debug
-from pybullet_planning import plan_cartesian_motion, plan_cartesian_motion_lg, compute_inverse_kinematics
 from pybullet_planning import randomize, elapsed_time, BLUE, GREEN, RED, LockRenderer
 
 import ikfast_abb_irb4600_40_255
 
 # from compas_fab.backends import PyBulletClient
 from compas_fab_pychoreo.client import PyChoreoClient
-from compas_fab_pychoreo.utils import values_as_list
 from compas_fab_pychoreo.conversions import pose_from_frame, frame_from_pose
 from compas_fab_pychoreo.backend_features.pychoreo_frame_variant_generator import PyChoreoFiniteEulerAngleVariantGenerator
 
@@ -44,20 +42,20 @@ def ik_wrapper(compas_fab_ik_fn):
     # convert a compas_fab ik solver to a function that conforms with pybullet_planning convention
     def fn(pose):
         configurations = compas_fab_ik_fn(frame_from_pose(pose))
-        return [np.array(configuration.values) for configuration in configurations if configuration is not None]
+        return [np.array(configuration.joint_values) for configuration in configurations if configuration is not None]
     return fn
 
 def compute_trajectory_cost(trajectory, init_conf_val=np.zeros(6)):
-    cost = np.linalg.norm(init_conf_val - np.array(trajectory.points[0].values))
+    cost = np.linalg.norm(init_conf_val - np.array(trajectory.points[0].joint_values))
     for traj_pt1, traj_pt2 in zip(trajectory.points[:-1], trajectory.points[1:]):
-        cost += np.linalg.norm(np.array(traj_pt1.values) - np.array(traj_pt2.values))
+        cost += np.linalg.norm(np.array(traj_pt1.joint_values) - np.array(traj_pt2.joint_values))
     return cost
 
 #####################################
 
 @pytest.mark.collision_check_abb
 @pytest.mark.parametrize("tool_type", [
-    # ('static'),
+    ('static'),
     ('actuated'),
     ])
 def test_collision_checker(abb_irb4600_40_255_setup, itj_TC_g1_cms, itj_beam_cm, column_obstacle_cm, base_plate_cm,
@@ -65,7 +63,7 @@ def test_collision_checker(abb_irb4600_40_255_setup, itj_TC_g1_cms, itj_beam_cm,
     itj_tool_changer_urdf_path, itj_g1_urdf_path,
     viewer, diagnosis):
     # modified from https://github.com/yijiangh/pybullet_planning/blob/dev/tests/test_collisions.py
-    sweep_collision_only = True
+    sweep_collision_only = False
 
     urdf_filename, semantics = abb_irb4600_40_255_setup
 
@@ -150,7 +148,7 @@ def test_collision_checker(abb_irb4600_40_255_setup, itj_TC_g1_cms, itj_beam_cm,
         client.set_object_frame('^{}$'.format('itj_beam_b2'), Frame.from_transformation(tool0_tf*tool0_from_beam_base))
         client.add_attached_collision_mesh(AttachedCollisionMesh(CollisionMesh(None, 'itj_beam_b2'),
             flange_link_name, touch_links=[]), options={'robot' : robot})
-        wait_if_gui('beam attached.')
+        # wait_if_gui('beam attached.')
 
         if diagnosis:
             client._print_object_summary()
@@ -293,9 +291,10 @@ def test_circle_cartesian(fixed_waam_setup, viewer, planner_ik_conf):
 
             # options.update({'ik_function' : lambda pose: compute_inverse_kinematics(ikfast_abb_irb4600_40_255.get_ik, pose, sampled=[])})
 
-            trajectory = client.plan_cartesian_motion(robot, ee_frames_WCF, group=move_group, options=options)
+            with LockRenderer():
+                trajectory = client.plan_cartesian_motion(robot, ee_frames_WCF, group=move_group, options=options)
             cprint('W/o frame variant solving time: {}'.format(elapsed_time(st_time)), 'blue')
-            cprint('Cost: {}'.format(compute_trajectory_cost(trajectory, init_conf_val=init_conf.values)), 'blue')
+            cprint('Cost: {}'.format(compute_trajectory_cost(trajectory, init_conf_val=init_conf.joint_values)), 'blue')
             print('-'*5)
 
             f_variant_options = {'delta_yaw' : np.pi/3, 'yaw_sample_size' : 5}
@@ -304,9 +303,10 @@ def test_circle_cartesian(fixed_waam_setup, viewer, planner_ik_conf):
 
         client.set_robot_configuration(robot, init_conf)
         st_time = time.time()
-        trajectory = client.plan_cartesian_motion(robot, ee_frames_WCF, group=move_group, options=options)
+        with LockRenderer():
+            trajectory = client.plan_cartesian_motion(robot, ee_frames_WCF, group=move_group, options=options)
         cprint('{} solving time: {}'.format('With frame variant ' if planner_id == 'LadderGraph' else 'Direct', elapsed_time(st_time)), 'cyan')
-        cprint('Cost: {}'.format(compute_trajectory_cost(trajectory, init_conf_val=init_conf.values)), 'cyan')
+        cprint('Cost: {}'.format(compute_trajectory_cost(trajectory, init_conf_val=init_conf.joint_values)), 'cyan')
 
         if trajectory is None:
             cprint('Client Cartesian planner {} CANNOT find a plan!'.format(planner_id), 'red')
@@ -323,7 +323,7 @@ def test_circle_cartesian(fixed_waam_setup, viewer, planner_ik_conf):
 #####################################
 @pytest.mark.plan_motion
 @pytest.mark.parametrize("tool_type", [
-    ('static'),
+    # ('static'),
     ('actuated'),
     ])
 def test_plan_motion(abb_irb4600_40_255_setup, itj_TC_g1_cms, itj_beam_cm, column_obstacle_cm, base_plate_cm,
@@ -383,19 +383,20 @@ def test_plan_motion(abb_irb4600_40_255_setup, itj_TC_g1_cms, itj_beam_cm, colum
         wait_if_gui('beam attached.')
 
         vals = [-1.4660765716752369, -0.22689280275926285, 0.27925268031909273, 0.17453292519943295, 0.22689280275926285, -0.22689280275926285]
-        start_conf = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
+        start_conf = Configuration(joint_values=vals, joint_types=ik_joint_types, joint_names=ik_joint_names)
         # client.set_robot_configuration(robot, start_conf)
         # wait_if_gui()
 
         # vals = [0.05235987755982989, -0.087266462599716474, -0.05235987755982989, 1.7104226669544429, 0.13962634015954636, -0.43633231299858238]
         vals = [0.034906585039886591, 0.68067840827778847, 0.15707963267948966, -0.89011791851710809, -0.034906585039886591, -2.2514747350726849]
-        end_conf = Configuration(values=vals, types=ik_joint_types, joint_names=ik_joint_names)
+        end_conf = Configuration(joint_values=vals, joint_types=ik_joint_types, joint_names=ik_joint_names)
         # client.set_robot_configuration(robot, end_conf)
         # wait_if_gui()
 
         plan_options = {
             'diagnosis' : True,
-            'resolutions' : 0.05
+            'resolutions' : 0.05,
+            'rrt_restarts' : 10,
             }
 
         goal_constraints = robot.constraints_from_configuration(end_conf, [0.01], [0.01], group=move_group)
@@ -406,7 +407,7 @@ def test_plan_motion(abb_irb4600_40_255_setup, itj_TC_g1_cms, itj_beam_cm, colum
 
         if trajectory is None:
             cprint('Client motion planner CANNOT find a plan!', 'red')
-            # assert False, 'Client motion planner CANNOT find a plan!'
+            assert False, 'Client motion planner CANNOT find a plan!'
             # TODO warning
         else:
             cprint('Client motion planning find a plan!', 'green')
@@ -481,14 +482,12 @@ def test_ik(fixed_waam_setup, viewer, ik_engine):
                         if q is not None:
                             assert isinstance(q, Configuration)
                             client.set_robot_configuration(robot, q)
-                            # set_joint_positions(robot_uid, ik_joints, q.values)
                             tcp_pose = get_link_pose(robot_uid, tool_link)
                             assert_almost_equal(tcp_pose[0], p[0], decimal=3)
                             assert_almost_equal(quat_angle_between(tcp_pose[1], p[1]), 0, decimal=3)
             elif isinstance(qs, Configuration):
                 # cprint('Single solutions found!', 'green')
                 q = qs
-                # set_joint_positions(robot_uid, ik_joints, q.values)
                 client.set_robot_configuration(robot, q)
                 tcp_pose = get_link_pose(robot_uid, tool_link)
                 assert_almost_equal(tcp_pose[0], p[0], decimal=3)

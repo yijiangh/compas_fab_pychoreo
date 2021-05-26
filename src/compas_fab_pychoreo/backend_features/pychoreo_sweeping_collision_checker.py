@@ -53,6 +53,8 @@ def get_attachment_sweeping_collision_fn(robot_body, joints, obstacles=[],
 
         # * ray - body check
         # ! TODO check if AABB is updated: https://github.com/bulletphysics/bullet3/pull/2900
+        # https://github.com/bulletphysics/bullet3/pull/3331
+        # ! pybullet.performCollisionDetection ()
         check_bodies = obstacles
         # print('obstacles: ', obstacles)
         with WorldSaver():
@@ -112,11 +114,11 @@ class PyChoreoSweepingCollisionChecker(SweepingCollisionChecker):
 
     def _get_sweeping_collision_fn(self, robot, joint_names, options=None):
         robot_uid = self.client.get_robot_pybullet_uid(robot)
-        avoid_collisions = options.get('avoid_collisions', True)
-        self_collisions = options.get('self_collisions', True)
-        distance_threshold = options.get('distance_threshold', 0.0)
-        max_distance = options.get('max_distance', 0.0)
-        debug = options.get('debug', False)
+        # avoid_collisions = options.get('avoid_collisions', True)
+        # self_collisions = options.get('self_collisions', True)
+        # distance_threshold = options.get('distance_threshold', 0.0)
+        # max_distance = options.get('max_distance', 0.0)
+        # debug = options.get('debug', False)
 
         # * custom joint limits
         ik_joints = joints_from_names(robot_uid, joint_names)

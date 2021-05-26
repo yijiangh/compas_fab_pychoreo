@@ -130,6 +130,7 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
             if jt_type in [Joint.REVOLUTE, Joint.CONTINUOUS] else 0.1 \
             for jt_name, jt_type in zip(joint_names, joint_types)})
         jump_threshold_from_joint = {joint_from_name(robot_uid, jt_name) : j_diff for jt_name, j_diff in jump_threshold.items()}
+
         # * iterative IK options
         pos_tolerance = is_valid_option(options, 'pos_tolerance', 1e-3)
         ori_tolerance = is_valid_option(options, 'ori_tolerance', 1e-3*np.pi)
@@ -190,7 +191,8 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
                     sample_ee_fn = None
 
                 path, cost = plan_cartesian_motion_lg(robot_uid, ik_joints, ee_poses, sample_ik_fn, collision_fn, \
-                    jump_threshold=jump_threshold_from_joint, sample_ee_fn=sample_ee_fn)
+                    jump_threshold=jump_threshold_from_joint, sample_ee_fn=sample_ee_fn,
+                    enforce_start_conf=start_configuration is not None)
 
                 if verbose:
                     print('Ladder graph cost: {}'.format(cost))
@@ -205,12 +207,13 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
             # TODO start_conf might have different number of joints with the given group?
             start_traj_pt = None
             if start_configuration is not None:
-                start_traj_pt = JointTrajectoryPoint(values=start_configuration.values, types=start_configuration.types)
+                start_traj_pt = JointTrajectoryPoint(joint_values=start_configuration.joint_values,
+                    joint_types=start_configuration.joint_types)
                 start_traj_pt.joint_names = start_configuration.joint_names
 
             jt_traj_pts = []
             for i, conf in enumerate(path):
-                jt_traj_pt = JointTrajectoryPoint(values=conf, types=joint_types)
+                jt_traj_pt = JointTrajectoryPoint(joint_values=conf, joint_types=joint_types)
                 jt_traj_pt.joint_names = joint_names
                 if start_traj_pt is not None:
                     # ! TrajectoryPoint doesn't copy over joint_names...
@@ -221,7 +224,8 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
                 jt_traj_pt.time_from_start = Duration(i*1,0)
                 jt_traj_pts.append(jt_traj_pt)
 
-            if start_configuration is not None and not compare_configurations(start_configuration, jt_traj_pts[0], jump_threshold, verbose=verbose):
+            if start_configuration is not None and \
+                not compare_configurations(start_configuration, jt_traj_pts[0], jump_threshold, verbose=verbose):
                 # if verbose:
                 #     print()
                 #     cprint('Joint jump from start conf, max diff {}'.format(start_configuration.max_difference(jt_traj_pts[0])), 'red')
@@ -251,5 +255,5 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
             # pb pose -> list(conf values)
             # TODO run random seed here and return a list of confs
             configurations = self.client.inverse_kinematics(robot, frame_from_pose(pose), options=ik_options)
-            return [configuration.values for configuration in configurations if configuration is not None]
+            return [configuration.joint_values for configuration in configurations if configuration is not None]
         return sample_ik_fn

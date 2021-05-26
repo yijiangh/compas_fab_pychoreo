@@ -71,7 +71,7 @@ class PyChoreoInverseKinematics(InverseKinematics):
         target_pose = pose_from_frame(frame_WCF)
         with WorldSaver():
             if start_configuration is not None:
-                start_conf_vals = start_configuration.values
+                start_conf_vals = start_configuration.joint_values
                 set_joint_positions(robot_uid, ik_joints, start_conf_vals)
             # else:
             #     sample_fn = get_sample_fn(robot_uid, ik_joints)
@@ -82,7 +82,7 @@ class PyChoreoInverseKinematics(InverseKinematics):
             conf_vals = self._compute_ik(robot_uid, ik_joints, tool_link, target_pose, max_iterations, custom_limits=pb_custom_limits)
 
             joint_types = robot.get_joint_types_by_names(ik_joint_names)
-            configurations = [Configuration(values=conf_val, types=joint_types, joint_names=ik_joint_names) \
+            configurations = [Configuration(joint_values=conf_val, joint_types=joint_types, joint_names=ik_joint_names) \
                 for conf_val in conf_vals if conf_val is not None]
             # else:
             #     # qs = client.inverse_kinematics(frame_WCF, group=move_group)
