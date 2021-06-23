@@ -1,7 +1,5 @@
-import logging
 import re
 from collections.abc import Iterable
-from compas.robots import Joint
 
 ###########################################
 
@@ -43,6 +41,24 @@ def wildcard_keys(data, wildcard):
 ############################################
 
 def compare_configurations(conf1, conf2, diff_tol_from_joint_names, fallback_tol=1e-3, verbose=True):
+    """Compare configurations using different tolerances for different joints.
+
+    Parameters
+    ----------
+    conf1 : Configuration
+    conf2 : Configuration
+    diff_tol_from_joint_names : dict
+        {joint_name : joint diff tolerance}
+    fallback_tol : float, optional
+        fallback tolerance if joint tol is not specified in `diff_tol_from_joint_names`, by default 1e-3
+    verbose : bool, optional
+        Printout for each joint diff, by default True
+
+    Returns
+    -------
+    [type]
+        [description]
+    """
     joint_names = conf1.joint_names or conf2.joint_names
     is_diff = False
     for i, diff in enumerate(conf1.iter_differences(conf2)):

@@ -114,7 +114,6 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
         base_link_name = robot.get_base_link_name(group=group)
         tool_link_name = robot.get_end_effector_link_name(group=group)
         tool_link = link_from_name(robot_uid, tool_link_name)
-        base_link = link_from_name(robot_uid, base_link_name)
 
         joint_names = robot.get_configurable_joint_names(group=group)
         joint_types = robot.get_joint_types_by_names(joint_names)
