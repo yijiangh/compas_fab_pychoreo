@@ -16,9 +16,20 @@ from pybullet_planning import WorldSaver, joints_from_names, joint_from_name, \
     link_from_name, interpolate_poses, plan_cartesian_motion_lg, get_labeled_configuration
 
 from pybullet_planning import HideOutput
-from pybullet_planning import all_between, get_custom_limits, get_movable_joints, set_joint_positions, get_link_pose
+from pybullet_planning import all_between, get_custom_limits, get_movable_joints, set_joint_positions, get_link_pose, \
+    get_link_subtree
 from pybullet_planning import prune_fixed_joints, get_configuration
 from pybullet_planning import inverse_kinematics_helper, is_pose_close, clone_body, remove_body
+
+def create_sub_robot(robot, first_joint, target_link):
+    # TODO: create a class or generator for repeated use
+    selected_links = get_link_subtree(robot, first_joint) # TODO: child_link_from_joint?
+    selected_joints = prune_fixed_joints(robot, selected_links)
+    assert(target_link in selected_links)
+    sub_target_link = selected_links.index(target_link)
+    sub_robot = clone_body(robot, links=selected_links, visual=False, collision=False) # TODO: joint limits
+    assert len(selected_joints) == len(get_movable_joints(sub_robot))
+    return sub_robot, selected_joints, sub_target_link
 
 def plan_cartesian_motion_from_links(robot, selected_links, target_link, waypoint_poses,
         max_iterations=200, custom_limits={}, get_sub_conf=False, **kwargs):
@@ -62,19 +73,20 @@ def plan_cartesian_motion_from_links(robot, selected_links, target_link, waypoin
 from pybullet_planning import INF
 from itertools import chain, islice
 from pybullet_planning import get_difference_fn, get_joint_positions, get_min_limits, get_max_limits, get_length, \
-    interval_generator, elapsed_time, randomize, violates_limits
+    interval_generator, elapsed_time, randomize, violates_limits, inverse_kinematics, get_ordered_ancestors
 
-def ikfast_inverse_kinematics(robot_uid, ik_info, world_from_target,
+def base_sample_inverse_kinematics(robot_uid, ik_info, world_from_target,
                               fixed_joints=[], max_ik_attempts=200, max_ik_time=INF,
-                              norm=INF, max_distance=INF, free_delta=0.01, **kwargs):
+                              norm=INF, max_joint_distance=INF, free_delta=0.01, use_pybullet=False, **kwargs):
     assert (max_ik_attempts < INF) or (max_ik_time < INF)
-    if max_distance is None:
-        max_distance = INF
+    if max_joint_distance is None:
+        max_joint_distance = INF
     #assert is_ik_compiled(ikfast_info)
     # ikfast = import_ikfast(ikfast_info)
     # ik_joints = get_ik_joints(robot, ikfast_info, tool_link)
     ik_joints = joints_from_names(robot_uid, ik_info.ik_joint_names)
     free_joints = joints_from_names(robot_uid, ik_info.free_joint_names)
+    ee_link = link_from_name(robot_uid, ik_info.ee_link_name)
     # base_from_ee = get_base_from_ee(robot_uid, ikfast_info, tool_link, world_from_target)
 
     difference_fn = get_difference_fn(robot_uid, ik_joints)
@@ -96,17 +108,42 @@ def ikfast_inverse_kinematics(robot_uid, ik_info, world_from_target,
             break
         # ! set free joint
         set_joint_positions(robot_uid, free_joints, free_positions)
+        if use_pybullet:
+            sub_robot, selected_joints, sub_target_link = create_sub_robot(robot_uid, ik_joints[0], ee_link)
+            sub_joints = prune_fixed_joints(sub_robot, get_ordered_ancestors(sub_robot, sub_target_link))
+            # ! call ik fn on ik_joints
+            all_confs = []
+            sub_kinematic_conf = inverse_kinematics(sub_robot, sub_target_link, world_from_target)
+                                                    # pos_tolerance=pos_tolerance, ori_tolerance=ori_tolerance)
+            if sub_kinematic_conf is not None:
+                #set_configuration(sub_robot, sub_kinematic_conf)
+                sub_kinematic_conf = get_joint_positions(sub_robot, sub_joints)
+                set_joint_positions(robot_uid, selected_joints, sub_kinematic_conf)
+                all_confs = [sub_kinematic_conf]
+        else:
+            all_confs = ik_info.ik_fn(world_from_target)
 
-        # ! call ik fn on ik_joints
-        for conf in randomize(ik_info.ik_fn(world_from_target)):
+        for conf in randomize(all_confs):
             #solution(robot, ik_joints, conf, tool_link, world_from_target)
             difference = difference_fn(current_conf, conf)
-            if not violates_limits(robot_uid, ik_joints, conf) and (get_length(difference, norm=norm) <= max_distance):
+            if not violates_limits(robot_uid, ik_joints, conf) and (get_length(difference, norm=norm) <= max_joint_distance):
                 #set_joint_positions(robot, ik_joints, conf)
                 yield (free_positions, conf)
+            # else:
+            #     print('current_conf: ', current_conf)
+            #     print('conf: ', conf)
+            #     print('diff: {}', difference)
+        # else:
+        #     min_distance = min([INF] + [get_length(difference_fn(q, current_conf), norm=norm) for q in all_confs])
+            # print('None of out {} solutions works, min distance {}.'.format(len(all_confs), min_distance))
+            #     lower_limits, upper_limits = get_custom_limits(robot_uid, ik_joints)
+            #     print('L: ', lower_limits)
+            #     print('U: ', upper_limits)
+        if use_pybullet:
+            remove_body(sub_robot)
 
 def plan_cartesian_motion_with_customized_ik(robot_uid, ik_info, waypoint_poses,
-        custom_limits={}, **kwargs):
+        custom_limits={}, pos_tolerance=1e-3, ori_tolerance=1e-3*np.pi, **kwargs):
     lower_limits, upper_limits = get_custom_limits(robot_uid, get_movable_joints(robot_uid), custom_limits)
     # selected_movable_joints = prune_fixed_joints(robot, selected_links)
     # assert(target_link in selected_links)
@@ -121,21 +158,24 @@ def plan_cartesian_motion_with_customized_ik(robot_uid, ik_info, waypoint_poses,
     ee_link = link_from_name(robot_uid, ik_info.ee_link_name)
 
     solutions = []
-    for target_pose in waypoint_poses:
-        for conf_pair in ikfast_inverse_kinematics(robot_uid, ik_info, target_pose):
+    for i, target_pose in enumerate(waypoint_poses):
+        tmp_fixed_joints = [] # if i != 0 else free_joints
+        for conf_pair in base_sample_inverse_kinematics(robot_uid, ik_info, target_pose, fixed_joints=tmp_fixed_joints, **kwargs):
             if conf_pair is None:
                 return None
                 # continue
             set_joint_positions(robot_uid, free_joints, conf_pair[0])
             set_joint_positions(robot_uid, ik_joints, conf_pair[1])
             # pos_tolerance=1e-3, ori_tolerance=1e-3*np.pi
-            if is_pose_close(get_link_pose(robot_uid, ee_link), target_pose, **kwargs):
+            if is_pose_close(get_link_pose(robot_uid, ee_link), target_pose,
+                    pos_tolerance=pos_tolerance, ori_tolerance=ori_tolerance):
                 kinematic_conf = get_configuration(robot_uid)
                 if not all_between(lower_limits, kinematic_conf, upper_limits):
                     return None
                 solutions.append(kinematic_conf)
                 break
         else:
+            print('#{}/{} way point IK fails.'.format(i, len(waypoint_poses)))
             return None
     return solutions
 
@@ -222,7 +262,8 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
         ik_function = options.get('ik_function', None)
         customized_ikinfo = options.get('customized_ikinfo', None)
         max_ik_attempts = options.get('max_ik_attempts', 200)
-        free_delta = options.get('free_delta', 0.01)
+        free_delta = options.get('free_delta', 0.1)
+        max_joint_distance = options.get('max_joint_distance', np.inf)
 
         # * convert to poses and do workspace linear interpolation
         given_poses = [pose_from_frame(frame_WCF) for frame_WCF in frames_WCF]
@@ -240,6 +281,10 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
             # set to start conf
             if start_configuration is not None:
                 self.client.set_robot_configuration(robot, start_configuration)
+                # print('FK: ', get_link_pose(robot_uid, tool_link))
+                # print('Start ee: ', ee_poses[0])
+                # print('is_pose_close: ', is_pose_close(get_link_pose(robot_uid, tool_link), ee_poses[0],
+                #     pos_tolerance=pos_tolerance, ori_tolerance=ori_tolerance))
 
             if planner_id == 'IterativeIK':
                 selected_links = [link_from_name(robot_uid, l) for l in robot.get_link_names(group=group)]
@@ -250,8 +295,10 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
                         ee_poses, get_sub_conf=False, pos_tolerance=pos_tolerance, ori_tolerance=ori_tolerance)
                 else:
                     assert tool_link_name == customized_ikinfo.ee_link_name
-                    plan_cartesian_motion_with_customized_ik(robot_uid, customized_ikinfo, ee_poses,
-                        pos_tolerance=pos_tolerance, ori_tolerance=ori_tolerance)
+                    path = plan_cartesian_motion_with_customized_ik(robot_uid, customized_ikinfo, ee_poses,
+                        pos_tolerance=pos_tolerance, ori_tolerance=ori_tolerance,
+                        max_ik_attempts=max_ik_attempts, free_delta=free_delta, max_joint_distance=max_joint_distance)
+
                 if path is None:
                     failure_reason = 'IK plan is not found.'
                 # collision checking is not included in the default Cartesian planning
