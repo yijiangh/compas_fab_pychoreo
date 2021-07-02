@@ -2,7 +2,7 @@ import numpy as np
 import time
 import math
 from termcolor import cprint
-from compas_fab.robots import Configuration, JointTrajectory, JointTrajectoryPoint, Duration
+from compas_fab.robots import Configuration, JointTrajectory, JointTrajectoryPoint, Duration, robot
 from compas.robots import Joint
 from compas.geometry import distance_point_point
 from compas_fab.backends.interfaces import PlanCartesianMotion
@@ -58,6 +58,88 @@ def plan_cartesian_motion_from_links(robot, selected_links, target_link, waypoin
     remove_body(sub_robot)
     return solutions
 
+#######################################################
+from pybullet_planning import INF
+from itertools import chain, islice
+from pybullet_planning import get_difference_fn, get_joint_positions, get_min_limits, get_max_limits, get_length, \
+    interval_generator, elapsed_time, randomize, violates_limits
+
+def ikfast_inverse_kinematics(robot_uid, ik_info, world_from_target,
+                              fixed_joints=[], max_ik_attempts=200, max_ik_time=INF,
+                              norm=INF, max_distance=INF, free_delta=0.01, **kwargs):
+    assert (max_ik_attempts < INF) or (max_ik_time < INF)
+    if max_distance is None:
+        max_distance = INF
+    #assert is_ik_compiled(ikfast_info)
+    # ikfast = import_ikfast(ikfast_info)
+    # ik_joints = get_ik_joints(robot, ikfast_info, tool_link)
+    ik_joints = joints_from_names(robot_uid, ik_info.ik_joint_names)
+    free_joints = joints_from_names(robot_uid, ik_info.free_joint_names)
+    # base_from_ee = get_base_from_ee(robot_uid, ikfast_info, tool_link, world_from_target)
+
+    difference_fn = get_difference_fn(robot_uid, ik_joints)
+    current_conf = get_joint_positions(robot_uid,ik_joints)
+    current_positions = get_joint_positions(robot_uid, free_joints)
+
+    # TODO: handle circular joints
+    # TODO: use norm=INF to limit the search for free values
+    free_deltas = np.array([0. if joint in fixed_joints else free_delta for joint in free_joints])
+    lower_limits = np.maximum(get_min_limits(robot_uid, free_joints), current_positions - free_deltas)
+    upper_limits = np.minimum(get_max_limits(robot_uid, free_joints), current_positions + free_deltas)
+    generator = chain([current_positions], # TODO: sample from a truncated Gaussian nearby
+                      interval_generator(lower_limits, upper_limits))
+    if max_ik_attempts < INF:
+        generator = islice(generator, max_ik_attempts)
+    start_time = time.time()
+    for free_positions in generator:
+        if max_ik_time < elapsed_time(start_time):
+            break
+        # ! set free joint
+        set_joint_positions(robot_uid, free_joints, free_positions)
+
+        # ! call ik fn on ik_joints
+        for conf in randomize(ik_info.ik_fn(world_from_target)):
+            #solution(robot, ik_joints, conf, tool_link, world_from_target)
+            difference = difference_fn(current_conf, conf)
+            if not violates_limits(robot_uid, ik_joints, conf) and (get_length(difference, norm=norm) <= max_distance):
+                #set_joint_positions(robot, ik_joints, conf)
+                yield (free_positions, conf)
+
+def plan_cartesian_motion_with_customized_ik(robot_uid, ik_info, waypoint_poses,
+        custom_limits={}, **kwargs):
+    lower_limits, upper_limits = get_custom_limits(robot_uid, get_movable_joints(robot_uid), custom_limits)
+    # selected_movable_joints = prune_fixed_joints(robot, selected_links)
+    # assert(target_link in selected_links)
+    # selected_target_link = selected_links.index(target_link)
+    # sub_robot = clone_body(robot, links=selected_links, visual=False, collision=False) # TODO: joint limits
+    # sub_movable_joints = get_movable_joints(sub_robot)
+    #null_space = get_null_space(robot, selected_movable_joints, custom_limits=custom_limits)
+    # null_space = None
+
+    ik_joints = joints_from_names(robot_uid, ik_info.ik_joint_names)
+    free_joints = joints_from_names(robot_uid, ik_info.free_joint_names)
+    ee_link = link_from_name(robot_uid, ik_info.ee_link_name)
+
+    solutions = []
+    for target_pose in waypoint_poses:
+        for conf_pair in ikfast_inverse_kinematics(robot_uid, ik_info, target_pose):
+            if conf_pair is None:
+                return None
+                # continue
+            set_joint_positions(robot_uid, free_joints, conf_pair[0])
+            set_joint_positions(robot_uid, ik_joints, conf_pair[1])
+            # pos_tolerance=1e-3, ori_tolerance=1e-3*np.pi
+            if is_pose_close(get_link_pose(robot_uid, ee_link), target_pose, **kwargs):
+                kinematic_conf = get_configuration(robot_uid)
+                if not all_between(lower_limits, kinematic_conf, upper_limits):
+                    return None
+                solutions.append(kinematic_conf)
+                break
+        else:
+            return None
+    return solutions
+
+#######################################################
 
 class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
     def __init__(self, client):
@@ -137,7 +219,10 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
         ori_tolerance = is_valid_option(options, 'ori_tolerance', 1e-3*np.pi)
         # * ladder graph options
         frame_variant_gen = is_valid_option(options, 'frame_variant_generator', None)
-        ik_function = is_valid_option(options, 'ik_function', None)
+        ik_function = options.get('ik_function', None)
+        customized_ikinfo = options.get('customized_ikinfo', None)
+        max_ik_attempts = options.get('max_ik_attempts', 200)
+        free_delta = options.get('free_delta', 0.01)
 
         # * convert to poses and do workspace linear interpolation
         given_poses = [pose_from_frame(frame_WCF) for frame_WCF in frames_WCF]
@@ -160,8 +245,13 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
                 selected_links = [link_from_name(robot_uid, l) for l in robot.get_link_names(group=group)]
                 # with HideOutput():
                 # with redirect_stdout():
-                path = plan_cartesian_motion_from_links(robot_uid, selected_links, tool_link,
-                    ee_poses, get_sub_conf=False, pos_tolerance=pos_tolerance, ori_tolerance=ori_tolerance)
+                if customized_ikinfo is None:
+                    path = plan_cartesian_motion_from_links(robot_uid, selected_links, tool_link,
+                        ee_poses, get_sub_conf=False, pos_tolerance=pos_tolerance, ori_tolerance=ori_tolerance)
+                else:
+                    assert tool_link_name == customized_ikinfo.ee_link_name
+                    plan_cartesian_motion_with_customized_ik(robot_uid, customized_ikinfo, ee_poses,
+                        pos_tolerance=pos_tolerance, ori_tolerance=ori_tolerance)
                 if path is None:
                     failure_reason = 'IK plan is not found.'
                 # collision checking is not included in the default Cartesian planning
