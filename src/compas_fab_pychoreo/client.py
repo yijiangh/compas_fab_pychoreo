@@ -288,7 +288,7 @@ class PyChoreoClient(PyBulletClient):
 
     ########################################
 
-    def set_robot_configuration(self, robot, configuration): #, group=None
+    def set_robot_configuration(self, robot, configuration, group=None): #, group=None
         # We enforce that `joint_names` attribute must be specified in `configuration`
         # ! YJ: I don't like the assumption that the "unspecified" joints are assumed to be zero
         # I think it's better to leave them "as-is"

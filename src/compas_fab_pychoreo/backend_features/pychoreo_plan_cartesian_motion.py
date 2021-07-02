@@ -4,6 +4,7 @@ import math
 from termcolor import cprint
 from compas_fab.robots import Configuration, JointTrajectory, JointTrajectoryPoint, Duration
 from compas.robots import Joint
+from compas.geometry import distance_point_point
 from compas_fab.backends.interfaces import PlanCartesianMotion
 from compas_fab.backends.interfaces import InverseKinematics
 from compas_fab.backends.pybullet.utils import redirect_stdout
@@ -125,6 +126,7 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
         avoid_collisions = options.get('avoid_collisions', True)
         pos_step_size = options.get('max_step', 0.01)
         planner_id = is_valid_option(options, 'planner_id', 'IterativeIK')
+        frame_jump_tolerance = options.get('frame_jump_tolerance', 0.001)
         jump_threshold = is_valid_option(options, 'jump_threshold', {jt_name : math.pi/6 \
             if jt_type in [Joint.REVOLUTE, Joint.CONTINUOUS] else 0.1 \
             for jt_name, jt_type in zip(joint_names, joint_types)})
@@ -225,12 +227,16 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
 
             if start_configuration is not None and \
                 not compare_configurations(start_configuration, jt_traj_pts[0], jump_threshold, verbose=verbose):
-                # if verbose:
-                #     print()
-                #     cprint('Joint jump from start conf, max diff {}'.format(start_configuration.max_difference(jt_traj_pts[0])), 'red')
-                #     cprint('start conf {}'.format(['{:.4f}'.format(v) for v in start_configuration.values]), 'red')
-                #     cprint('traj pt 0  {}'.format(['{:.4f}'.format(v) for v in jt_traj_pts[0].values]), 'red')
-                pass
+                fk_frame1 = self.client.forward_kinematics(robot, start_configuration, group=group, options={'link' : tool_link_name})
+                fk_frame2 = self.client.forward_kinematics(robot, jt_traj_pts[0], group=group, options={'link' : tool_link_name})
+                point_dist = distance_point_point(fk_frame1.point, fk_frame2.point)
+                if not fk_frame1.__eq__(fk_frame2, tol=frame_jump_tolerance):
+                    if point_dist > frame_jump_tolerance:
+                        if verbose:
+                            cprint('Robot FK tool pose center point diverge: {:.5f} (m)'.format(point_dist), 'yellow')
+                if verbose:
+                    cprint('Conf disagreement found, FK center point diff {:.5f}(m), but still returns a trajectory. Please be cautious.'.format(point_dist), 'yellow')
+                # pass
                 # return None
             # TODO check intermediate joint jump
             trajectory = JointTrajectory(trajectory_points=jt_traj_pts,
