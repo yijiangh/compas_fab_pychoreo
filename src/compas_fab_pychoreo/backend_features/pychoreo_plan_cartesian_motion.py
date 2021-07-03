@@ -1,6 +1,8 @@
 import numpy as np
 import time
 import math
+from pybullet_planning.interfaces.env_manager.user_io import wait_for_user
+from pybullet_planning.interfaces.robots.body import dump_body
 from termcolor import cprint
 from compas_fab.robots import Configuration, JointTrajectory, JointTrajectoryPoint, Duration, robot
 from compas.robots import Joint
@@ -159,7 +161,7 @@ def plan_cartesian_motion_with_customized_ik(robot_uid, ik_info, waypoint_poses,
 
     solutions = []
     for i, target_pose in enumerate(waypoint_poses):
-        tmp_fixed_joints = [] # if i != 0 else free_joints
+        tmp_fixed_joints = [] if i != 0 else free_joints
         for conf_pair in base_sample_inverse_kinematics(robot_uid, ik_info, target_pose, fixed_joints=tmp_fixed_joints, **kwargs):
             if conf_pair is None:
                 return None
@@ -175,7 +177,7 @@ def plan_cartesian_motion_with_customized_ik(robot_uid, ik_info, waypoint_poses,
                 solutions.append(kinematic_conf)
                 break
         else:
-            print('#{}/{} way point IK fails.'.format(i, len(waypoint_poses)))
+            print('#{}/{} waypoint IK fails.'.format(i, len(waypoint_poses)))
             return None
     return solutions
 
@@ -263,7 +265,7 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
         customized_ikinfo = options.get('customized_ikinfo', None)
         max_ik_attempts = options.get('max_ik_attempts', 200)
         free_delta = options.get('free_delta', 0.1)
-        max_joint_distance = options.get('max_joint_distance', np.inf)
+        max_joint_distance = options.get('max_joint_distance', 0.5)
 
         # * convert to poses and do workspace linear interpolation
         given_poses = [pose_from_frame(frame_WCF) for frame_WCF in frames_WCF]
@@ -271,6 +273,8 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
         for p1, p2 in zip(given_poses[:-1], given_poses[1:]):
             c_interp_poses = list(interpolate_poses(p1, p2, pos_step_size=pos_step_size))
             ee_poses.extend(c_interp_poses)
+        if len(ee_poses) == 0:
+            cprint('Warning: target interpolated workspace poses are empty.')
 
         # * build collision fn
         attachments = values_as_list(self.client.pychoreo_attachments)
