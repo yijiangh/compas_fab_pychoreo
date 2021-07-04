@@ -77,73 +77,6 @@ from itertools import chain, islice
 from pybullet_planning import get_difference_fn, get_joint_positions, get_min_limits, get_max_limits, get_length, \
     interval_generator, elapsed_time, randomize, violates_limits, inverse_kinematics, get_ordered_ancestors
 
-def base_sample_inverse_kinematics(robot_uid, ik_info, world_from_target,
-                              fixed_joints=[], max_ik_attempts=200, max_ik_time=INF,
-                              norm=INF, max_joint_distance=INF, free_delta=0.01, use_pybullet=False, **kwargs):
-    assert (max_ik_attempts < INF) or (max_ik_time < INF)
-    if max_joint_distance is None:
-        max_joint_distance = INF
-    #assert is_ik_compiled(ikfast_info)
-    # ikfast = import_ikfast(ikfast_info)
-    # ik_joints = get_ik_joints(robot, ikfast_info, tool_link)
-    ik_joints = joints_from_names(robot_uid, ik_info.ik_joint_names)
-    free_joints = joints_from_names(robot_uid, ik_info.free_joint_names)
-    ee_link = link_from_name(robot_uid, ik_info.ee_link_name)
-    # base_from_ee = get_base_from_ee(robot_uid, ikfast_info, tool_link, world_from_target)
-
-    difference_fn = get_difference_fn(robot_uid, ik_joints)
-    current_conf = get_joint_positions(robot_uid,ik_joints)
-    current_positions = get_joint_positions(robot_uid, free_joints)
-
-    # TODO: handle circular joints
-    # TODO: use norm=INF to limit the search for free values
-    free_deltas = np.array([0. if joint in fixed_joints else free_delta for joint in free_joints])
-    lower_limits = np.maximum(get_min_limits(robot_uid, free_joints), current_positions - free_deltas)
-    upper_limits = np.minimum(get_max_limits(robot_uid, free_joints), current_positions + free_deltas)
-    generator = chain([current_positions], # TODO: sample from a truncated Gaussian nearby
-                      interval_generator(lower_limits, upper_limits))
-    if max_ik_attempts < INF:
-        generator = islice(generator, max_ik_attempts)
-    start_time = time.time()
-    for free_positions in generator:
-        if max_ik_time < elapsed_time(start_time):
-            break
-        # ! set free joint
-        set_joint_positions(robot_uid, free_joints, free_positions)
-        if use_pybullet:
-            sub_robot, selected_joints, sub_target_link = create_sub_robot(robot_uid, ik_joints[0], ee_link)
-            sub_joints = prune_fixed_joints(sub_robot, get_ordered_ancestors(sub_robot, sub_target_link))
-            # ! call ik fn on ik_joints
-            all_confs = []
-            sub_kinematic_conf = inverse_kinematics(sub_robot, sub_target_link, world_from_target)
-                                                    # pos_tolerance=pos_tolerance, ori_tolerance=ori_tolerance)
-            if sub_kinematic_conf is not None:
-                #set_configuration(sub_robot, sub_kinematic_conf)
-                sub_kinematic_conf = get_joint_positions(sub_robot, sub_joints)
-                set_joint_positions(robot_uid, selected_joints, sub_kinematic_conf)
-                all_confs = [sub_kinematic_conf]
-        else:
-            all_confs = ik_info.ik_fn(world_from_target)
-
-        for conf in randomize(all_confs):
-            #solution(robot, ik_joints, conf, tool_link, world_from_target)
-            difference = difference_fn(current_conf, conf)
-            if not violates_limits(robot_uid, ik_joints, conf) and (get_length(difference, norm=norm) <= max_joint_distance):
-                #set_joint_positions(robot, ik_joints, conf)
-                yield (free_positions, conf)
-            # else:
-            #     print('current_conf: ', current_conf)
-            #     print('conf: ', conf)
-            #     print('diff: {}', difference)
-        # else:
-        #     min_distance = min([INF] + [get_length(difference_fn(q, current_conf), norm=norm) for q in all_confs])
-            # print('None of out {} solutions works, min distance {}.'.format(len(all_confs), min_distance))
-            #     lower_limits, upper_limits = get_custom_limits(robot_uid, ik_joints)
-            #     print('L: ', lower_limits)
-            #     print('U: ', upper_limits)
-        if use_pybullet:
-            remove_body(sub_robot)
-
 def plan_cartesian_motion_with_customized_ik(robot_uid, ik_info, waypoint_poses,
         custom_limits={}, pos_tolerance=1e-3, ori_tolerance=1e-3*np.pi, **kwargs):
     lower_limits, upper_limits = get_custom_limits(robot_uid, get_movable_joints(robot_uid), custom_limits)
@@ -161,13 +94,11 @@ def plan_cartesian_motion_with_customized_ik(robot_uid, ik_info, waypoint_poses,
 
     solutions = []
     for i, target_pose in enumerate(waypoint_poses):
-        tmp_fixed_joints = [] if i != 0 else free_joints
-        for conf_pair in base_sample_inverse_kinematics(robot_uid, ik_info, target_pose, fixed_joints=tmp_fixed_joints, **kwargs):
-            if conf_pair is None:
+        for conf in ik_info.ik_fn(target_pose, **kwargs):
+            if conf is None:
                 return None
                 # continue
-            set_joint_positions(robot_uid, free_joints, conf_pair[0])
-            set_joint_positions(robot_uid, ik_joints, conf_pair[1])
+            set_joint_positions(robot_uid, ik_joints, conf)
             # pos_tolerance=1e-3, ori_tolerance=1e-3*np.pi
             if is_pose_close(get_link_pose(robot_uid, ee_link), target_pose,
                     pos_tolerance=pos_tolerance, ori_tolerance=ori_tolerance):
@@ -300,8 +231,8 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
                 else:
                     assert tool_link_name == customized_ikinfo.ee_link_name
                     path = plan_cartesian_motion_with_customized_ik(robot_uid, customized_ikinfo, ee_poses,
-                        pos_tolerance=pos_tolerance, ori_tolerance=ori_tolerance,
-                        max_ik_attempts=max_ik_attempts, free_delta=free_delta, max_joint_distance=max_joint_distance)
+                        pos_tolerance=pos_tolerance, ori_tolerance=ori_tolerance)
+                        # max_ik_attempts=max_ik_attempts, free_delta=free_delta, max_joint_distance=max_joint_distance)
 
                 if path is None:
                     failure_reason = 'IK plan is not found.'
