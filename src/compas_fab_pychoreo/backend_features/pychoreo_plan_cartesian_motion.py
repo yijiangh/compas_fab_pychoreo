@@ -194,9 +194,10 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
         frame_variant_gen = is_valid_option(options, 'frame_variant_generator', None)
         ik_function = options.get('ik_function', None)
         customized_ikinfo = options.get('customized_ikinfo', None)
-        max_ik_attempts = options.get('max_ik_attempts', 200)
-        free_delta = options.get('free_delta', 0.1)
-        max_joint_distance = options.get('max_joint_distance', 0.5)
+        # ! options for base sampler + ik
+        # max_ik_attempts = options.get('max_ik_attempts', 200)
+        # free_delta = options.get('free_delta', 0.1)
+        # max_joint_distance = options.get('max_joint_distance', 0.5)
 
         # * convert to poses and do workspace linear interpolation
         given_poses = [pose_from_frame(frame_WCF) for frame_WCF in frames_WCF]
@@ -243,7 +244,7 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
                         for attachment in attachments:
                             attachment.assign()
                         if collision_fn(pruned_conf_val, diagnosis=diagnosis):
-                            failure_reason = 'IK plan is found but collision violated.'
+                            failure_reason = 'IK plan is found but collision violated'
                             path = None
                             break
                         path[i] = pruned_conf_val
@@ -297,17 +298,17 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
                 jt_traj_pt.time_from_start = Duration(i*1,0)
                 jt_traj_pts.append(jt_traj_pt)
 
-            if start_configuration is not None and \
-                not compare_configurations(start_configuration, jt_traj_pts[0], jump_threshold, verbose=verbose):
-                fk_frame1 = self.client.forward_kinematics(robot, start_configuration, group=group, options={'link' : tool_link_name})
-                fk_frame2 = self.client.forward_kinematics(robot, jt_traj_pts[0], group=group, options={'link' : tool_link_name})
-                point_dist = distance_point_point(fk_frame1.point, fk_frame2.point)
-                if not fk_frame1.__eq__(fk_frame2, tol=frame_jump_tolerance):
-                    if point_dist > frame_jump_tolerance:
-                        if verbose:
-                            cprint('Robot FK tool pose center point diverge: {:.5f} (m)'.format(point_dist), 'yellow')
-                if verbose:
-                    cprint('Conf disagreement found, FK center point diff {:.5f}(m), but still returns a trajectory. Please be cautious.'.format(point_dist), 'yellow')
+            # if start_configuration is not None and \
+            #     not compare_configurations(start_configuration, jt_traj_pts[0], jump_threshold, verbose=verbose):
+            #     fk_frame1 = self.client.forward_kinematics(robot, start_configuration, group=group, options={'link' : tool_link_name})
+            #     fk_frame2 = self.client.forward_kinematics(robot, jt_traj_pts[0], group=group, options={'link' : tool_link_name})
+            #     point_dist = distance_point_point(fk_frame1.point, fk_frame2.point)
+            #     if not fk_frame1.__eq__(fk_frame2, tol=frame_jump_tolerance):
+            #         if point_dist > frame_jump_tolerance:
+            #             if verbose:
+            #                 cprint('Robot FK tool pose center point diverge: {:.5f} (m)'.format(point_dist), 'yellow')
+            #     if verbose:
+            #         cprint('Conf disagreement found, FK center point diff {:.5f}(m), but still returns a trajectory. Please be cautious.'.format(point_dist), 'yellow')
                 # pass
                 # return None
             # TODO check intermediate joint jump

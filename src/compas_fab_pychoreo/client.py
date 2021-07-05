@@ -14,7 +14,7 @@ from pybullet_planning import set_joint_positions
 from pybullet_planning import joints_from_names, get_joint_positions
 from pybullet_planning import set_pose, create_attachment, set_color, get_name
 from pybullet_planning import add_fixed_constraint, remove_constraint
-from pybullet_planning import draw_pose
+from pybullet_planning import draw_pose, get_pose
 from pybullet_planning import draw_collision_diagnosis, expand_links, pairwise_link_collision, pairwise_link_collision_info
 
 from compas_fab.backends import PyBulletClient
@@ -267,6 +267,13 @@ class PyChoreoClient(PyBulletClient):
                 links = get_all_links(body)
                 for link in links:
                     set_color(body, color, link=link)
+
+    def get_object_frame(self, wildcard, scale=1.0):
+        bodies = self._get_bodies(wildcard)
+        body_frames = {}
+        for body in bodies:
+            body_frames[body] = frame_from_pose(get_pose(body), scale)
+        return body_frames
 
     def _print_object_summary(self):
         print('^'*10)
