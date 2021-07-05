@@ -60,9 +60,9 @@ class PyChoreoPlanMotion(PlanMotion):
         # * parse options
         verbose = is_valid_option(options, 'verbose', False)
         diagnosis = options.get('diagnosis', False)
-        custom_limits = options.get('custom_limits') or {}
-        resolutions = options.get('resolutions') or 0.1
-        weights = options.get('weights') or None
+        custom_limits = options.get('custom_limits', {})
+        resolutions = options.get('joint_resolutions', 0.1)
+        weights = options.get('joint_weights', None)
         rrt_restarts = options.get('rrt_restarts', 2)
         rrt_iterations = options.get('rrt_iterations', 20)
         smooth_iterations = options.get('smooth_iterations', 100)
