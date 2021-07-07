@@ -17,7 +17,7 @@ from compas_fab_pychoreo.backend_features.pychoreo_configuration_collision_check
 from pybullet_planning import WorldSaver, joints_from_names, joint_from_name, \
     link_from_name, interpolate_poses, plan_cartesian_motion_lg, get_labeled_configuration
 
-from pybullet_planning import HideOutput
+from pybullet_planning import HideOutput, draw_pose
 from pybullet_planning import all_between, get_custom_limits, get_movable_joints, set_joint_positions, get_link_pose, \
     get_link_subtree
 from pybullet_planning import prune_fixed_joints, get_configuration
@@ -96,6 +96,7 @@ def plan_cartesian_motion_with_customized_ik(robot_uid, ik_info, waypoint_poses,
     for i, target_pose in enumerate(waypoint_poses):
         for conf in ik_info.ik_fn(target_pose, **kwargs):
             if conf is None:
+                print('TracIK: #{}/{} waypoint IK fails due to unfound.'.format(i, len(waypoint_poses)))
                 return None
                 # continue
             set_joint_positions(robot_uid, ik_joints, conf)
@@ -104,11 +105,16 @@ def plan_cartesian_motion_with_customized_ik(robot_uid, ik_info, waypoint_poses,
                     pos_tolerance=pos_tolerance, ori_tolerance=ori_tolerance):
                 kinematic_conf = get_configuration(robot_uid)
                 if not all_between(lower_limits, kinematic_conf, upper_limits):
+                    print('Reject due to limit: {} \nL {}\nU {}'.format(kinematic_conf, lower_limits, upper_limits))
                     return None
                 solutions.append(kinematic_conf)
                 break
+            else:
+                # draw_pose(get_link_pose(robot_uid, ee_link), length=1.0)
+                # draw_pose(target_pose, length=1.0)
+                print('Pose not close:\nIK {}\nGiven {}!'.format(get_link_pose(robot_uid, ee_link), target_pose))
         else:
-            print('#{}/{} waypoint IK fails.'.format(i, len(waypoint_poses)))
+            print('TracIK: #{}/{} waypoint IK fails.'.format(i, len(waypoint_poses)))
             return None
     return solutions
 
