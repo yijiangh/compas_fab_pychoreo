@@ -7,12 +7,13 @@ from collections import defaultdict
 from itertools import combinations
 from termcolor import cprint
 
+import pybullet_planning as pp
 from pybullet_planning import HideOutput, CLIENTS, load_pybullet, INFO_FROM_BODY, ModelInfo
 from pybullet_planning import BASE_LINK, RED, GREY, YELLOW, BLUE
 from pybullet_planning import get_link_pose, link_from_name, get_disabled_collisions, get_all_links
 from pybullet_planning import set_joint_positions
 from pybullet_planning import joints_from_names, get_joint_positions
-from pybullet_planning import set_pose, create_attachment, set_color, get_name
+from pybullet_planning import set_pose, set_color, get_name, Attachment
 from pybullet_planning import add_fixed_constraint, remove_constraint
 from pybullet_planning import draw_pose, get_pose
 from pybullet_planning import draw_collision_diagnosis, expand_links, pairwise_link_collision, pairwise_link_collision_info
@@ -26,8 +27,7 @@ from compas_fab_pychoreo.utils import wildcard_keys
 
 from .exceptions import CollisionError
 from .exceptions import InverseKinematicsError
-from .conversions import frame_from_pose
-from .conversions import pose_from_frame
+from .conversions import frame_from_pose, pose_from_transformation, pose_from_frame
 from .utils import values_as_list
 
 class PyChoreoClient(PyBulletClient):
@@ -105,7 +105,9 @@ class PyChoreoClient(PyBulletClient):
         # INFO_FROM_BODY[self.client.client_id, tool_robot] = ModelInfo(tool_name, urdf_file, False, 1.0)
 
     def add_attached_collision_mesh(self, attached_collision_mesh, options=None):
-        """Adds an attached collision object to the planning scene, the grasp pose is set according to the
+        """Adds an attached collision object to the planning scene.
+
+        If no grasp pose is passed in, by default the grasp is set according to the
         **current** relative pose in the scene. Thus, the robot conf needs to be set to the right values to
         make the grasp pose right.
 
@@ -128,6 +130,7 @@ class PyChoreoClient(PyBulletClient):
         options['mass'] = mass
         color = options.get('color', None)
         attached_child_link_name = options.get('attached_child_link_name', None)
+        parent_link_from_child_link = options.get('parent_link_from_child_link_transformation', None)
 
         robot_uid = self.get_robot_pybullet_uid(robot)
         name = attached_collision_mesh.collision_mesh.id
@@ -159,8 +162,14 @@ class PyChoreoClient(PyBulletClient):
                     set_color(body, color, link=link)
             # create attachment based on their *current* pose
             attach_child_link = BASE_LINK if not attached_child_link_name else link_from_name(body, attached_child_link_name)
-            attachment = create_attachment(robot_uid, tool_attach_link, body, attach_child_link)
-            attachment.assign()
+            if not parent_link_from_child_link:
+                attachment = pp.create_attachment(robot_uid, tool_attach_link, body, attach_child_link)
+            else:
+                # grasp_pose = pp.multiply(pp.invert(parent_link_pose), child_link_pose)
+                grasp_pose = pose_from_transformation(parent_link_from_child_link)
+                Attachment(robot_uid, tool_attach_link, grasp_pose, body)
+                attachment.assign()
+
             self.pychoreo_attachments[name].append(attachment)
             # create fixed constraint to conform to PybulletClient (we don't use it though)
             constraint_id = add_fixed_constraint(attachment.child, attachment.parent, attachment.parent_link)

@@ -13,7 +13,6 @@ def pose_from_frame(frame, scale=1.0):
     """
     return ([v*scale for v in frame.point], frame.quaternion.xyzw)
 
-
 def frame_from_pose(pose, scale=1.0):
     """Returns a frame from a PyBullet pose.
 
