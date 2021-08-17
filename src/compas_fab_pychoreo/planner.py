@@ -61,12 +61,12 @@ class PyChoreoPlanner(PlannerInterface):
 
     #####
 
-    def add_attached_collision_mesh(self, *args, **kwargs):
-        # ! using main-branch
-        return PyBulletAddAttachedCollisionMesh(self.client)(*args, **kwargs)
+    # def add_attached_collision_mesh(self, *args, **kwargs):
+    #     # ! using main-branch
+    #     return PyBulletAddAttachedCollisionMesh(self.client)(*args, **kwargs)
 
-    def remove_attached_collision_mesh(self, *args, **kwargs):
-        # ! using main-branch
-        return PyBulletRemoveAttachedCollisionMesh(self.client)(*args, **kwargs)
+    # def remove_attached_collision_mesh(self, *args, **kwargs):
+    #     # ! using main-branch
+    #     return PyBulletRemoveAttachedCollisionMesh(self.client)(*args, **kwargs)
 
 

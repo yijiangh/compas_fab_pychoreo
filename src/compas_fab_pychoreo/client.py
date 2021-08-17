@@ -138,7 +138,7 @@ class PyChoreoClient(PyBulletClient):
         # ! mimic ROS' behavior: collision object with same name is replaced
         if name in self.attached_collision_objects:
             cprint('Replacing existing attached collision mesh {}'.format(name), 'yellow')
-            self.remove_attached_collision_mesh(name)
+            self.remove_attached_collision_mesh(name, options=options)
         if name not in self.collision_objects:
             # ! I don't want to add another copy of the objects
             # self.planner.add_attached_collision_mesh(attached_collision_mesh, options=options)
@@ -167,8 +167,8 @@ class PyChoreoClient(PyBulletClient):
             else:
                 # grasp_pose = pp.multiply(pp.invert(parent_link_pose), child_link_pose)
                 grasp_pose = pose_from_transformation(parent_link_from_child_link)
-                Attachment(robot_uid, tool_attach_link, grasp_pose, body)
-                attachment.assign()
+                attachment = Attachment(robot_uid, tool_attach_link, grasp_pose, body)
+            attachment.assign()
 
             self.pychoreo_attachments[name].append(attachment)
             # create fixed constraint to conform to PybulletClient (we don't use it though)
@@ -180,7 +180,7 @@ class PyChoreoClient(PyBulletClient):
 
     def remove_attached_collision_mesh(self, name, options=None):
         # ! Remove and detach, ambiguity?
-        self.planner.remove_attached_collision_mesh(name, options=options)
+        # self.planner.remove_attached_collision_mesh(name, options=options)
         wildcard = options.get('wildcard') or '^{}$'.format(name)
         names = wildcard_keys(self.pychoreo_attachments, wildcard)
         for name in names:
