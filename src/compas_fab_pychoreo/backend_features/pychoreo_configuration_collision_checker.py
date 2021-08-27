@@ -11,9 +11,17 @@ class PyChoreoConfigurationCollisionChecker(ConfigurationCollisionChecker):
     def __init__(self, client):
         self.client = client
 
-    # def configuration_in_collision(self, configuration, group=None, options=None):
     def check_collisions(self, robot, configuration=None, options=None):
-        """[summary]
+        """check collisions between the robot at the given configuration and all the existing obstacles in the scene.
+
+        the collision is checked among:
+            1. robot self-collision (if `self_collisions=true`), ignored robot link pairs can be specified in `disabled_collisions`
+            2. between (robot links) and (attached objects)
+            3. between (robot links, attached objects) and obstacles
+        ignored collisions for (2) and (3) can be specified in `extra_disabled_collisions`.
+
+        ! note that:
+            - collisions among attached objects are not checked
 
         Parameters
         ----------

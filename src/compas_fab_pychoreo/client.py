@@ -337,18 +337,39 @@ class PyChoreoClient(PyBulletClient):
     ###########################################################
 
     def check_collisions(self, *args, **kwargs):
+        """check collisions between the robot at the given configuration and all the existing obstacles in the scene.
+
+        the collision is checked among:
+            1. robot self-collision (if `self_collisions=true`), ignored robot link pairs can be specified in `disabled_collisions`
+            2. between (robot links) and (attached objects)
+            3. between (robot links, attached objects) and obstacles
+        ignored collisions for (2) and (3) can be specified in `extra_disabled_collisions`.
+
+        ! note that:
+            - collisions among attached objects are not checked
+        """
         return self.planner.check_collisions(*args, **kwargs)
 
     def check_sweeping_collisions(self, *args, **kwargs):
+        """Check collisions between the sweeping polylines of attached objects' vertices and the obstacles in the scene.
+        """
         return self.planner.check_sweeping_collisions(*args, **kwargs)
 
     def check_attachment_collisions(self, options=None):
+        """check collisions among the list of attached objects and obstacles in the scene.
+
+        This includes collisions between:
+            - each pair of (attached object, obstacle)
+            - each pair of (attached object 1, attached object 2)
+        """
         options = options or {}
         diagnosis = options.get('diagnosis', False)
         distance_threshold = options.get('distance_threshold', 0.0)
         max_distance = options.get('max_distance', 0.0)
 
+        # current status of the scene
         obstacles, attachments, extra_disabled_collisions = self._get_collision_checking_setup(options)
+        # get all pybullet bodies of the attachment
         attached_bodies = [att.child for att in attachments]
 
         return _check_bodies_collisions(attached_bodies, obstacles,
@@ -405,9 +426,17 @@ class PyChoreoClient(PyBulletClient):
 
 def _check_bodies_collisions(moving_bodies : list, obstacles : list,
         extra_disabled_collisions=None, diagnosis=False, body_name_from_id=None, **kwargs) -> bool:
+    """check collisions among a list of bodies (`moving_bodies`) with a list of obstacles.
+
+    This includes collisions between:
+        - each pair of (moving_body, obstacle)
+        - each pair of (moving_body1, moving_body2)
+
+    where `moving_body` in `moving_bodies`, `obstacle` in `obstacles`
+    """
     extra_disabled_collisions = extra_disabled_collisions or None
     # print('{} vs. {}'.format(moving_bodies, obstacles))
-    # * body pairs
+    # * converting body pairs to (body,link) pairs
     check_body_pairs = list(product(moving_bodies, obstacles)) + list(combinations(moving_bodies, 2))
     check_body_link_pairs = []
     for body1, body2 in check_body_pairs:

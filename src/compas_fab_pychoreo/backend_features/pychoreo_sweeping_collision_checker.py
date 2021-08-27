@@ -83,7 +83,7 @@ class PyChoreoSweepingCollisionChecker(SweepingCollisionChecker):
         self.client = client
 
     def step_in_collision(self, robot, configuration_1=None, configuration_2=None, options=None):
-        """[summary]
+        """Check collisions between the sweeping polylines of attached objects' vertices and the obstacles in the scene.
 
         Parameters
         ----------
