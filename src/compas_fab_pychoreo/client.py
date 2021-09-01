@@ -7,6 +7,7 @@ from collections import defaultdict
 from itertools import combinations
 from termcolor import cprint
 
+import numpy as np
 import pybullet_planning as pp
 from pybullet_planning import HideOutput, CLIENTS, load_pybullet, INFO_FROM_BODY, ModelInfo
 from pybullet_planning import BASE_LINK, RED, GREY, YELLOW, BLUE
@@ -131,6 +132,9 @@ class PyChoreoClient(PyBulletClient):
         color = options.get('color', None)
         attached_child_link_name = options.get('attached_child_link_name', None)
         parent_link_from_child_link = options.get('parent_link_from_child_link_transformation', None)
+        frame_jump_tolerance = options.get('frame_jump_tolerance', 0.001)
+        frame_jump_quat_tolerance = options.get('frame_jump_quat_tolerance', np.pi/180)
+        verbose = options.get('verbose', False)
 
         robot_uid = self.get_robot_pybullet_uid(robot)
         name = attached_collision_mesh.collision_mesh.id
@@ -160,15 +164,24 @@ class PyChoreoClient(PyBulletClient):
             if color:
                 for link in links:
                     set_color(body, color, link=link)
-            # create attachment based on their *current* pose
             attach_child_link = BASE_LINK if not attached_child_link_name else link_from_name(body, attached_child_link_name)
             if not parent_link_from_child_link:
+                # * create attachment based on their *current* pose
                 attachment = pp.create_attachment(robot_uid, tool_attach_link, body, attach_child_link)
             else:
-                # grasp_pose = pp.multiply(pp.invert(parent_link_pose), child_link_pose)
+                # * create attachment based on a given grasp transformation
                 grasp_pose = pose_from_transformation(parent_link_from_child_link)
                 attachment = Attachment(robot_uid, tool_attach_link, grasp_pose, body)
-            attachment.assign()
+
+            parent_link_point, parent_link_quat = pp.get_link_pose(robot_uid, tool_attach_link)
+            attached_body_point, attached_body_quat = pp.get_link_pose(body, attach_child_link)
+            if pp.get_distance(parent_link_point, attached_body_point) < frame_jump_tolerance and \
+                pp.quat_angle_between(parent_link_quat, attached_body_quat) < frame_jump_quat_tolerance:
+                attachment.assign()
+            else:
+                # if verbose:
+                cprint('WARNING: Attaching {} (link {}) to robot link {}, but they are not in the same pose in pybullet scene.'.format(name, attached_child_link_name if attached_child_link_name else 'BASE_LINK',
+                       attached_collision_mesh.link_name), 'yellow')
 
             self.pychoreo_attachments[name].append(attachment)
             # create fixed constraint to conform to PybulletClient (we don't use it though)
@@ -435,7 +448,6 @@ def _check_bodies_collisions(moving_bodies : list, obstacles : list,
     where `moving_body` in `moving_bodies`, `obstacle` in `obstacles`
     """
     extra_disabled_collisions = extra_disabled_collisions or None
-    # print('{} vs. {}'.format(moving_bodies, obstacles))
     # * converting body pairs to (body,link) pairs
     check_body_pairs = list(product(moving_bodies, obstacles)) + list(combinations(moving_bodies, 2))
     check_body_link_pairs = []
