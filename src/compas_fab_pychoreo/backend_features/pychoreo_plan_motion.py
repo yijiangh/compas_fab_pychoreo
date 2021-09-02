@@ -4,7 +4,7 @@ from compas_fab.backends.interfaces import PlanMotion
 from compas_fab.backends.interfaces import InverseKinematics
 from compas_fab.robots import JointTrajectory, Duration, JointTrajectoryPoint, Configuration
 
-from pybullet_planning import is_connected, get_bodies, WorldSaver, joints_from_names, set_joint_positions, plan_joint_motion, check_initial_end
+from pybullet_planning import WorldSaver, joints_from_names, check_initial_end
 from pybullet_planning import get_custom_limits, get_joint_positions, get_sample_fn, get_extend_fn, get_distance_fn, MAX_DISTANCE, joint_from_name
 from pybullet_planning.motion_planners import birrt, lazy_prm
 from pybullet_planning import wait_if_gui
@@ -65,7 +65,7 @@ class PyChoreoPlanMotion(PlanMotion):
         weights = options.get('joint_weights', None)
         rrt_restarts = options.get('rrt_restarts', 2)
         rrt_iterations = options.get('rrt_iterations', 20)
-        smooth_iterations = options.get('smooth_iterations', 100)
+        smooth_iterations = options.get('smooth_iterations', 20)
         # TODO: auto compute joint weight
         # print('plan motion options: ', options)
 
