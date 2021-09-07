@@ -58,7 +58,7 @@ class PyChoreoTrajectorySmoother(TrajectorySmoother):
 
         if smoothed_path:
             jt_traj_pts = []
-            for i, conf in enumerate(path):
+            for i, conf in enumerate(smoothed_path):
                 jt_traj_pt = JointTrajectoryPoint(joint_values=conf, joint_types=joint_types, time_from_start=Duration(i*1,0))
                 jt_traj_pt.joint_names = joint_names
                 jt_traj_pts.append(jt_traj_pt)
