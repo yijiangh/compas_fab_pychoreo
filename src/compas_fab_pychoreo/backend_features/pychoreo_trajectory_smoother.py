@@ -34,6 +34,7 @@ class PyChoreoTrajectorySmoother(TrajectorySmoother):
         # ! max_time is prioritized over iterations
         smooth_iterations = options.get('smooth_iterations', 100)
         max_smooth_time = options.get('max_smooth_time', 120) # seconds
+        frel_tol = options.get('frel_tol', 1e-6) # relative delta tolerance of path distance for termination criteria
 
         if trajectory is None or len(trajectory.points) == 0:
             return (False, None, 'Empty trajectory input.')
@@ -54,9 +55,11 @@ class PyChoreoTrajectorySmoother(TrajectorySmoother):
             collision_fn = PyChoreoConfigurationCollisionChecker(self.client)._get_collision_fn(robot, joint_names, options=options)
 
             smoothed_path = pp.smooth_path(path, extend_fn, collision_fn, distance_fn=distance_fn, \
-                iterations=smooth_iterations, max_time=max_smooth_time, verbose=verbose)
+                iterations=smooth_iterations, max_time=max_smooth_time, verbose=verbose, frel_tol=frel_tol)
 
         if smoothed_path:
+            old_cost = pp.compute_path_cost(path, cost_fn=distance_fn)
+            new_cost = pp.compute_path_cost(smoothed_path, cost_fn=distance_fn)
             jt_traj_pts = []
             for i, conf in enumerate(smoothed_path):
                 jt_traj_pt = JointTrajectoryPoint(joint_values=conf, joint_types=joint_types, time_from_start=Duration(i*1,0))
@@ -64,6 +67,7 @@ class PyChoreoTrajectorySmoother(TrajectorySmoother):
                 jt_traj_pts.append(jt_traj_pt)
             smoothed_trajectory = JointTrajectory(trajectory_points=jt_traj_pts,
                 joint_names=joint_names, start_configuration=jt_traj_pts[0], fraction=1.0)
-            return (True, smoothed_trajectory, 'Smoothing succeeded!')
+            return (True, smoothed_trajectory, 'Smoothing succeeded | before smoothing total path distance {:.3f}, after {:.3f}'.format(
+                old_cost, new_cost))
         else:
             return (False, None, 'TBD smoothing fails.')
