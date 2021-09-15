@@ -32,9 +32,9 @@ class PyChoreoTrajectorySmoother(TrajectorySmoother):
         weights = options.get('joint_weights', None)
         resolutions = options.get('joint_resolutions', 0.1)
         # ! max_time is prioritized over iterations
-        smooth_iterations = options.get('smooth_iterations', 100)
-        max_smooth_time = options.get('max_smooth_time', 120) # seconds
-        frel_tol = options.get('frel_tol', 1e-6) # relative delta tolerance of path distance for termination criteria
+        smooth_iterations = options.get('smooth_iterations', 200)
+        max_smooth_time = options.get('max_smooth_time', 60) # seconds
+        # frel_tol = options.get('frel_tol', 1e-6) # relative delta tolerance of path distance for termination criteria
 
         if trajectory is None or len(trajectory.points) == 0:
             return (False, None, 'Empty trajectory input.')
@@ -55,7 +55,7 @@ class PyChoreoTrajectorySmoother(TrajectorySmoother):
             collision_fn = PyChoreoConfigurationCollisionChecker(self.client)._get_collision_fn(robot, joint_names, options=options)
 
             smoothed_path = pp.smooth_path(path, extend_fn, collision_fn, distance_fn=distance_fn, \
-                iterations=smooth_iterations, max_time=max_smooth_time, verbose=False, frel_tol=frel_tol)
+                iterations=smooth_iterations, max_time=max_smooth_time, verbose=False) #, frel_tol=frel_tol)
 
         if smoothed_path:
             old_cost = pp.compute_path_cost(path, cost_fn=distance_fn)
