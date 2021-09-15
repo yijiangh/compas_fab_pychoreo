@@ -26,7 +26,7 @@ class PyChoreoTrajectorySmoother(TrajectorySmoother):
         triplet
             (success_bool, smoothed trajectory, message)
         """
-        verbose = options.get('verbose', False)
+        # verbose = options.get('verbose', False)
         diagnosis = options.get('diagnosis', False)
         custom_limits = options.get('custom_limits', {})
         weights = options.get('joint_weights', None)
@@ -55,7 +55,7 @@ class PyChoreoTrajectorySmoother(TrajectorySmoother):
             collision_fn = PyChoreoConfigurationCollisionChecker(self.client)._get_collision_fn(robot, joint_names, options=options)
 
             smoothed_path = pp.smooth_path(path, extend_fn, collision_fn, distance_fn=distance_fn, \
-                iterations=smooth_iterations, max_time=max_smooth_time, verbose=verbose, frel_tol=frel_tol)
+                iterations=smooth_iterations, max_time=max_smooth_time, verbose=False, frel_tol=frel_tol)
 
         if smoothed_path:
             old_cost = pp.compute_path_cost(path, cost_fn=distance_fn)
