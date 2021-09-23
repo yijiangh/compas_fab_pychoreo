@@ -141,13 +141,15 @@ class PyChoreoClient(PyBulletClient):
         attached_bodies = []
         # ! mimic ROS' behavior: collision object with same name is replaced
         if name in self.attached_collision_objects:
-            cprint('Replacing existing attached collision mesh {}'.format(name), 'yellow')
-            self.remove_attached_collision_mesh(name, options=options)
+            # cprint('Replacing existing attached collision mesh {}'.format(name), 'yellow')
+            self.detach_attached_collision_mesh(name, options=options)
+            # self.remove_attached_collision_mesh(name, options=options)
         if name not in self.collision_objects:
             # ! I don't want to add another copy of the objects
             # self.planner.add_attached_collision_mesh(attached_collision_mesh, options=options)
             # attached_bodies = [constr.body_id for constr in self.attached_collision_objects[name]]
             self.planner.add_collision_mesh(attached_collision_mesh.collision_mesh, options=options)
+
         attached_bodies = self.collision_objects[name]
         del self.collision_objects[name]
         self.attached_collision_objects[name] = []
@@ -178,10 +180,10 @@ class PyChoreoClient(PyBulletClient):
             if pp.get_distance(parent_link_point, attached_body_point) < frame_jump_tolerance and \
                 pp.quat_angle_between(parent_link_quat, attached_body_quat) < frame_jump_quat_tolerance:
                 attachment.assign()
-            else:
+            # else:
                 # if verbose:
-                cprint('WARNING: Attaching {} (link {}) to robot link {}, but they are not in the same pose in pybullet scene.'.format(name, attached_child_link_name if attached_child_link_name else 'BASE_LINK',
-                       attached_collision_mesh.link_name), 'yellow')
+                # cprint('WARNING: Attaching {} (link {}) to robot link {}, but they are not in the same pose in pybullet scene.'.format(name, attached_child_link_name if attached_child_link_name else 'BASE_LINK',
+                    #    attached_collision_mesh.link_name), 'yellow')
 
             self.pychoreo_attachments[name].append(attachment)
             # create fixed constraint to conform to PybulletClient (we don't use it though)
@@ -223,6 +225,15 @@ class PyChoreoClient(PyBulletClient):
 
     ########################################
     # Collision / Attached pybullet body managment
+    def get_object_names_and_status(self, wildcard):
+        status = self._get_body_status(wildcard)
+        if status == 'collision_object':
+            names = self._get_collision_object_names(wildcard)
+        elif status == 'attached_object':
+            names = self._get_attachment_names(wildcard)
+        else:
+            names = []
+        return names, status
 
     def _get_collision_object_names(self, wildcard):
         return wildcard_keys(self.collision_objects, wildcard)
@@ -245,16 +256,14 @@ class PyChoreoClient(PyBulletClient):
         return bodies
 
     def _get_body_status(self, wildcard):
-        # -1 if not attached and not collision object
-        # 0 if collision object, 1 if attached
         co_names = wildcard_keys(self.collision_objects, wildcard)
         at_names = wildcard_keys(self.pychoreo_attachments, wildcard)
         if len(co_names) == 0 and len(at_names) == 0:
-            return -1
+            return 'not_exist'
         elif len(co_names) > 0 and len(at_names) == 0:
-            return 0
+            return 'collision_object'
         elif len(co_names) == 0 and len(at_names) > 0:
-            return 1
+            return 'attached_object'
         else:
             raise ValueError('names {} should not appear at both collision objects ({}) and attached objects ({}) at the same time!'.format(
                 wildcard, co_names, at_names))
