@@ -55,7 +55,7 @@ class PyChoreoTrajectorySmoother(TrajectorySmoother):
             collision_fn = PyChoreoConfigurationCollisionChecker(self.client)._get_collision_fn(robot, joint_names, options=options)
 
             smoothed_path = pp.smooth_path(path, extend_fn, collision_fn, distance_fn=distance_fn, \
-                iterations=smooth_iterations, max_time=max_smooth_time, verbose=False) #, frel_tol=frel_tol)
+                max_iterations=smooth_iterations, max_time=max_smooth_time, verbose=False) #, frel_tol=frel_tol)
 
         if smoothed_path:
             old_cost = pp.compute_path_cost(path, cost_fn=distance_fn)

@@ -1,17 +1,28 @@
 import time
 from termcolor import cprint
 from compas_fab.backends.interfaces import PlanMotion
-from compas_fab.backends.interfaces import InverseKinematics
-from compas_fab.robots import JointTrajectory, Duration, JointTrajectoryPoint, Configuration
+from compas_fab.robots import JointTrajectory, Duration, JointTrajectoryPoint
+
+from compas_fab_pychoreo.backend_features.pychoreo_configuration_collision_checker import PyChoreoConfigurationCollisionChecker
+from compas_fab_pychoreo.utils import is_valid_option
 
 from pybullet_planning import WorldSaver, joints_from_names, check_initial_end
 from pybullet_planning import get_custom_limits, get_joint_positions, get_sample_fn, get_extend_fn, get_distance_fn, MAX_DISTANCE, joint_from_name
-from pybullet_planning.motion_planners import birrt, lazy_prm
 from pybullet_planning import wait_if_gui
-from compas_fab_pychoreo.backend_features.pychoreo_configuration_collision_checker import PyChoreoConfigurationCollisionChecker
 
-# from compas_fab_pychoreo.conversions import
-from compas_fab_pychoreo.utils import is_valid_option, values_as_list
+from pybullet_planning.motion_planners import solve_motion_plan
+from pybullet_planning.motion_planners import INF
+MOTION_PLANNING_ALGORITHMS = [
+    "prm",
+    "lazy_prm",
+    "rrt_connect",
+    "birrt",
+    "rrt",
+    "rrt_star",
+    "lattice",
+    # TODO: RRT in position/velocity space using spline interpolation
+    # TODO: https://ompl.kavrakilab.org/planners.html
+]
 
 class PyChoreoPlanMotion(PlanMotion):
     def __init__(self, client):
@@ -56,18 +67,36 @@ class PyChoreoPlanMotion(PlanMotion):
             The calculated trajectory.
         """
         robot_uid = self.client.get_robot_pybullet_uid(robot)
-
-        # * parse options
         verbose = is_valid_option(options, 'verbose', False)
         diagnosis = options.get('diagnosis', False)
+
+        # * robot-related paramters
         custom_limits = options.get('custom_limits', {})
         resolutions = options.get('joint_resolutions', 0.1)
         weights = options.get('joint_weights', None)
-        rrt_restarts = options.get('rrt_restarts', 2)
-        rrt_iterations = options.get('rrt_iterations', 20)
-        smooth_iterations = options.get('smooth_iterations', 20)
         # TODO: auto compute joint weight
-        # print('plan motion options: ', options)
+        algorithm = options.get('algorithm', 'birrt') # number of random restarts
+        if algorithm not in MOTION_PLANNING_ALGORITHMS:
+            cprint('{} algorithm not implemented, using birrt instead.'.format(algorithm), 'yellow')
+
+        plan_options = {}
+        max_time = options.get('max_time', INF) # total allowable planning time
+        max_iterations = options.get('rrt_iterations', 20) # iterations of rrt explorations
+        smooth_iterations = options.get('smooth_iterations', 20) # apply smoothing after finding a solution by default
+
+        # * prm family paramaters
+        plan_options['num_samples'] = options.get('num_samples', 100)
+        # num_samples = options.get('num_samples', 100)
+        # * rrt family paramaters
+        if algorithm in ['birrt', 'rrt_connect']:
+            plan_options['tree_frequency'] = options.get('tree_frequency', 1)
+            # The frequency of adding tree nodes when extending a path from the current tree to the newly sampled config.
+            # For example, if tree_freq=2, then a tree node is added every three nodes in the newly extended path, larger value means coarser extension, less nodes are added, by default 1. Only enlarge this if you think the planning is too slow,
+            # and a path is easy to find.
+        if algorithm == 'birrt':
+            plan_options['restarts'] = options.get('rrt_restarts', 2) # number of random restarts
+        if algorithm in ['rrt', 'rrt_star']:
+            plan_options['goal_probability'] = options.get('goal_probability', 0.2) # goal biase probability for single-direction rrt
 
         # * convert link/joint names to pybullet indices
         joint_names = robot.get_configurable_joint_names(group=group)
@@ -93,9 +122,13 @@ class PyChoreoPlanMotion(PlanMotion):
 
             if not check_initial_end(start_conf, end_conf, collision_fn, diagnosis=diagnosis):
                 return None
-            path = birrt(start_conf, end_conf, distance_fn, sample_fn, extend_fn, collision_fn,
-                restarts=rrt_restarts, iterations=rrt_iterations, smooth=smooth_iterations)
-            #return plan_lazy_prm(start_conf, end_conf, sample_fn, extend_fn, collision_fn)
+
+            # path = birrt(start_conf, end_conf, distance_fn, sample_fn, extend_fn, collision_fn,
+            #     restarts=rrt_restarts, iterations=rrt_iterations, tree_frequency=tree_frequency,
+            #     smooth=smooth_iterations, )
+            path = solve_motion_plan(start_conf, end_conf, distance_fn, sample_fn, extend_fn, collision_fn,
+                algorithm=algorithm, max_time=max_time, max_iterations=max_iterations, smooth=smooth_iterations,
+                **plan_options) #num_samples=num_samples,
 
         if path is None:
             # TODO use LOG
