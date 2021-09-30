@@ -214,6 +214,8 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
         if len(ee_poses) == 0:
             cprint('Warning: target interpolated workspace poses are empty.')
 
+        # TODO try floating attachment only planning before full cartesian planning.keys())?
+
         # * build collision fn
         attachments = values_as_list(self.client.pychoreo_attachments)
         collision_fn = PyChoreoConfigurationCollisionChecker(self.client)._get_collision_fn(robot, joint_names, options=options)
