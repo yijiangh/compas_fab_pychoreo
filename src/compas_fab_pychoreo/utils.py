@@ -1,4 +1,5 @@
 import re
+from termcolor import cprint
 from collections.abc import Iterable
 
 ###########################################
@@ -59,9 +60,17 @@ def compare_configurations(conf1, conf2, diff_tol_from_joint_names, fallback_tol
     [type]
         [description]
     """
-    joint_names = conf1.joint_names or conf2.joint_names
+    _conf1 =conf1.copy()
+    _conf2 =conf2.copy()
+    if conf1.joint_names != conf2.joint_names:
+        if conf1.joint_names < conf2.joint_names:
+            _conf1 = _conf2.merged(_conf1)
+        else:
+            _conf2 = _conf1.merged(_conf2)
     is_diff = False
-    for i, diff in enumerate(conf1.iter_differences(conf2)):
+    assert _conf1.joint_names == _conf2.joint_names
+    joint_names = _conf1.joint_names
+    for i, diff in enumerate(_conf1.iter_differences(_conf2)):
         # cprint('Joint #{} diff: {}'.format(joint_names[i], diff), 'yellow')
         tol = diff_tol_from_joint_names[joint_names[i]] if joint_names[i] in diff_tol_from_joint_names \
             else fallback_tol
