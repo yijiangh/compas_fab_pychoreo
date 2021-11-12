@@ -181,9 +181,9 @@ class PyChoreoClient(PyBulletClient):
                 pp.quat_angle_between(parent_link_quat, attached_body_quat) < frame_jump_quat_tolerance:
                 attachment.assign()
             # else:
-                # if verbose:
-                # cprint('WARNING: Attaching {} (link {}) to robot link {}, but they are not in the same pose in pybullet scene.'.format(name, attached_child_link_name if attached_child_link_name else 'BASE_LINK',
-                    #    attached_collision_mesh.link_name), 'yellow')
+            #     if verbose:
+            #         cprint('WARNING: Attaching {} (link {}) to robot link {}, but they are not in the same pose in pybullet scene.'.format(name, attached_child_link_name if attached_child_link_name else 'BASE_LINK',
+            #                attached_collision_mesh.link_name), 'yellow')
 
             self.pychoreo_attachments[name].append(attachment)
             # create fixed constraint to conform to PybulletClient (we don't use it though)
@@ -400,6 +400,9 @@ class PyChoreoClient(PyBulletClient):
 
     def _get_collision_checking_setup(self, options=None):
         avoid_collisions = options.get('avoid_collisions', True)
+        obstacles = []
+        attachments = []
+        extra_disabled_collisions = set()
         if avoid_collisions:
             wildcards = options.get('collision_object_wildcards') or None
             if wildcards is None:
@@ -429,8 +432,7 @@ class PyChoreoClient(PyBulletClient):
                         )
         else:
             # only check joint limits, no collision considered
-            obstacles = []
-            attachments = []
+            pass
         return obstacles, attachments, extra_disabled_collisions
 
     ########################################

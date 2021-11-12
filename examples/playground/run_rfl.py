@@ -66,7 +66,7 @@ def to_rlf_robot_full_conf(robot11_confval, robot12_confval, scale=1e-3):
             )
         )
 
-def rfl_camera(scale=1e-3):
+def debug_rfl_camera(scale=1e-3):
     camera = {
         'location': np.array([14830.746366, 17616.580504, 9461.594828])*scale,
         'target' : np.array([24470.185559, 7976.896428, 2694.413294])*scale,
@@ -114,7 +114,7 @@ def main():
 
         draw_pose(unit_pose(), length=1.)
 
-        cam = rfl_camera()
+        cam = debug_rfl_camera()
         set_camera_pose(cam['target'], cam['location'])
 
         ik_joints = joints_from_names(robot_uid, ik_joint_names)
