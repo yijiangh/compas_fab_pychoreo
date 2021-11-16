@@ -222,7 +222,7 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
 
         failure_reason = ''
         with WorldSaver():
-            # set to start conf
+            # * set to start conf
             if start_configuration is not None:
                 self.client.set_robot_configuration(robot, start_configuration)
                 # print('FK: ', get_link_pose(robot_uid, tool_link))
@@ -246,15 +246,16 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
                 if path is None:
                     failure_reason = 'IK plan is not found.'
                 # collision checking is not included in the default Cartesian planning
-                if path is not None and avoid_collisions:
+                if path is not None:
                     for i, conf_val in enumerate(path):
                         pruned_conf_val = self._prune_configuration(robot_uid, conf_val, joint_names)
-                        for attachment in attachments:
-                            attachment.assign()
-                        if collision_fn(pruned_conf_val, diagnosis=diagnosis):
-                            failure_reason = 'IK plan is found but collision violated'
-                            path = None
-                            break
+                        if avoid_collisions:
+                            for attachment in attachments:
+                                attachment.assign()
+                            if collision_fn(pruned_conf_val, diagnosis=diagnosis):
+                                failure_reason = 'IK plan is found but collision violated'
+                                path = None
+                                break
                         path[i] = pruned_conf_val
 
                 # TODO check joint threshold
@@ -295,8 +296,7 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
 
             jt_traj_pts = []
             for i, conf in enumerate(path):
-                jt_traj_pt = JointTrajectoryPoint(joint_values=conf, joint_types=joint_types)
-                jt_traj_pt.joint_names = joint_names
+                jt_traj_pt = JointTrajectoryPoint(joint_values=conf, joint_names = joint_names, joint_types=joint_types)
                 if start_traj_pt is not None:
                     # ! TrajectoryPoint doesn't copy over joint_names...
                     jtp = start_traj_pt.copy()
