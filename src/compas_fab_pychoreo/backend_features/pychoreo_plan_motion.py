@@ -6,7 +6,7 @@ from compas_fab.backends.interfaces import PlanMotion
 from compas_fab.robots import JointTrajectory, Duration, JointTrajectoryPoint
 
 from compas_fab_pychoreo.backend_features.pychoreo_configuration_collision_checker import PyChoreoConfigurationCollisionChecker
-from compas_fab_pychoreo.utils import is_valid_option
+from compas_fab_pychoreo.utils import compare_configurations, is_valid_option
 
 import pybullet_planning as pp
 from pybullet_planning import WorldSaver, joints_from_names, check_initial_end

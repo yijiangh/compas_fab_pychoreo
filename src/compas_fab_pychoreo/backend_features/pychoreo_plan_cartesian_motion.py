@@ -187,15 +187,15 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
         avoid_collisions = options.get('avoid_collisions', True)
         pos_step_size = options.get('max_step', 0.01)
         planner_id = is_valid_option(options, 'planner_id', 'IterativeIK')
-        frame_jump_tolerance = options.get('frame_jump_tolerance', 0.001)
+        frame_jump_tolerance = options.get('frame_jump_tolerance', 0.001) # m
         jump_threshold = is_valid_option(options, 'jump_threshold', {jt_name : math.pi/6 \
             if jt_type in [Joint.REVOLUTE, Joint.CONTINUOUS] else 0.1 \
             for jt_name, jt_type in zip(joint_names, joint_types)})
         jump_threshold_from_joint = {joint_from_name(robot_uid, jt_name) : j_diff for jt_name, j_diff in jump_threshold.items()}
 
         # * iterative IK options
-        pos_tolerance = is_valid_option(options, 'pos_tolerance', 1e-3)
-        ori_tolerance = is_valid_option(options, 'ori_tolerance', 1e-3*np.pi)
+        pos_tolerance = is_valid_option(options, 'pos_tolerance', frame_jump_tolerance)
+        ori_tolerance = is_valid_option(options, 'ori_tolerance', np.pi*1e-3)
         # * ladder graph options
         frame_variant_gen = is_valid_option(options, 'frame_variant_generator', None)
         ik_function = options.get('ik_function', None)
@@ -295,7 +295,7 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
                 start_traj_pt.joint_names = start_configuration.joint_names
 
             jt_traj_pts = []
-            for i, conf in enumerate(path):
+            for i, (conf, target_pose) in enumerate(zip(path, ee_poses)):
                 jt_traj_pt = JointTrajectoryPoint(joint_values=conf, joint_names = joint_names, joint_types=joint_types)
                 if start_traj_pt is not None:
                     # ! TrajectoryPoint doesn't copy over joint_names...
@@ -304,21 +304,27 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
                     jtp.merge(jt_traj_pt)
                     jt_traj_pt = jtp
                 jt_traj_pt.time_from_start = Duration(i*1,0)
+
+                # * check start_conf joint value agreement
+                if i == 0 and start_configuration is not None and \
+                    compare_configurations(start_configuration, jt_traj_pt, {}, verbose=verbose):
+                    cprint('plan_cartesian_motion: planned traj\'s first conf does not agree with the given start conf.', 'red')
+                    return None
+
+                # * check FK and target frame agreement
+                fk_frame = self.client.forward_kinematics(robot, jt_traj_pt, group=group, options={'link' : tool_link_name})
+                # self.client.set_robot_configuration(robot, jt_traj_pt)
+                # tool_link = link_from_name(robot_uid, tool_link_name)
+                # fk_frame = frame_from_pose(get_link_pose(robot_uid, tool_link))
+                target_frame = frame_from_pose(target_pose)
+                if not fk_frame.__eq__(target_frame, tol=frame_jump_tolerance):
+                    cprint('plan_cartesian_motion: Conf FK disagreement found, FK center point diff (m) (o, x, y): {} | tol {} | tool link name {}!'.format(
+                        list(distance_point_point(val_fk, val_fr) for val_fk, val_fr in zip(fk_frame, target_frame)),
+                            frame_jump_tolerance, tool_link_name), 'red')
+                    return None
+
                 jt_traj_pts.append(jt_traj_pt)
 
-            # if start_configuration is not None and \
-            #     not compare_configurations(start_configuration, jt_traj_pts[0], jump_threshold, verbose=verbose):
-            #     fk_frame1 = self.client.forward_kinematics(robot, start_configuration, group=group, options={'link' : tool_link_name})
-            #     fk_frame2 = self.client.forward_kinematics(robot, jt_traj_pts[0], group=group, options={'link' : tool_link_name})
-            #     point_dist = distance_point_point(fk_frame1.point, fk_frame2.point)
-            #     if not fk_frame1.__eq__(fk_frame2, tol=frame_jump_tolerance):
-            #         if point_dist > frame_jump_tolerance:
-            #             if verbose:
-            #                 cprint('Robot FK tool pose center point diverge: {:.5f} (m)'.format(point_dist), 'yellow')
-            #     if verbose:
-            #         cprint('Conf disagreement found, FK center point diff {:.5f}(m), but still returns a trajectory. Please be cautious.'.format(point_dist), 'yellow')
-                # pass
-                # return None
             # TODO check intermediate joint jump
             trajectory = JointTrajectory(trajectory_points=jt_traj_pts,
                 joint_names=jt_traj_pts[0].joint_names, start_configuration=jt_traj_pts[0], fraction=1.0)

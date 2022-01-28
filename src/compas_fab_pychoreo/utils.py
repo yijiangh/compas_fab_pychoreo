@@ -1,6 +1,7 @@
 import re
 from termcolor import cprint
 from collections.abc import Iterable
+from compas.geometry import allclose
 
 ###########################################
 
