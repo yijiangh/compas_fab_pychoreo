@@ -1,9 +1,6 @@
 [submodule "data/robots/abb_irb4600_40_255"]
 	path = data/robots/abb_irb4600_40_255
 	url = https://github.com/yijiangh/abb_irb4600_40_255.git
-[submodule "data/robots/rfl_description"]
-	path = data/robots/rfl_description
-	url = https://github.com/yijiangh/rfl_description.git
 [submodule "external/pybullet_planning"]
 	path = external/pybullet_planning
 	url = https://github.com/yijiangh/pybullet_planning.git

@@ -58,16 +58,6 @@ def abb_irb4600_40_255_setup():
     return urdf_filename, semantics
 
 @pytest.fixture
-def rfl_setup():
-    HERE = os.path.dirname(__file__)
-    data_dir = os.path.abspath(os.path.join(HERE, "..", "..", "data", 'robots'))
-    urdf_filename = os.path.join(data_dir, 'rfl_description', 'rfl_description', "urdf", "rfl_pybullet.urdf")
-    srdf_filename = os.path.join(data_dir, 'rfl_description', 'rfl_description', "urdf", "rfl.srdf")
-    model = RobotModel.from_urdf_file(urdf_filename)
-    semantics = RobotSemantics.from_srdf_file(srdf_filename, model)
-    return urdf_filename, semantics
-
-@pytest.fixture
 def itj_TC_g1_cms():
     HERE = os.path.dirname(__file__)
     tc_dir_path = os.path.abspath(os.path.join(HERE, "..", "data", 'TC_static'))
