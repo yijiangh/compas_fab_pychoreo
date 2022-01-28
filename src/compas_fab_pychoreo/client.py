@@ -387,7 +387,7 @@ class PyChoreoClient(PyBulletClient):
         options = options or {}
         diagnosis = options.get('diagnosis', False)
         collision_distance_threshold = options.get('collision_distance_threshold', 0.0)
-        max_distance = options.get('max_distance', 0.0)
+        max_distance = options.get('collision_buffer_distance_threshold', 0.0)
 
         # current status of the scene
         obstacles, attachments, extra_disabled_collisions = self._get_collision_checking_setup(options)

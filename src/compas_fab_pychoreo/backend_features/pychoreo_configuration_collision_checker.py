@@ -56,7 +56,7 @@ class PyChoreoConfigurationCollisionChecker(ConfigurationCollisionChecker):
         avoid_collisions = options.get('avoid_collisions', True)
         self_collisions = options.get('self_collisions', True)
         collision_distance_threshold = options.get('collision_distance_threshold', 0.0)
-        max_distance = options.get('max_distance', 0.0)
+        max_distance = options.get('collision_buffer_distance_threshold', 0.0)
         debug = options.get('debug', False)
 
         # * custom joint limits
