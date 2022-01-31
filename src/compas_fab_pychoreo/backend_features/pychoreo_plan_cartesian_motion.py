@@ -1,3 +1,4 @@
+from compas_fab.backends.ros.fileserver_loader import LOGGER
 import numpy as np
 import time
 import math
@@ -12,7 +13,7 @@ from compas_fab.backends.interfaces import InverseKinematics
 from compas_fab.backends.pybullet.utils import redirect_stdout
 
 from compas_fab_pychoreo.conversions import pose_from_frame, frame_from_pose
-from compas_fab_pychoreo.utils import is_valid_option, values_as_list, compare_configurations
+from compas_fab_pychoreo.utils import is_valid_option, values_as_list, is_configurations_close, is_poses_close, is_frames_close
 from compas_fab_pychoreo.backend_features.pychoreo_configuration_collision_checker import PyChoreoConfigurationCollisionChecker
 from pybullet_planning import WorldSaver, joints_from_names, joint_from_name, \
     link_from_name, interpolate_poses, plan_cartesian_motion_lg, get_labeled_configuration
@@ -21,7 +22,7 @@ from pybullet_planning import HideOutput, draw_pose
 from pybullet_planning import all_between, get_custom_limits, get_movable_joints, set_joint_positions, get_link_pose, \
     get_link_subtree
 from pybullet_planning import prune_fixed_joints, get_configuration
-from pybullet_planning import inverse_kinematics_helper, is_pose_close, clone_body, remove_body
+from pybullet_planning import inverse_kinematics_helper, clone_body, remove_body
 
 def create_sub_robot(robot, first_joint, target_link):
     # TODO: create a class or generator for repeated use
@@ -34,7 +35,8 @@ def create_sub_robot(robot, first_joint, target_link):
     return sub_robot, selected_joints, sub_target_link
 
 def plan_cartesian_motion_from_links(robot, selected_links, target_link, waypoint_poses,
-        max_iterations=200, custom_limits={}, get_sub_conf=False, **kwargs):
+        max_iterations=200, custom_limits={}, get_sub_conf=False, options=None, **kwargs):
+    options = options or {}
     lower_limits, upper_limits = get_custom_limits(robot, get_movable_joints(robot), custom_limits)
     selected_movable_joints = prune_fixed_joints(robot, selected_links)
     assert(target_link in selected_links)
@@ -54,7 +56,7 @@ def plan_cartesian_motion_from_links(robot, selected_links, target_link, waypoin
                 # continue
             set_joint_positions(sub_robot, sub_movable_joints, sub_kinematic_conf)
             # pos_tolerance=1e-3, ori_tolerance=1e-3*np.pi
-            if is_pose_close(get_link_pose(sub_robot, selected_target_link), target_pose, **kwargs):
+            if is_poses_close(get_link_pose(sub_robot, selected_target_link), target_pose, options=options):
                 set_joint_positions(robot, selected_movable_joints, sub_kinematic_conf)
                 kinematic_conf = get_configuration(robot)
                 if not all_between(lower_limits, kinematic_conf, upper_limits):
@@ -78,7 +80,8 @@ from pybullet_planning import get_difference_fn, get_joint_positions, get_min_li
     interval_generator, elapsed_time, randomize, violates_limits, inverse_kinematics, get_ordered_ancestors
 
 def plan_cartesian_motion_with_customized_ik(robot_uid, ik_info, waypoint_poses,
-        custom_limits={}, pos_tolerance=1e-3, ori_tolerance=1e-3*np.pi, **kwargs):
+        custom_limits={}, options=None, **kwargs):
+    options = options or {}
     lower_limits, upper_limits = get_custom_limits(robot_uid, get_movable_joints(robot_uid), custom_limits)
     # selected_movable_joints = prune_fixed_joints(robot, selected_links)
     # assert(target_link in selected_links)
@@ -96,23 +99,21 @@ def plan_cartesian_motion_with_customized_ik(robot_uid, ik_info, waypoint_poses,
     for i, target_pose in enumerate(waypoint_poses):
         for conf in ik_info.ik_fn(target_pose, **kwargs):
             if conf is None:
-                print('TracIK: #{}/{} waypoint IK fails due to unfound.'.format(i, len(waypoint_poses)))
+                LOGGER.debug('TracIK: #{}/{} waypoint IK fails due to unfound.'.format(i, len(waypoint_poses)))
                 return None
                 # continue
             set_joint_positions(robot_uid, ik_joints, conf)
-            # pos_tolerance=1e-3, ori_tolerance=1e-3*np.pi
-            if is_pose_close(get_link_pose(robot_uid, ee_link), target_pose,
-                    pos_tolerance=pos_tolerance, ori_tolerance=ori_tolerance):
+            if is_poses_close(get_link_pose(robot_uid, ee_link), target_pose, options=options):
                 kinematic_conf = get_configuration(robot_uid)
                 if not all_between(lower_limits, kinematic_conf, upper_limits):
-                    print('Reject due to limit: {} \nL {}\nU {}'.format(kinematic_conf, lower_limits, upper_limits))
+                    LOGGER.debug('Reject due to limit: {} \nL {}\nU {}'.format(kinematic_conf, lower_limits, upper_limits))
                     return None
                 solutions.append(kinematic_conf)
                 break
             else:
                 # draw_pose(get_link_pose(robot_uid, ee_link), length=1.0)
                 # draw_pose(target_pose, length=1.0)
-                print('Pose not close:\nIK {}\nGiven {}!'.format(get_link_pose(robot_uid, ee_link), target_pose))
+                LOGGER.debug('Pose not close:\nIK {}\nGiven {}!'.format(get_link_pose(robot_uid, ee_link), target_pose))
         else:
             print('TracIK: #{}/{} waypoint IK fails.'.format(i, len(waypoint_poses)))
             return None
@@ -187,15 +188,9 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
         avoid_collisions = options.get('avoid_collisions', True)
         pos_step_size = options.get('max_step', 0.01)
         planner_id = is_valid_option(options, 'planner_id', 'IterativeIK')
-        frame_jump_tolerance = options.get('frame_jump_tolerance', 0.001) # m
-        jump_threshold = is_valid_option(options, 'jump_threshold', {jt_name : math.pi/6 \
-            if jt_type in [Joint.REVOLUTE, Joint.CONTINUOUS] else 0.1 \
-            for jt_name, jt_type in zip(joint_names, joint_types)})
-        jump_threshold_from_joint = {joint_from_name(robot_uid, jt_name) : j_diff for jt_name, j_diff in jump_threshold.items()}
+        joint_jump_threshold = options.get('joint_jump_threshold', {})
+        jump_threshold_from_joint = {joint_from_name(robot_uid, jt_name) : j_diff for jt_name, j_diff in joint_jump_threshold.items()}
 
-        # * iterative IK options
-        pos_tolerance = is_valid_option(options, 'pos_tolerance', frame_jump_tolerance)
-        ori_tolerance = is_valid_option(options, 'ori_tolerance', np.pi*1e-3)
         # * ladder graph options
         frame_variant_gen = is_valid_option(options, 'frame_variant_generator', None)
         ik_function = options.get('ik_function', None)
@@ -236,11 +231,11 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
                 # with redirect_stdout():
                 if customized_ikinfo is None:
                     path = plan_cartesian_motion_from_links(robot_uid, selected_links, tool_link,
-                        ee_poses, get_sub_conf=False, pos_tolerance=pos_tolerance, ori_tolerance=ori_tolerance)
+                        ee_poses, get_sub_conf=False, options=options)
                 else:
                     assert tool_link_name == customized_ikinfo.ee_link_name
                     path = plan_cartesian_motion_with_customized_ik(robot_uid, customized_ikinfo, ee_poses,
-                        pos_tolerance=pos_tolerance, ori_tolerance=ori_tolerance)
+                        options=options)
                         # max_ik_attempts=max_ik_attempts, free_delta=free_delta, max_joint_distance=max_joint_distance)
 
                 if path is None:
@@ -278,7 +273,7 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
                     enforce_start_conf=start_configuration is not None)
 
                 if verbose:
-                    print('Ladder graph cost: {}'.format(cost))
+                    LOGGER.debug('Ladder graph cost: {}'.format(cost))
             else:
                 raise ValueError('Cartesian planner {} not implemented!', planner_id)
 
@@ -307,8 +302,8 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
 
                 # * check start_conf joint value agreement
                 if i == 0 and start_configuration is not None and \
-                    compare_configurations(start_configuration, jt_traj_pt, {}, verbose=verbose):
-                    cprint('plan_cartesian_motion: planned traj\'s first conf does not agree with the given start conf.', 'red')
+                    not is_configurations_close(start_configuration, jt_traj_pt, options=options):
+                    LOGGER.error('plan_cartesian_motion: planned traj\'s first conf does not agree with the given start conf.', 'red')
                     return None
 
                 # * check FK and target frame agreement
@@ -317,10 +312,10 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
                 # tool_link = link_from_name(robot_uid, tool_link_name)
                 # fk_frame = frame_from_pose(get_link_pose(robot_uid, tool_link))
                 target_frame = frame_from_pose(target_pose)
-                if not fk_frame.__eq__(target_frame, tol=frame_jump_tolerance):
-                    cprint('plan_cartesian_motion: Conf FK disagreement found, FK center point diff (m) (o, x, y): {} | tol {} | tool link name {}!'.format(
+                if not is_frames_close(fk_frame, target_frame, options=options):
+                    LOGGER.error('plan_cartesian_motion: Conf FK disagreement found, FK center point diff (m) (o, x, y): {} | tool link name {}!'.format(
                         list(distance_point_point(val_fk, val_fr) for val_fk, val_fr in zip(fk_frame, target_frame)),
-                            frame_jump_tolerance, tool_link_name), 'red')
+                            tool_link_name))
                     return None
 
                 jt_traj_pts.append(jt_traj_pt)

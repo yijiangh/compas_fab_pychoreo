@@ -5,7 +5,6 @@ import tempfile
 from itertools import product, combinations
 from collections import defaultdict
 from itertools import combinations
-from termcolor import cprint
 
 import numpy as np
 import pybullet_planning as pp
@@ -29,7 +28,7 @@ from compas_fab_pychoreo.utils import wildcard_keys
 from .exceptions import CollisionError
 from .exceptions import InverseKinematicsError
 from .conversions import frame_from_pose, pose_from_transformation, pose_from_frame
-from .utils import values_as_list
+from .utils import values_as_list, LOGGER
 
 class PyChoreoClient(PyBulletClient):
     """Interface to use pybullet as backend via the **pybullet_plannning**.
@@ -208,7 +207,7 @@ class PyChoreoClient(PyBulletClient):
         wildcard = options.get('wildcard') or '^{}$'.format(name)
         names = wildcard_keys(self.pychoreo_attachments, wildcard)
         if len(names) == 0:
-            cprint('No attachment with name {} found.'.format(name), 'yellow')
+            LOGGER.warning('No attachment with name {} found.'.format(name), 'yellow')
             return None
         detached_attachments = []
         for name in names:
@@ -307,22 +306,22 @@ class PyChoreoClient(PyBulletClient):
         return body_frames
 
     def _print_object_summary(self):
-        print('^'*10)
-        print('PychoreoClient scene summary:')
+        LOGGER.debug('^'*10)
+        LOGGER.debug('PychoreoClient scene summary:')
         body_name_from_id = self._name_from_body_id
-        print('Collision Objects:')
+        LOGGER.debug('Collision Objects:')
         for name, bodies in self.collision_objects.items():
-            print('\t{}: {}'.format(name, bodies))
-        print('Attachments:')
+            LOGGER.debug('\t{}: {}'.format(name, bodies))
+        LOGGER.debug('Attachments:')
         for name, attachments in self.pychoreo_attachments.items():
-            print('\t{}: {}'.format(name, [at.child for at in attachments]))
-        print('Extra disabled collision links:')
+            LOGGER.info('\t{}: {}'.format(name, [at.child for at in attachments]))
+        LOGGER.debug('Extra disabled collision links:')
         for name, blink_pairs in self.extra_disabled_collision_links.items():
-            print('\t{}:'.format(name))
+            LOGGER.debug('\t{}:'.format(name))
             for (b1,l1_name), (b2,l2_name) in blink_pairs:
                 b1_name = body_name_from_id[b1] if b1 in body_name_from_id else get_name(b1)
                 b2_name = body_name_from_id[b2] if b2 in body_name_from_id else get_name(b2)
-                print('\t\t({}-{}), ({}-{})'.format(b1_name,l1_name,b2_name,l2_name))
+                LOGGER.debug('\t\t({}-{}), ({}-{})'.format(b1_name,l1_name,b2_name,l2_name))
 
     ########################################
 
