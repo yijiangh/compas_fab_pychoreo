@@ -314,7 +314,7 @@ class PyChoreoClient(PyBulletClient):
             LOGGER.debug('\t{}: {}'.format(name, bodies))
         LOGGER.debug('Attachments:')
         for name, attachments in self.pychoreo_attachments.items():
-            LOGGER.info('\t{}: {}'.format(name, [at.child for at in attachments]))
+            LOGGER.debug('\t{}: {}'.format(name, [at.child for at in attachments]))
         LOGGER.debug('Extra disabled collision links:')
         for name, blink_pairs in self.extra_disabled_collision_links.items():
             LOGGER.debug('\t{}:'.format(name))
