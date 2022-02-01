@@ -115,7 +115,7 @@ def plan_cartesian_motion_with_customized_ik(robot_uid, ik_info, waypoint_poses,
                 # draw_pose(target_pose, length=1.0)
                 LOGGER.debug('Pose not close:\nIK {}\nGiven {}!'.format(get_link_pose(robot_uid, ee_link), target_pose))
         else:
-            print('TracIK: #{}/{} waypoint IK fails.'.format(i, len(waypoint_poses)))
+            LOGGER.debug('TracIK: #{}/{} waypoint IK fails.'.format(i, len(waypoint_poses)))
             return None
     return solutions
 
@@ -188,8 +188,8 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
         avoid_collisions = options.get('avoid_collisions', True)
         pos_step_size = options.get('max_step', 0.01)
         planner_id = is_valid_option(options, 'planner_id', 'IterativeIK')
-        joint_jump_threshold = options.get('joint_jump_threshold', {})
-        jump_threshold_from_joint = {joint_from_name(robot_uid, jt_name) : j_diff for jt_name, j_diff in joint_jump_threshold.items()}
+        joint_jump_tolerances = options.get('joint_jump_tolerances', {})
+        jump_threshold_from_joint = {joint_from_name(robot_uid, jt_name) : j_diff for jt_name, j_diff in joint_jump_tolerances.items()}
 
         # * ladder graph options
         frame_variant_gen = is_valid_option(options, 'frame_variant_generator', None)
@@ -207,7 +207,8 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
             c_interp_poses = list(interpolate_poses(p1, p2, pos_step_size=pos_step_size))
             ee_poses.extend(c_interp_poses)
         if len(ee_poses) == 0:
-            cprint('Warning: target interpolated workspace poses are empty.')
+            LOGGER.error('target interpolated workspace poses are empty.')
+            return None
 
         # TODO try floating attachment only planning before full cartesian planning.keys())?
 
@@ -279,7 +280,7 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
 
         if path is None:
             if verbose:
-                cprint('No Cartesian motion found, due to {}!'.format(failure_reason), 'red')
+                LOGGER.debug('No Cartesian motion found, due to {}!'.format(failure_reason), 'red')
             return None
         else:
             # TODO start_conf might have different number of joints with the given group?
@@ -336,7 +337,7 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
         return pruned_conf
 
     def _get_sample_ik_fn(self, robot, ik_options=None):
-        cprint('Ladder graph using client default IK solver.', 'yellow')
+        LOGGER.debug('Ladder graph using client default IK solver.', 'yellow')
         ik_options = ik_options or {}
         def sample_ik_fn(pose):
             # pb pose -> list(conf values)

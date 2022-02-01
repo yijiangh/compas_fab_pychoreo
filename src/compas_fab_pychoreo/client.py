@@ -23,7 +23,7 @@ from compas_fab.backends.pybullet.const import ConstraintInfo, STATIC_MASS
 from compas_fab.robots.configuration import Configuration
 
 from compas_fab_pychoreo.planner import PyChoreoPlanner
-from compas_fab_pychoreo.utils import wildcard_keys
+from compas_fab_pychoreo.utils import wildcard_keys, is_poses_close
 
 from .exceptions import CollisionError
 from .exceptions import InverseKinematicsError
@@ -131,9 +131,6 @@ class PyChoreoClient(PyBulletClient):
         color = options.get('color', None)
         attached_child_link_name = options.get('attached_child_link_name', None)
         parent_link_from_child_link = options.get('parent_link_from_child_link_transformation', None)
-        frame_jump_tolerance = options.get('frame_jump_tolerance', 0.001)
-        frame_jump_quat_tolerance = options.get('frame_jump_quat_tolerance', np.pi/180)
-        verbose = options.get('verbose', False)
 
         robot_uid = self.get_robot_pybullet_uid(robot)
         name = attached_collision_mesh.collision_mesh.id
@@ -174,15 +171,13 @@ class PyChoreoClient(PyBulletClient):
                 grasp_pose = pose_from_transformation(parent_link_from_child_link)
                 attachment = Attachment(robot_uid, tool_attach_link, grasp_pose, body)
 
-            parent_link_point, parent_link_quat = pp.get_link_pose(robot_uid, tool_attach_link)
-            attached_body_point, attached_body_quat = pp.get_link_pose(body, attach_child_link)
-            if pp.get_distance(parent_link_point, attached_body_point) < frame_jump_tolerance and \
-                pp.quat_angle_between(parent_link_quat, attached_body_quat) < frame_jump_quat_tolerance:
+            parent_link_pose = pp.get_link_pose(robot_uid, tool_attach_link)
+            attached_body_pose = pp.get_link_pose(body, attach_child_link)
+            if is_poses_close(parent_link_pose, attached_body_pose, options=options):
                 attachment.assign()
             # else:
-            #     if verbose:
-            #         cprint('WARNING: Attaching {} (link {}) to robot link {}, but they are not in the same pose in pybullet scene.'.format(name, attached_child_link_name if attached_child_link_name else 'BASE_LINK',
-            #                attached_collision_mesh.link_name), 'yellow')
+            #     LOGGER.warning('Attaching {} (link {}) to robot link {}, but they are not in the same pose in pybullet scene.'.format(name, attached_child_link_name if attached_child_link_name else 'BASE_LINK',
+            #                attached_collision_mesh.link_name))
 
             self.pychoreo_attachments[name].append(attachment)
             # create fixed constraint to conform to PybulletClient (we don't use it though)

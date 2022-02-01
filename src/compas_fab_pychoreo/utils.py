@@ -1,6 +1,7 @@
 import logging
 import re
 from collections.abc import Iterable
+import copy
 from click import option
 import numpy as np
 import pybullet_planning as pp
@@ -71,6 +72,7 @@ def wildcard_keys(data, wildcard):
     return matched_keys
 
 ############################################
+
 def is_configurations_close(conf1, conf2, options=None, fallback_tol=1e-3):
     """Compare configurations using different tolerances for different joints.
     Return True if same, False if different.
@@ -111,11 +113,18 @@ def is_configurations_close(conf1, conf2, options=None, fallback_tol=1e-3):
         tol = joint_compare_tolerances[joint_names[i]] if joint_names[i] in joint_compare_tolerances \
             else fallback_tol
         if abs(diff) > tol:
-            # if verbose:
-            LOGGER.debug('Joint #{} (revolution) jump: {:.4f} | tol: {:.4f}'.format(joint_names[i],
+            if verbose:
+                LOGGER.debug('Joint #{} diff: {:.4f} | tol: {:.4f}'.format(joint_names[i],
                     abs(diff), tol))
             return False
     return True
+
+def does_configurations_jump(conf1, conf2, options=None, fallback_tol=1e-1):
+    options = options or {}
+    joint_jump_tolerances = options.get('joint_jump_tolerances', {})
+    _options = options.copy()
+    _options['joint_compare_tolerances'] = joint_jump_tolerances
+    return not is_configurations_close(conf1, conf2, options=_options, fallback_tol=fallback_tol)
 
 ###############################################
 
@@ -130,14 +139,14 @@ def is_poses_close(pose0, pose1, options=None):
     R1 = pp.matrix_from_quat(quat1)
     if pp.get_distance(point0, point1) > frame_compare_distance_tolerance:
         if verbose:
-            LOGGER.debug("Point distance: {:.4f} m | tol: {:.4f}".format(pp.get_distance(point0, point1), frame_compare_distance_tolerance))
+            LOGGER.warning("Point distance: {:.6f} m | tol: {:.6f}".format(pp.get_distance(point0, point1), frame_compare_distance_tolerance))
         return False
     for i in range(3):
         if pp.angle_between(R0[:,i], R1[:,i]) > frame_compare_axis_angle_tolerance:
-            LOGGER.debug("Axis {} angle: {:.4f} | tol: {:.4f}".format(i, pp.angle_between(R0[:,i], R1[:,i]), frame_compare_axis_angle_tolerance))
+            if verbose:
+                LOGGER.warning("Axis {} angle: {:.6f} | tol: {:.6f}".format(i, pp.angle_between(R0[:,i], R1[:,i]), frame_compare_axis_angle_tolerance))
             return False
     return True
 
 def is_frames_close(frame0, frame1, options=None, scale=1.0):
-    options = options or {}
     return is_poses_close(pose_from_frame(frame0, scale), pose_from_frame(frame1, scale), options)
