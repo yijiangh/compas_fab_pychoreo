@@ -56,7 +56,7 @@ class PyChoreoInverseKinematics(InverseKinematics):
         max_iterations = is_valid_option(options, 'attempts', 8)
         avoid_collisions = is_valid_option(options, 'avoid_collisions', True)
         return_all = is_valid_option(options, 'return_all', False)
-        custom_limits = options.get('custom_limits') or {}
+        joint_custom_limits = options.get('joint_custom_limits', {})
         # return_closest_to_start = is_valid_option(options, 'return_closest_to_start', False)
         # cull = is_valid_option(options, 'cull', True)
 
@@ -65,8 +65,8 @@ class PyChoreoInverseKinematics(InverseKinematics):
         ik_joints = joints_from_names(robot_uid, ik_joint_names)
         tool_link_name = robot.get_end_effector_link_name(group=group)
         tool_link = link_from_name(robot_uid, tool_link_name)
-        pb_custom_limits = get_custom_limits(robot_uid, ik_joints,
-            custom_limits={joint_from_name(robot_uid, jn) : lims for jn, lims in custom_limits.items()})
+        pb_custom_limits = {joint_from_name(robot_uid, joint_name) : lims \
+            for joint_name, lims in joint_custom_limits.items()}
 
         target_pose = pose_from_frame(frame_WCF)
         with WorldSaver():

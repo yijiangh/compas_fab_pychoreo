@@ -52,7 +52,7 @@ class PyChoreoConfigurationCollisionChecker(ConfigurationCollisionChecker):
         """Returns a `pybullet_planning` collision_fn
         """
         robot_uid = self.client.get_robot_pybullet_uid(robot)
-        custom_limits = options.get('custom_limits', {})
+        joint_custom_limits = options.get('joint_custom_limits', {})
         avoid_collisions = options.get('avoid_collisions', True)
         self_collisions = options.get('self_collisions', True)
         collision_distance_threshold = options.get('collision_distance_threshold', 0.0)
@@ -61,8 +61,8 @@ class PyChoreoConfigurationCollisionChecker(ConfigurationCollisionChecker):
 
         # * custom joint limits
         ik_joints = joints_from_names(robot_uid, joint_names)
-        pb_custom_limits = get_custom_limits(robot_uid, ik_joints,
-            custom_limits={joint_from_name(robot_uid, jn) : lims for jn, lims in custom_limits.items()})
+        pb_custom_limits = {joint_from_name(robot_uid, jn) : lims \
+            for jn, lims in joint_custom_limits.items()}
 
         obstacles, attachments, extra_disabled_collisions = self.client._get_collision_checking_setup(options)
 

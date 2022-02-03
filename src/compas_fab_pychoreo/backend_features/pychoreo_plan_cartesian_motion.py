@@ -35,7 +35,8 @@ def create_sub_robot(robot, first_joint, target_link):
     return sub_robot, selected_joints, sub_target_link
 
 def plan_cartesian_motion_from_links(robot, selected_links, target_link, waypoint_poses,
-        max_iterations=200, custom_limits={}, get_sub_conf=False, options=None, **kwargs):
+        max_iterations=200, custom_limits={}, get_sub_conf=False, options=None):
+    """Plan a cartesian path using iterative pybullet IK"""
     options = options or {}
     lower_limits, upper_limits = get_custom_limits(robot, get_movable_joints(robot), custom_limits)
     selected_movable_joints = prune_fixed_joints(robot, selected_links)
@@ -73,14 +74,9 @@ def plan_cartesian_motion_from_links(robot, selected_links, target_link, waypoin
     remove_body(sub_robot)
     return solutions
 
-#######################################################
-from pybullet_planning import INF
-from itertools import chain, islice
-from pybullet_planning import get_difference_fn, get_joint_positions, get_min_limits, get_max_limits, get_length, \
-    interval_generator, elapsed_time, randomize, violates_limits, inverse_kinematics, get_ordered_ancestors
-
 def plan_cartesian_motion_with_customized_ik(robot_uid, ik_info, waypoint_poses,
         custom_limits={}, options=None, **kwargs):
+    """Plan cartesian motion with a customized ik fn"""
     options = options or {}
     lower_limits, upper_limits = get_custom_limits(robot_uid, get_movable_joints(robot_uid), custom_limits)
     # selected_movable_joints = prune_fixed_joints(robot, selected_links)
@@ -189,16 +185,20 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
         pos_step_size = options.get('max_step', 0.01)
         planner_id = is_valid_option(options, 'planner_id', 'IterativeIK')
         joint_jump_tolerances = options.get('joint_jump_tolerances', {})
-        jump_threshold_from_joint = {joint_from_name(robot_uid, jt_name) : j_diff for jt_name, j_diff in joint_jump_tolerances.items()}
+        joint_custom_limits = options.get('joint_custom_limits', {}) # {joint_name : (lower_limit, upper_limit)}
+
+        pb_jump_tolerances = {joint_from_name(robot_uid, jt_name) : j_diff \
+            for jt_name, j_diff in joint_jump_tolerances.items()}
+        pb_custom_limits = {joint_from_name(robot_uid, joint_name) : lims \
+            for joint_name, lims in joint_custom_limits.items()}
+
+        # * Iterative IK options
+        customized_ikinfo = options.get('customized_ikinfo', None)
 
         # * ladder graph options
         frame_variant_gen = is_valid_option(options, 'frame_variant_generator', None)
+        # ik function used in the ladder graph search
         ik_function = options.get('ik_function', None)
-        customized_ikinfo = options.get('customized_ikinfo', None)
-        # ! options for base sampler + ik
-        # max_ik_attempts = options.get('max_ik_attempts', 200)
-        # free_delta = options.get('free_delta', 0.1)
-        # max_joint_distance = options.get('max_joint_distance', 0.5)
 
         # * convert to poses and do workspace linear interpolation
         given_poses = [pose_from_frame(frame_WCF) for frame_WCF in frames_WCF]
@@ -228,15 +228,13 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
 
             if planner_id == 'IterativeIK':
                 selected_links = [link_from_name(robot_uid, l) for l in robot.get_link_names(group=group)]
-                # with HideOutput():
-                # with redirect_stdout():
                 if customized_ikinfo is None:
                     path = plan_cartesian_motion_from_links(robot_uid, selected_links, tool_link,
-                        ee_poses, get_sub_conf=False, options=options)
+                        ee_poses, custom_limits=pb_custom_limits, get_sub_conf=False, options=options)
                 else:
                     assert tool_link_name == customized_ikinfo.ee_link_name
                     path = plan_cartesian_motion_with_customized_ik(robot_uid, customized_ikinfo, ee_poses,
-                        options=options)
+                        custom_limits=pb_custom_limits, options=options)
                         # max_ik_attempts=max_ik_attempts, free_delta=free_delta, max_joint_distance=max_joint_distance)
 
                 if path is None:
@@ -270,13 +268,14 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
                     sample_ee_fn = None
 
                 path, cost = plan_cartesian_motion_lg(robot_uid, ik_joints, ee_poses, sample_ik_fn, collision_fn, \
-                    jump_threshold=jump_threshold_from_joint, sample_ee_fn=sample_ee_fn,
+                    jump_threshold=pb_jump_tolerances, sample_ee_fn=sample_ee_fn,
                     enforce_start_conf=start_configuration is not None)
 
                 if verbose:
                     LOGGER.debug('Ladder graph cost: {}'.format(cost))
             else:
-                raise ValueError('Cartesian planner {} not implemented!', planner_id)
+                LOGGER.error('Cartesian planner {} not implemented!', planner_id)
+                return None
 
         if path is None:
             if verbose:
@@ -294,8 +293,8 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
             for i, (conf, target_pose) in enumerate(zip(path, ee_poses)):
                 jt_traj_pt = JointTrajectoryPoint(joint_values=conf, joint_names = joint_names, joint_types=joint_types)
                 if start_traj_pt is not None:
-                    # ! TrajectoryPoint doesn't copy over joint_names...
                     jtp = start_traj_pt.copy()
+                    # ! TrajectoryPoint doesn't copy over joint_names...
                     jtp.joint_names = start_traj_pt.joint_names
                     jtp.merge(jt_traj_pt)
                     jt_traj_pt = jtp
@@ -332,8 +331,6 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
         for joint_name, joint_value in zip(conf_val_from_joint_name, conf_val):
             if joint_name in joint_names or joint_name.decode('UTF-8') in joint_names:
                 pruned_conf.append(joint_value)
-            # else:
-            #     print(joint_name.decode('UTF-8'))
         return pruned_conf
 
     def _get_sample_ik_fn(self, robot, ik_options=None):

@@ -1,12 +1,11 @@
 import time
 from compas.datastructures.network.core import graph
 from pybullet_planning.interfaces.env_manager.simulation import LockRenderer
-from termcolor import cprint
 from compas_fab.backends.interfaces import PlanMotion
 from compas_fab.robots import JointTrajectory, Duration, JointTrajectoryPoint
 
 from compas_fab_pychoreo.backend_features.pychoreo_configuration_collision_checker import PyChoreoConfigurationCollisionChecker
-from compas_fab_pychoreo.utils import is_configurations_close, is_valid_option
+from compas_fab_pychoreo.utils import is_configurations_close, is_valid_option, LOGGER
 
 import pybullet_planning as pp
 from pybullet_planning import WorldSaver, joints_from_names, check_initial_end
@@ -116,13 +115,14 @@ class PyChoreoPlanMotion(PlanMotion):
         draw_mp_exploration = options.get('draw_mp_exploration', False)
 
         # * robot-related paramters
-        custom_limits = options.get('custom_limits', {})
-        resolutions = options.get('joint_resolutions', 0.1)
-        weights = options.get('joint_weights', None)
+        joint_custom_limits = options.get('joint_custom_limits', {}) # {joint_name : (lower_limit, upper_limit)}
+        # {joint_name : res_value}, default using DEFAULT_RESOLUTION (0.05) in pp.get_extend_fn
+        joint_resolutions = options.get('joint_resolutions', {})
         # TODO: auto compute joint weight
+        joint_weights = options.get('joint_weights', {}) # {joint_name : res_value}
         algorithm = options.get('mp_algorithm', 'birrt') # number of random restarts
         if algorithm not in MOTION_PLANNING_ALGORITHMS:
-            cprint('{} algorithm not implemented, using birrt instead.'.format(algorithm), 'yellow')
+            LOGGER.warning('{} algorithm not implemented, using birrt instead.'.format(algorithm))
 
         plan_options = {}
         max_time = options.get('max_time', INF) # total allowable planning time
@@ -158,19 +158,24 @@ class PyChoreoPlanMotion(PlanMotion):
 
         # * convert link/joint names to pybullet indices
         joint_names = robot.get_configurable_joint_names(group=group)
+        # all the joints-related values (joint limits, resolutions, weights, etc)
+        # are a list following the order of joint_names
         conf_joints = joints_from_names(robot_uid, joint_names)
         joint_types = robot.get_joint_types_by_names(joint_names)
-        pb_custom_limits = {joint_from_name(robot_uid, jn) : lims for jn, lims in custom_limits.items()}
-        # print('pb custom limits: ', list(pb_custom_limits))
+        pb_custom_limits = {joint_from_name(robot_uid, joint_name) : lims \
+            for joint_name, lims in joint_custom_limits.items()}
+        # ! currently pp's resolutions and weights only support array not dict
+        pb_joint_resolutions = None if len(joint_resolutions) == 0 else \
+            [joint_resolutions[joint_name] for joint_name in joint_names]
+        pb_joint_weights = None if len(joint_weights) == 0 else \
+            [joint_weights[joint_name] for joint_name in joint_names]
 
         with WorldSaver():
             if start_configuration is not None:
-                # * set to start conf
                 self.client.set_robot_configuration(robot, start_configuration)
             sample_fn = get_sample_fn(robot_uid, conf_joints, custom_limits=pb_custom_limits)
-            distance_fn = get_distance_fn(robot_uid, conf_joints, weights=weights)
-            extend_fn = get_extend_fn(robot_uid, conf_joints, resolutions=resolutions)
-            options['robot'] = robot
+            distance_fn = get_distance_fn(robot_uid, conf_joints, weights=pb_joint_weights)
+            extend_fn = get_extend_fn(robot_uid, conf_joints, resolutions=pb_joint_resolutions)
             collision_fn = PyChoreoConfigurationCollisionChecker(self.client)._get_collision_fn(robot, joint_names, options=options)
 
             start_conf = get_joint_positions(robot_uid, conf_joints)
@@ -178,7 +183,7 @@ class PyChoreoPlanMotion(PlanMotion):
             assert len(conf_joints) == len(end_conf)
 
             if not check_initial_end(start_conf, end_conf, collision_fn, diagnosis=diagnosis):
-                cprint('No free motion found because initial or end conf in collision!', 'red')
+                LOGGER.error('No free motion found because initial or end conf in collision!', 'red')
                 return None
 
             path = solve_motion_plan(start_conf, end_conf, distance_fn, sample_fn, extend_fn, collision_fn,
@@ -186,9 +191,7 @@ class PyChoreoPlanMotion(PlanMotion):
                 **plan_options) #num_samples=num_samples,
 
         if path is None:
-            # TODO use LOG
-            if verbose:
-                cprint('No free motion found with algorithm {}!'.format(algorithm), 'red')
+            LOGGER.debug('No free motion found with algorithm {}!'.format(algorithm))
             return None
         else:
             if draw_mp_exploration:
@@ -215,5 +218,5 @@ class PyChoreoPlanMotion(PlanMotion):
                     joint_vals.append(constr.value)
                     break
             else:
-                assert False, 'Joint name {} not found in constraints {}'.format(name, constraints)
+                raise ValueError('Joint name {} not found in constraints {}'.format(name, constraints))
         return joint_vals

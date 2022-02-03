@@ -28,9 +28,8 @@ class PyChoreoTrajectorySmoother(TrajectorySmoother):
         """
         # verbose = options.get('verbose', False)
         diagnosis = options.get('diagnosis', False)
-        custom_limits = options.get('custom_limits', {})
-        weights = options.get('joint_weights', None)
-        resolutions = options.get('joint_resolutions', 0.1)
+        joint_weights = options.get('joint_weights', {})
+        joint_resolutions = options.get('joint_resolutions', {})
         # ! max_time is prioritized over iterations
         smooth_iterations = options.get('smooth_iterations', 200)
         max_smooth_time = options.get('max_smooth_time', 60) # seconds
@@ -41,16 +40,20 @@ class PyChoreoTrajectorySmoother(TrajectorySmoother):
 
         robot_uid = self.client.get_robot_pybullet_uid(robot)
         # * convert link/joint names to pybullet indices
+        # ! we assume all joint names are the same across the entire trajectory
         joint_names = trajectory.joint_names or trajectory.points[0].joint_names
         joint_types = robot.get_joint_types_by_names(joint_names)
         pb_joints = pp.joints_from_names(robot_uid, joint_names)
-        # pb_custom_limits = pp.get_custom_limits(robot_uid, pb_joints,
-        #     custom_limits={pp.joint_from_name(robot_uid, jn) : lims for jn, lims in custom_limits.items()})
+        # ! currently pp's resolutions and weights only support array not dict
+        pb_joint_resolutions = None if len(joint_resolutions) == 0 else \
+            [joint_resolutions[joint_name] for joint_name in joint_names]
+        pb_joint_weights = None if len(joint_weights) == 0 else \
+            [joint_weights[joint_name] for joint_name in joint_names]
 
         path = [conf.joint_values for conf in trajectory.points]
         with pp.WorldSaver():
-            distance_fn = pp.get_distance_fn(robot_uid, pb_joints, weights=weights)
-            extend_fn = pp.get_extend_fn(robot_uid, pb_joints, resolutions=resolutions)
+            distance_fn = pp.get_distance_fn(robot_uid, pb_joints, weights=pb_joint_weights)
+            extend_fn = pp.get_extend_fn(robot_uid, pb_joints, resolutions=pb_joint_resolutions)
             options['robot'] = robot
             collision_fn = PyChoreoConfigurationCollisionChecker(self.client)._get_collision_fn(robot, joint_names, options=options)
 
