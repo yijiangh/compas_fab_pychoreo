@@ -98,6 +98,9 @@ def is_configurations_close(conf1, conf2, options=None, fallback_tol=1e-3):
     """
     options = options or {}
     verbose = options.get('verbose', False)
+    if conf1 is None or conf2 is None:
+        LOGGER.error('Compare confs: Conf1 is None: {} | Conf2 is None: {}'.format(conf1 is None, conf2 is None))
+        return False
     joint_compare_tolerances = options.get('joint_compare_tolerances', {})
     _conf1 =conf1.copy()
     _conf2 =conf2.copy()

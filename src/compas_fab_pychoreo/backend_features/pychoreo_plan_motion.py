@@ -175,7 +175,7 @@ class PyChoreoPlanMotion(PlanMotion):
                 self.client.set_robot_configuration(robot, start_configuration)
             sample_fn = get_sample_fn(robot_uid, conf_joints, custom_limits=pb_custom_limits)
             distance_fn = get_distance_fn(robot_uid, conf_joints, weights=pb_joint_weights)
-            extend_fn = get_extend_fn(robot_uid, conf_joints, resolutions=pb_joint_resolutions)
+            extend_fn = get_extend_fn(robot_uid, conf_joints, resolutions=pb_joint_resolutions, norm=pp.INF)
             collision_fn = PyChoreoConfigurationCollisionChecker(self.client)._get_collision_fn(robot, joint_names, options=options)
 
             start_conf = get_joint_positions(robot_uid, conf_joints)
