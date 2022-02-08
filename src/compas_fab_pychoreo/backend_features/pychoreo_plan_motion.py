@@ -183,7 +183,7 @@ class PyChoreoPlanMotion(PlanMotion):
             assert len(conf_joints) == len(end_conf)
 
             if not check_initial_end(start_conf, end_conf, collision_fn, diagnosis=diagnosis):
-                LOGGER.error('No free motion found because initial or end conf in collision!', 'red')
+                LOGGER.error('No free motion found because initial or end conf in collision!')
                 return None
 
             path = solve_motion_plan(start_conf, end_conf, distance_fn, sample_fn, extend_fn, collision_fn,
@@ -191,7 +191,7 @@ class PyChoreoPlanMotion(PlanMotion):
                 **plan_options) #num_samples=num_samples,
 
         if path is None:
-            LOGGER.debug('No free motion found with algorithm {}!'.format(algorithm))
+            if verbose: LOGGER.debug('No free motion found with algorithm {}!'.format(algorithm))
             return None
         else:
             if draw_mp_exploration:
