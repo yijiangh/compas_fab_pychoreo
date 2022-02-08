@@ -301,22 +301,22 @@ class PyChoreoClient(PyBulletClient):
         return body_frames
 
     def _print_object_summary(self):
-        LOGGER.debug('^'*10)
-        LOGGER.debug('PychoreoClient scene summary:')
+        LOGGER.info('^'*10)
+        LOGGER.info('PychoreoClient scene summary:')
         body_name_from_id = self._name_from_body_id
-        LOGGER.debug('Collision Objects:')
+        LOGGER.info('Collision Objects:')
         for name, bodies in self.collision_objects.items():
-            LOGGER.debug('\t{}: {}'.format(name, bodies))
-        LOGGER.debug('Attachments:')
+            LOGGER.info('\t{}: {}'.format(name, bodies))
+        LOGGER.info('Attachments:')
         for name, attachments in self.pychoreo_attachments.items():
-            LOGGER.debug('\t{}: {}'.format(name, [at.child for at in attachments]))
+            LOGGER.info('\t{}: {}'.format(name, [at.child for at in attachments]))
         LOGGER.debug('Extra disabled collision links:')
         for name, blink_pairs in self.extra_disabled_collision_links.items():
-            LOGGER.debug('\t{}:'.format(name))
+            LOGGER.info('\t{}:'.format(name))
             for (b1,l1_name), (b2,l2_name) in blink_pairs:
                 b1_name = body_name_from_id[b1] if b1 in body_name_from_id else get_name(b1)
                 b2_name = body_name_from_id[b2] if b2 in body_name_from_id else get_name(b2)
-                LOGGER.debug('\t\t({}-{}), ({}-{})'.format(b1_name,l1_name,b2_name,l2_name))
+                LOGGER.info('\t\t({}-{}), ({}-{})'.format(b1_name,l1_name,b2_name,l2_name))
 
     ########################################
 
