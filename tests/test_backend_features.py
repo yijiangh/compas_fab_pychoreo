@@ -1,3 +1,4 @@
+from pybullet_planning.interfaces.env_manager.user_io import wait_for_user
 import pytest
 import os
 import numpy as np
@@ -416,6 +417,95 @@ def test_plan_motion(abb_irb4600_40_255_setup, itj_TC_g1_cms, itj_beam_cm, colum
             for traj_pt in trajectory.points:
                 client.set_robot_configuration(robot, traj_pt)
                 wait_for_duration(time_step)
+
+        wait_if_gui("Finished.")
+
+#####################################
+
+@pytest.mark.plan_motion_with_polyline
+def test_plan_motion_with_polyline(abb_irb4600_40_255_setup, column_obstacle_cm, base_plate_cm, tube_cms,
+    itj_s1_urdf_path, itj_s1_grasp_transf, viewer, diagnosis):
+    urdf_filename, semantics = abb_irb4600_40_255_setup
+
+    move_group = 'bare_arm'
+    ee_touched_link_names = ['link_6']
+
+    options = {
+        # 'collision_distance_threshold' : 0.001, # in meter,
+        'diagnosis' : diagnosis,
+        'resolutions' : 0.05,
+        'rrt_restarts' : 2,
+        }
+
+    with PyChoreoClient(viewer=viewer) as client:
+        with LockRenderer():
+            robot = client.load_robot(urdf_filename)
+            robot.semantics = semantics
+            client.disabled_collisions = robot.semantics.disabled_collisions
+
+            client.add_tool_from_urdf('s1', itj_s1_urdf_path)
+
+            # * add static obstacles
+            client.add_collision_mesh(base_plate_cm)
+            client.add_collision_mesh(column_obstacle_cm)
+            for tube_cm in tube_cms:
+                client.add_collision_mesh(tube_cm)
+
+        ik_joint_names = robot.get_configurable_joint_names(group=move_group)
+        ik_joint_types = robot.get_joint_types_by_names(ik_joint_names)
+        flange_link_name = robot.get_end_effector_link_name(group=move_group)
+
+        # tool0_tf = Transformation.from_frame(client.get_link_frame_from_name(robot, flange_link_name))
+        tool0_from_s1_base = itj_s1_grasp_transf
+        # client.set_object_frame('^{}$'.format('s1'), Frame.from_transformation(tool0_tf*tool0_from_tool_changer_base))
+
+        names = client._get_collision_object_names('^{}$'.format('s1'))
+        for ee_name in names:
+            attach_options = {'robot' : robot}
+            attached_child_link_name = 'toolchanger_base' if 'TC' in ee_name else 'gripper_base'
+            attach_options.update({
+                'attached_child_link_name' : attached_child_link_name,
+                'parent_link_from_child_link_transformation' : tool0_from_s1_base,
+                })
+            client.add_attached_collision_mesh(
+                AttachedCollisionMesh(CollisionMesh(None, ee_name),
+                                      flange_link_name,
+                                      touch_links=ee_touched_link_names),
+                                      options=attach_options)
+
+        start_conf = Configuration(joint_values=np.zeros(6).tolist(), joint_types=ik_joint_types, joint_names=ik_joint_names)
+        assert not client.check_collisions(robot, start_conf, options=options)
+        # client.set_robot_configuration(robot, start_conf)
+        # wait_if_gui()
+
+        vals = [0.027925268031909273, 0.0, 0.0, 0.087266462599716474, 0.0, 0.0]
+        near_start_conf = Configuration(joint_values=vals, joint_types=ik_joint_types, joint_names=ik_joint_names)
+        assert client.check_sweeping_collisions(robot, start_conf, near_start_conf, options=options)
+
+        vals = [0.034906585039886591, 0.68067840827778847, 0.15707963267948966, -0.89011791851710809, -0.034906585039886591, -2.2514747350726849]
+        end_conf = Configuration(joint_values=vals, joint_types=ik_joint_types, joint_names=ik_joint_names)
+        assert not client.check_collisions(robot, end_conf, options=options)
+        client.set_robot_configuration(robot, end_conf)
+        wait_if_gui()
+
+        goal_constraints = robot.constraints_from_configuration(end_conf, [0.01], [0.01], group=move_group)
+
+        st_time = time.time()
+        trajectory = client.plan_motion(robot, goal_constraints, start_configuration=start_conf, group=move_group, options=options)
+        print('Solving time: {}'.format(elapsed_time(st_time)))
+
+        if trajectory is None:
+            cprint('Client motion planner CANNOT find a plan!', 'red')
+            assert False, 'Client motion planner CANNOT find a plan!'
+            # TODO warning
+        else:
+            cprint('Client motion planning find a plan!', 'green')
+            wait_if_gui('Start sim.')
+            time_step = 0.1
+            for traj_pt in trajectory.points:
+                client.set_robot_configuration(robot, traj_pt)
+                # wait_for_duration(time_step)
+                wait_for_user()
 
         wait_if_gui("Finished.")
 

@@ -1,0 +1,214 @@
+<?xml version="1.0" encoding="utf-8"?>
+<robot name="s1">
+  <link name="gripper_base">
+    <visual>
+      <geometry>
+        <mesh filename="package://s1/meshes/visual/L0_visual_0.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="Material">
+        <color rgba="0.8 0.8 0.8 1.0"/>
+      </material>
+    </visual>
+    <visual>
+      <geometry>
+        <mesh filename="package://s1/meshes/visual/L0_visual_1.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="Material">
+        <color rgba="0.8 0.8 0.8 1.0"/>
+      </material>
+    </visual>
+    <visual>
+      <geometry>
+        <mesh filename="package://s1/meshes/visual/L0_visual_2.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="Material">
+        <color rgba="0.8 0.8 0.8 1.0"/>
+      </material>
+    </visual>
+    <visual>
+      <geometry>
+        <mesh filename="package://s1/meshes/visual/L0_visual_3.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="Material">
+        <color rgba="0.8 0.8 0.8 1.0"/>
+      </material>
+    </visual>
+    <visual>
+      <geometry>
+        <mesh filename="package://s1/meshes/visual/L0_visual_4.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="Material">
+        <color rgba="0.8 0.8 0.8 1.0"/>
+      </material>
+    </visual>
+    <visual>
+      <geometry>
+        <mesh filename="package://s1/meshes/visual/L0_visual_5.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="Material">
+        <color rgba="0.8 0.8 0.8 1.0"/>
+      </material>
+    </visual>
+    <visual>
+      <geometry>
+        <mesh filename="package://s1/meshes/visual/L0_visual_6.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="Material">
+        <color rgba="0.8 0.8 0.8 1.0"/>
+      </material>
+    </visual>
+    <visual>
+      <geometry>
+        <mesh filename="package://s1/meshes/visual/L0_visual_7.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="Material">
+        <color rgba="0.8 0.8 0.8 1.0"/>
+      </material>
+    </visual>
+    <visual>
+      <geometry>
+        <mesh filename="package://s1/meshes/visual/L0_visual_8.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="Material">
+        <color rgba="0.8 0.8 0.8 1.0"/>
+      </material>
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="package://s1/meshes/collision/L0_collision_0.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </collision>
+    <collision>
+      <geometry>
+        <mesh filename="package://s1/meshes/collision/L0_collision_1.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </collision>
+    <collision>
+      <geometry>
+        <mesh filename="package://s1/meshes/collision/L0_collision_2.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </collision>
+    <collision>
+      <geometry>
+        <mesh filename="package://s1/meshes/collision/L0_collision_3.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </collision>
+    <collision>
+      <geometry>
+        <mesh filename="package://s1/meshes/collision/L0_collision_4.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </collision>
+    <collision>
+      <geometry>
+        <mesh filename="package://s1/meshes/collision/L0_collision_5.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </collision>
+    <collision>
+      <geometry>
+        <mesh filename="package://s1/meshes/collision/L0_collision_6.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </collision>
+    <collision>
+      <geometry>
+        <mesh filename="package://s1/meshes/collision/L0_collision_7.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </collision>
+    <collision>
+      <geometry>
+        <mesh filename="package://s1/meshes/collision/L0_collision_8.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </collision>
+  </link>
+  <link name="gripper_jaw_l">
+    <visual>
+      <geometry>
+        <mesh filename="package://s1/meshes/visual/L1_visual_0.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="Material">
+        <color rgba="0.8 0.8 0.8 1.0"/>
+      </material>
+    </visual>
+    <visual>
+      <geometry>
+        <mesh filename="package://s1/meshes/visual/L1_visual_1.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="Material">
+        <color rgba="0.8 0.8 0.8 1.0"/>
+      </material>
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="package://s1/meshes/collision/L1_collision_0.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </collision>
+    <collision>
+      <geometry>
+        <mesh filename="package://s1/meshes/collision/L1_collision_1.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </collision>
+  </link>
+  <link name="gripper_jaw_r">
+    <visual>
+      <geometry>
+        <mesh filename="package://s1/meshes/visual/L2_visual_0.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="Material">
+        <color rgba="0.8 0.8 0.8 1.0"/>
+      </material>
+    </visual>
+    <visual>
+      <geometry>
+        <mesh filename="package://s1/meshes/visual/L2_visual_1.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="Material">
+        <color rgba="0.8 0.8 0.8 1.0"/>
+      </material>
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="package://s1/meshes/collision/L2_collision_0.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </collision>
+    <collision>
+      <geometry>
+        <mesh filename="package://s1/meshes/collision/L2_collision_1.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </collision>
+  </link>
+  <link name="screwdriver_screw">
+    <visual>
+      <geometry>
+        <mesh filename="package://s1/meshes/visual/L3_visual_0.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="Material">
+        <color rgba="0.8 0.8 0.8 1.0"/>
+      </material>
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="package://s1/meshes/collision/L3_collision_0.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </collision>
+  </link>
+  <joint name="joint_gripper_jaw_l" type="prismatic">
+    <parent link="gripper_base"/>
+    <child link="gripper_jaw_l"/>
+    <axis xyz="-0.6644628767006494 -0.2418451684168724 -0.707106781186627"/>
+    <limit effort="0.0" upper="0.047" velocity="0.0"/>
+    <origin rpy="0.0 0.0 0.0" xyz="0.0 0.0 0.0"/>
+  </joint>
+  <joint name="joint_gripper_jaw_r" type="prismatic">
+    <parent link="gripper_base"/>
+    <child link="gripper_jaw_r"/>
+    <axis xyz="0.6644628767011193 0.24184516841704337 -0.7071067811861269"/>
+    <limit effort="0.0" upper="0.047" velocity="0.0"/>
+    <origin rpy="0.0 0.0 0.0" xyz="0.0 0.0 0.0"/>
+  </joint>
+  <joint name="screwdriver_screw" type="revolute">
+    <parent link="gripper_base"/>
+    <child link="screwdriver_screw"/>
+    <axis xyz="-7.25013948714e-14 -3.47598351414e-13 1.0"/>
+    <limit effort="0.0" upper="47.0" velocity="0.0"/>
+    <origin rpy="0.0 0.0 0.0" xyz="0.0 0.0 0.0"/>
+  </joint>
+</robot>
