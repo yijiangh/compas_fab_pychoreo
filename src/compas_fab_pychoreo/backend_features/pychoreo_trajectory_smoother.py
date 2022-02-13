@@ -54,7 +54,6 @@ class PyChoreoTrajectorySmoother(TrajectorySmoother):
         with pp.WorldSaver():
             distance_fn = pp.get_distance_fn(robot_uid, pb_joints, weights=pb_joint_weights)
             extend_fn = pp.get_extend_fn(robot_uid, pb_joints, resolutions=pb_joint_resolutions, norm=pp.INF)
-            options['robot'] = robot
             collision_fn = PyChoreoConfigurationCollisionChecker(self.client)._get_collision_fn(robot, joint_names, options=options)
 
             smoothed_path = pp.smooth_path(path, extend_fn, collision_fn, distance_fn=distance_fn, \
