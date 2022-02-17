@@ -153,3 +153,33 @@ def is_poses_close(pose0, pose1, options=None):
 
 def is_frames_close(frame0, frame1, options=None, scale=1.0):
     return is_poses_close(pose_from_frame(frame0, scale), pose_from_frame(frame1, scale), options)
+
+def verify_trajectory(client, robot, trajectory, options=None):
+    if trajectory is None:
+        LOGGER.warning('Trajectory None')
+        return False
+    options = options or {}
+    check_sweeping_collision = options.get('check_sweeping_collision', True)
+
+    prev_conf = trajectory.start_configuration or trajectory.points[0]
+    for conf_id, jpt in enumerate(trajectory.points):
+        # * traj-point collision checking
+        point_collision = client.check_collisions(robot, jpt, options=options)
+        if point_collision:
+            LOGGER.warning('pointwise collision: trajectory point #{}/{}'.format(conf_id,
+                len(trajectory.points)))
+            return False
+        # * prev-conf~conf polyline collision checking
+        polyline_collision = client.check_sweeping_collisions(robot, prev_conf, jpt, options=options)
+        if check_sweeping_collision and polyline_collision:
+            LOGGER.warning('polyline collision: trajectory point #{}/{}'.format(conf_id,
+                len(trajectory.points)))
+            # print('prev conf: ', prev_conf.joint_values)
+            # print('curr conf: ', jpt.joint_values)
+            return False
+        if prev_conf and does_configurations_jump(jpt, prev_conf, options=options):
+            LOGGER.warning('joint_flip: trajectory point #{}/{}'.format(conf_id, len(trajectory.points)))
+            return False
+        prev_conf = jpt
+
+    return True

@@ -1,3 +1,4 @@
+from tracemalloc import start
 from pybullet_planning.interfaces.env_manager.user_io import wait_for_user
 import pytest
 import os
@@ -25,6 +26,7 @@ import ikfast_abb_irb4600_40_255
 from compas_fab_pychoreo.client import PyChoreoClient
 from compas_fab_pychoreo.conversions import pose_from_frame, frame_from_pose
 from compas_fab_pychoreo.backend_features.pychoreo_frame_variant_generator import PyChoreoFiniteEulerAngleVariantGenerator
+from compas_fab_pychoreo.utils import is_configurations_close, verify_trajectory, LOGGER
 
 from compas_fab_pychoreo_examples.ik_solver import ik_abb_irb4600_40_255, InverseKinematicsSolver, get_ik_fn_from_ikfast
 
@@ -317,25 +319,28 @@ def test_circle_cartesian(fixed_waam_setup, viewer, planner_ik_conf):
             time_step = 0.03
             for traj_pt in trajectory.points:
                 client.set_robot_configuration(robot, traj_pt)
-                wait_for_duration(time_step)
+                # wait_for_duration(time_step)
+                wait_if_gui()
 
         wait_if_gui()
 
 #####################################
+
 @pytest.mark.plan_motion
-@pytest.mark.parametrize("tool_type", [
-    # ('static'),
-    ('actuated'),
+@pytest.mark.parametrize("smooth_iterations", [
+    (None),
+    # (10),
     ])
 def test_plan_motion(abb_irb4600_40_255_setup, itj_TC_g1_cms, itj_beam_cm, column_obstacle_cm, base_plate_cm,
-    itj_tool_changer_grasp_transf, itj_gripper_grasp_transf, itj_beam_grasp_transf, tool_type,
-    itj_tool_changer_urdf_path, itj_g1_urdf_path,
+    itj_tool_changer_grasp_transf, itj_gripper_grasp_transf, itj_beam_grasp_transf, smooth_iterations,
+    itj_tool_changer_urdf_path, itj_g1_urdf_path, abb_tolerances,
     viewer, diagnosis):
     # modified from https://github.com/yijiangh/pybullet_planning/blob/dev/tests/test_collisions.py
     urdf_filename, semantics = abb_irb4600_40_255_setup
 
     move_group = 'bare_arm'
     ee_touched_link_names = ['link_6']
+    tool_type = 'actuated'
 
     with PyChoreoClient(viewer=viewer) as client:
         with LockRenderer():
@@ -394,48 +399,48 @@ def test_plan_motion(abb_irb4600_40_255_setup, itj_TC_g1_cms, itj_beam_cm, colum
         # client.set_robot_configuration(robot, end_conf)
         # wait_if_gui()
 
-        plan_options = {
-            'diagnosis' : True,
-            'resolutions' : 0.05,
+        options = {
+            'diagnosis' : diagnosis,
+            'joint_resolutions' : 0.05,
             'rrt_restarts' : 10,
+            'mp_algorithm' : 'birrt',
+            'smooth_iterations' : smooth_iterations,
+            'verbose' : True,
             }
+        options.update(abb_tolerances)
 
         goal_constraints = robot.constraints_from_configuration(end_conf, [0.01], [0.01], group=move_group)
 
         st_time = time.time()
-        trajectory = client.plan_motion(robot, goal_constraints, start_configuration=start_conf, group=move_group, options=plan_options)
+        trajectory = client.plan_motion(robot, goal_constraints, start_configuration=start_conf, group=move_group, options=options)
         print('Solving time: {}'.format(elapsed_time(st_time)))
 
         if trajectory is None:
             cprint('Client motion planner CANNOT find a plan!', 'red')
             assert False, 'Client motion planner CANNOT find a plan!'
-            # TODO warning
         else:
             cprint('Client motion planning find a plan!', 'green')
             wait_if_gui('Start sim.')
-            time_step = 0.03
+            assert is_configurations_close(start_conf, trajectory.points[0], fallback_tol=1e-8)
+            assert is_configurations_close(end_conf, trajectory.points[-1], fallback_tol=1e-8)
+            assert verify_trajectory(client, robot, trajectory, options)
             for traj_pt in trajectory.points:
                 client.set_robot_configuration(robot, traj_pt)
-                wait_for_duration(time_step)
+                wait_if_gui()
 
         wait_if_gui("Finished.")
 
 #####################################
 
 @pytest.mark.plan_motion_with_polyline
-def test_plan_motion_with_polyline(abb_irb4600_40_255_setup, column_obstacle_cm, base_plate_cm, tube_cms,
-    itj_s1_urdf_path, itj_s1_grasp_transf, viewer, diagnosis):
+def test_plan_motion_with_polyline(abb_irb4600_40_255_setup, column_obstacle_cm, base_plate_cm, tube_cms, thin_panel_cm,
+    itj_s1_urdf_path, itj_s1_grasp_transf,
+    viewer, diagnosis):
     urdf_filename, semantics = abb_irb4600_40_255_setup
 
     move_group = 'bare_arm'
     ee_touched_link_names = ['link_6']
-
-    options = {
-        # 'collision_distance_threshold' : 0.001, # in meter,
-        'diagnosis' : diagnosis,
-        'resolutions' : 0.05,
-        'rrt_restarts' : 2,
-        }
+    attempt_iters = 100
 
     with PyChoreoClient(viewer=viewer) as client:
         with LockRenderer():
@@ -448,23 +453,30 @@ def test_plan_motion_with_polyline(abb_irb4600_40_255_setup, column_obstacle_cm,
             # * add static obstacles
             client.add_collision_mesh(base_plate_cm)
             client.add_collision_mesh(column_obstacle_cm)
-            for tube_cm in tube_cms:
-                client.add_collision_mesh(tube_cm)
+            client.add_collision_mesh(thin_panel_cm)
+            # for tube_cm in tube_cms:
+            #     client.add_collision_mesh(tube_cm)
 
         ik_joint_names = robot.get_configurable_joint_names(group=move_group)
         ik_joint_types = robot.get_joint_types_by_names(ik_joint_names)
         flange_link_name = robot.get_end_effector_link_name(group=move_group)
 
-        # tool0_tf = Transformation.from_frame(client.get_link_frame_from_name(robot, flange_link_name))
+        options = {
+            'verbose' : diagnosis,
+            'diagnosis' : diagnosis,
+            'joint_resolutions' : {jn : 0.3 for jn in ik_joint_names},
+            'joint_jump_tolerances' : {jn : 0.3 for jn in ik_joint_names},
+            'rrt_restarts' : 2,
+            'mp_algorithm' : 'birrt',
+            'smooth_iterations' : None,
+            }
+
         tool0_from_s1_base = itj_s1_grasp_transf
-        # client.set_object_frame('^{}$'.format('s1'), Frame.from_transformation(tool0_tf*tool0_from_tool_changer_base))
 
         names = client._get_collision_object_names('^{}$'.format('s1'))
         for ee_name in names:
             attach_options = {'robot' : robot}
-            attached_child_link_name = 'toolchanger_base' if 'TC' in ee_name else 'gripper_base'
             attach_options.update({
-                'attached_child_link_name' : attached_child_link_name,
                 'parent_link_from_child_link_transformation' : tool0_from_s1_base,
                 })
             client.add_attached_collision_mesh(
@@ -473,41 +485,90 @@ def test_plan_motion_with_polyline(abb_irb4600_40_255_setup, column_obstacle_cm,
                                       touch_links=ee_touched_link_names),
                                       options=attach_options)
 
-        start_conf = Configuration(joint_values=np.zeros(6).tolist(), joint_types=ik_joint_types, joint_names=ik_joint_names)
+        vals = [0.0, 0.0, 0.0, 0.0, 0.0, 1.2391837689159739]
+        start_conf = Configuration(joint_values=vals, joint_types=ik_joint_types, joint_names=ik_joint_names)
         assert not client.check_collisions(robot, start_conf, options=options)
         # client.set_robot_configuration(robot, start_conf)
         # wait_if_gui()
 
-        vals = [0.027925268031909273, 0.0, 0.0, 0.087266462599716474, 0.0, 0.0]
-        near_start_conf = Configuration(joint_values=vals, joint_types=ik_joint_types, joint_names=ik_joint_names)
-        assert client.check_sweeping_collisions(robot, start_conf, near_start_conf, options=options)
-
-        vals = [0.034906585039886591, 0.68067840827778847, 0.15707963267948966, -0.89011791851710809, -0.034906585039886591, -2.2514747350726849]
+        vals = [0.0, 0.0, 0.59341194567807209, 0.0, 0.0, 1.2391837689159739]
         end_conf = Configuration(joint_values=vals, joint_types=ik_joint_types, joint_names=ik_joint_names)
         assert not client.check_collisions(robot, end_conf, options=options)
-        client.set_robot_configuration(robot, end_conf)
-        wait_if_gui()
+        # client.set_robot_configuration(robot, end_conf)
+        # wait_if_gui()
 
         goal_constraints = robot.constraints_from_configuration(end_conf, [0.01], [0.01], group=move_group)
 
-        st_time = time.time()
+        LOGGER.info('Linear interpolation without polyline check')
+        options['check_sweeping_collision'] = False
         trajectory = client.plan_motion(robot, goal_constraints, start_configuration=start_conf, group=move_group, options=options)
-        print('Solving time: {}'.format(elapsed_time(st_time)))
+        assert is_configurations_close(start_conf, trajectory.points[0], fallback_tol=1e-8)
+        assert is_configurations_close(end_conf, trajectory.points[-1], fallback_tol=1e-8)
+        # options['check_sweeping_collision'] = True
+        # assert not verify_trajectory(client, robot, trajectory, options)
 
-        if trajectory is None:
-            cprint('Client motion planner CANNOT find a plan!', 'red')
-            assert False, 'Client motion planner CANNOT find a plan!'
-            # TODO warning
-        else:
-            cprint('Client motion planning find a plan!', 'green')
-            wait_if_gui('Start sim.')
-            time_step = 0.1
-            for traj_pt in trajectory.points:
-                client.set_robot_configuration(robot, traj_pt)
-                # wait_for_duration(time_step)
-                wait_for_user()
+        for iter_i in range(attempt_iters):
+            LOGGER.info(f'-- #{iter_i}')
+            options['check_sweeping_collision'] = True
+            st_time = time.time()
+            trajectory = client.plan_motion(robot, goal_constraints, start_configuration=start_conf, group=move_group, options=options)
+            LOGGER.info('Solving time: {}'.format(elapsed_time(st_time)))
+
+            if trajectory is None:
+                LOGGER.error('Client motion planner CANNOT find a plan!')
+                assert False, 'Client motion planner CANNOT find a plan!'
+            else:
+                LOGGER.info('Client motion planning find a plan, path length {}'.format(len(trajectory.points)))
+                assert is_configurations_close(start_conf, trajectory.points[0], fallback_tol=1e-8)
+                assert is_configurations_close(end_conf, trajectory.points[-1], fallback_tol=1e-8)
+                assert verify_trajectory(client, robot, trajectory, options)
+                # if diagnosis:
+                #     wait_if_gui('Start sim.')
+                #     for traj_pt in trajectory.points:
+                #         client.set_robot_configuration(robot, traj_pt)
+                #         wait_if_gui()
 
         wait_if_gui("Finished.")
+
+@pytest.mark.extend_fn
+def test_extend_fn(abb_irb4600_40_255_setup):
+    urdf_filename, semantics = abb_irb4600_40_255_setup
+
+    move_group = 'bare_arm'
+
+    attempts = 100
+    with PyChoreoClient(viewer=False) as client:
+        with LockRenderer():
+            robot = client.load_robot(urdf_filename)
+
+        ik_joint_names = robot.get_configurable_joint_names(group=move_group)
+
+        robot_uid = client.get_robot_pybullet_uid(robot)
+        joint_names = robot.get_configurable_joint_names(group=move_group)
+        conf_joints = joints_from_names(robot_uid, joint_names)
+
+        joint_resolutions = {jn : 0.3 for jn in ik_joint_names}
+        pb_joint_resolutions = None if len(joint_resolutions) == 0 else \
+            [joint_resolutions[joint_name] for joint_name in joint_names]
+
+        extend_fn = pp.get_extend_fn(robot_uid, conf_joints, resolutions=pb_joint_resolutions, norm=pp.INF)
+
+        q0 = np.array([0.0, 0.0, 0.59, 0.0, 0.0, 1])
+        q1 = np.array((0.0, 0.0, 0.0, 0.0, 0.0, 0.9))
+        path = list(extend_fn(q0, q1))
+        assert len(path) == 4
+
+        sample_fn = pp.get_sample_fn(robot_uid, conf_joints)
+
+        for _ in range(attempts):
+            q0 = sample_fn()
+            q1 = sample_fn()
+            path = list(extend_fn(q0, q1))
+            assert np.allclose(q0, path[0])
+            assert np.allclose(q1, path[-1])
+            for qt, qt1 in zip(path[:-1], path[1:]):
+                diff = np.abs(np.array(qt1)-np.array(qt))
+                assert pp.all_between(np.zeros(6), diff, pb_joint_resolutions)
 
 #####################################
 

@@ -1,19 +1,20 @@
-import time
-from compas.datastructures.network.core import graph
+import numpy as np
 from pybullet_planning.interfaces.env_manager.simulation import LockRenderer
 from compas_fab.backends.interfaces import PlanMotion
 from compas_fab.robots import JointTrajectory, Duration, JointTrajectoryPoint
 
-from compas_fab_pychoreo.backend_features.pychoreo_configuration_collision_checker import PyChoreoConfigurationCollisionChecker
+from .pychoreo_configuration_collision_checker import PyChoreoConfigurationCollisionChecker
+from .pychoreo_sweeping_collision_checker import PyChoreoSweepingCollisionChecker
 from compas_fab_pychoreo.utils import is_configurations_close, is_valid_option, LOGGER
 
 import pybullet_planning as pp
 from pybullet_planning import WorldSaver, joints_from_names, check_initial_end
-from pybullet_planning import get_custom_limits, get_joint_positions, get_sample_fn, get_extend_fn, get_distance_fn, MAX_DISTANCE, joint_from_name
-from pybullet_planning import wait_if_gui
+from pybullet_planning import get_joint_positions, get_sample_fn, get_extend_fn, get_distance_fn, joint_from_name
 
-from pybullet_planning.motion_planners import solve_motion_plan
+from pybullet_planning.motion_planners import solve_motion_plan, direct_path
 from pybullet_planning.motion_planners import INF
+
+SWEEP_COLLISION_SUPPORTED_ALGS = ['birrt', 'rrt_connect']
 MOTION_PLANNING_ALGORITHMS = [
     "prm",
     "lazy_prm",
@@ -113,21 +114,39 @@ class PyChoreoPlanMotion(PlanMotion):
         verbose = is_valid_option(options, 'verbose', False)
         diagnosis = options.get('diagnosis', False)
         draw_mp_exploration = options.get('draw_mp_exploration', False)
+        check_sweeping_collision = options.get('check_sweeping_collision', False)
 
         # * robot-related paramters
-        joint_custom_limits = options.get('joint_custom_limits', {}) # {joint_name : (lower_limit, upper_limit)}
+        # {joint_name : (lower_limit, upper_limit)}
+        joint_custom_limits = options.get('joint_custom_limits', {})
         # {joint_name : res_value}, default using DEFAULT_RESOLUTION (0.05) in pp.get_extend_fn
         joint_resolutions = options.get('joint_resolutions', {})
         # TODO: auto compute joint weight
         joint_weights = options.get('joint_weights', {}) # {joint_name : res_value}
-        algorithm = options.get('mp_algorithm', 'birrt') # number of random restarts
+        algorithm = options.get('mp_algorithm', 'birrt')
         if algorithm not in MOTION_PLANNING_ALGORITHMS:
             LOGGER.warning('{} algorithm not implemented, using birrt instead.'.format(algorithm))
+        if check_sweeping_collision and algorithm not in SWEEP_COLLISION_SUPPORTED_ALGS:
+            LOGGER.warning('Sweeping checks is not performed! Sweeping collision check currently unsupported in {}. This feature is only supported in {}. '.format(algorithm, SWEEP_COLLISION_SUPPORTED_ALGS))
 
         plan_options = {}
         max_time = options.get('max_time', INF) # total allowable planning time
         max_iterations = options.get('rrt_iterations', 20) # iterations of rrt explorations
         smooth_iterations = options.get('smooth_iterations', 20) # apply smoothing after finding a solution by default
+
+        # * convert link/joint names to pybullet indices
+        joint_names = robot.get_configurable_joint_names(group=group)
+        # all the joints-related values (joint limits, resolutions, weights, etc)
+        # are a list following the order of joint_names
+        conf_joints = joints_from_names(robot_uid, joint_names)
+        joint_types = robot.get_joint_types_by_names(joint_names)
+        pb_custom_limits = {joint_from_name(robot_uid, joint_name) : lims \
+            for joint_name, lims in joint_custom_limits.items()}
+        # ! currently pp's resolutions and weights only support array not dict
+        pb_joint_resolutions = None if len(joint_resolutions) == 0 else \
+            [joint_resolutions[joint_name] for joint_name in joint_names]
+        pb_joint_weights = None if len(joint_weights) == 0 else \
+            [joint_weights[joint_name] for joint_name in joint_names]
 
         # * prm family paramaters
         plan_options['num_samples'] = options.get('prm_num_samples', 200)
@@ -139,6 +158,8 @@ class PyChoreoPlanMotion(PlanMotion):
             # For example, if tree_freq=2, then a tree node is added every three nodes in the newly extended path, larger value means coarser extension, less nodes are added, by default 1. Only enlarge this if you think the planning is too slow,
             # and a path is easy to find.
             plan_options['enforce_alternate'] = options.get('birrt_enforce_alternate', False)
+            if check_sweeping_collision:
+                plan_options['sweep_collision_fn'] = PyChoreoSweepingCollisionChecker(self.client)._get_sweeping_collision_fn(robot, joint_names, options=options)
         if algorithm == 'birrt':
             plan_options['restarts'] = options.get('rrt_restarts', 2) # number of random restarts
         if algorithm in ['rrt', 'rrt_star']:
@@ -155,20 +176,6 @@ class PyChoreoPlanMotion(PlanMotion):
             else:
                 draw_fn = None
             plan_options['draw_fn'] = draw_fn
-
-        # * convert link/joint names to pybullet indices
-        joint_names = robot.get_configurable_joint_names(group=group)
-        # all the joints-related values (joint limits, resolutions, weights, etc)
-        # are a list following the order of joint_names
-        conf_joints = joints_from_names(robot_uid, joint_names)
-        joint_types = robot.get_joint_types_by_names(joint_names)
-        pb_custom_limits = {joint_from_name(robot_uid, joint_name) : lims \
-            for joint_name, lims in joint_custom_limits.items()}
-        # ! currently pp's resolutions and weights only support array not dict
-        pb_joint_resolutions = None if len(joint_resolutions) == 0 else \
-            [joint_resolutions[joint_name] for joint_name in joint_names]
-        pb_joint_weights = None if len(joint_weights) == 0 else \
-            [joint_weights[joint_name] for joint_name in joint_names]
 
         with WorldSaver():
             if start_configuration is not None:
@@ -197,6 +204,9 @@ class PyChoreoPlanMotion(PlanMotion):
             if draw_mp_exploration:
                 for q1, q2 in zip(path[:-1], path[1:]):
                     segment_draw_fn(q1, [q1, q2], True, True)
+
+            # assert np.allclose(path[0], start_conf, atol=1e-8), '{} | {}'.format(path[0], start_conf)
+            # assert np.allclose(path[-1], end_conf, atol=1e-8), '{} | {}'.format(path[-1], end_conf)
 
             jt_traj_pts = []
             for i, conf in enumerate(path):

@@ -1,5 +1,6 @@
 import os
 import pytest
+import numpy as np
 
 from compas.geometry import Frame
 from compas.datastructures import Mesh
@@ -135,3 +136,29 @@ def tube_cms():
     HERE = os.path.dirname(__file__)
     data_dir = os.path.abspath(os.path.join(HERE, "..", "data", "long_tube"))
     return [parse_collision_mesh_from_path(data_dir, "long_tube_{}.obj".format(i), scale=1) for i in range(4)]
+
+@pytest.fixture
+def thin_panel_cm():
+    HERE = os.path.dirname(__file__)
+    data_dir = os.path.abspath(os.path.join(HERE, "..", "data"))
+    return parse_collision_mesh_from_path(data_dir, "thin_panel.obj", scale=1)
+
+##########################################
+
+@pytest.fixture
+def abb_tolerances():
+    joint_jump_tolerances = {}
+    joint_compare_tolerances = {}
+    joint_resolutions = {}
+    joint_names = [f'joint_{i}' for i in range(1,7)]
+    for jt_name in joint_names:
+        joint_jump_tolerances[jt_name] = 10.0 * np.pi / 180.0 # 0.174 rad
+        joint_compare_tolerances[jt_name] = 0.0025 # rad, try tightened to 0.001 if possible
+        joint_resolutions[jt_name] = 10.0 * np.pi / 180.0 # 0.174 rad
+    tolerances = {
+        'joint_jump_tolerances' : joint_jump_tolerances,
+        'joint_compare_tolerances' : joint_compare_tolerances,
+        'joint_resolutions' : joint_resolutions,
+        # 'joint_custom_limits' : get_gantry_robot_custom_limits(MAIN_ROBOT_ID),
+    }
+    return tolerances

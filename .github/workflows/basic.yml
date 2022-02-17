@@ -43,6 +43,7 @@ jobs:
       - name: Install
         run: |
           git submodule update --init --recursive
+          python install external/pybullet_planning
           python -m pip install --no-cache-dir -r requirements-dev.txt
       - name: Run tests
         run: |

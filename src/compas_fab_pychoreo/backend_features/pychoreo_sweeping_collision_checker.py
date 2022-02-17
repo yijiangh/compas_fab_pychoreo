@@ -71,7 +71,8 @@ def get_attachment_sweeping_collision_fn(robot_body, joints, obstacles=[],
                                 draw_ray_result_diagnosis(ray, ray_result, b1=body, l1=body_link,
                                     point_color=pp.RED, line_color=pp.YELLOW, \
                                     focus_camera=True, body_name_from_id=body_name_from_id)
-                                pp.remove_handles(all_ray_lines)
+                                with LockRenderer():
+                                    pp.remove_handles(all_ray_lines)
                             return True
         return False
 
