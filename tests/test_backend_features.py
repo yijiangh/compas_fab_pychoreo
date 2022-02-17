@@ -341,6 +341,7 @@ def test_plan_motion(abb_irb4600_40_255_setup, itj_TC_g1_cms, itj_beam_cm, colum
     move_group = 'bare_arm'
     ee_touched_link_names = ['link_6']
     tool_type = 'actuated'
+    attempt_iters = 100
 
     with PyChoreoClient(viewer=viewer) as client:
         with LockRenderer():
@@ -406,27 +407,29 @@ def test_plan_motion(abb_irb4600_40_255_setup, itj_TC_g1_cms, itj_beam_cm, colum
             'mp_algorithm' : 'birrt',
             'smooth_iterations' : smooth_iterations,
             'verbose' : True,
+            'check_sweeping_collision' : False,
             }
         options.update(abb_tolerances)
 
         goal_constraints = robot.constraints_from_configuration(end_conf, [0.01], [0.01], group=move_group)
 
-        st_time = time.time()
-        trajectory = client.plan_motion(robot, goal_constraints, start_configuration=start_conf, group=move_group, options=options)
-        print('Solving time: {}'.format(elapsed_time(st_time)))
+        for _ in range(attempt_iters):
+            st_time = time.time()
+            trajectory = client.plan_motion(robot, goal_constraints, start_configuration=start_conf, group=move_group, options=options)
+            LOGGER.info('Solving time: {}'.format(elapsed_time(st_time)))
 
-        if trajectory is None:
-            cprint('Client motion planner CANNOT find a plan!', 'red')
-            assert False, 'Client motion planner CANNOT find a plan!'
-        else:
-            cprint('Client motion planning find a plan!', 'green')
-            wait_if_gui('Start sim.')
-            assert is_configurations_close(start_conf, trajectory.points[0], fallback_tol=1e-8)
-            assert is_configurations_close(end_conf, trajectory.points[-1], fallback_tol=1e-8)
-            assert verify_trajectory(client, robot, trajectory, options)
-            for traj_pt in trajectory.points:
-                client.set_robot_configuration(robot, traj_pt)
-                wait_if_gui()
+            if trajectory is None:
+                LOGGER.error('Client motion planner CANNOT find a plan!')
+                assert False, 'Client motion planner CANNOT find a plan!'
+            else:
+                LOGGER.info('Client motion planning find a plan!')
+                wait_if_gui('Start sim.')
+                assert is_configurations_close(start_conf, trajectory.points[0], fallback_tol=1e-8)
+                assert is_configurations_close(end_conf, trajectory.points[-1], fallback_tol=1e-8)
+                assert verify_trajectory(client, robot, trajectory, options)
+                # for traj_pt in trajectory.points:
+                #     client.set_robot_configuration(robot, traj_pt)
+                #     wait_if_gui()
 
         wait_if_gui("Finished.")
 
@@ -504,8 +507,8 @@ def test_plan_motion_with_polyline(abb_irb4600_40_255_setup, column_obstacle_cm,
         trajectory = client.plan_motion(robot, goal_constraints, start_configuration=start_conf, group=move_group, options=options)
         assert is_configurations_close(start_conf, trajectory.points[0], fallback_tol=1e-8)
         assert is_configurations_close(end_conf, trajectory.points[-1], fallback_tol=1e-8)
-        # options['check_sweeping_collision'] = True
-        # assert not verify_trajectory(client, robot, trajectory, options)
+        options['check_sweeping_collision'] = True
+        assert not verify_trajectory(client, robot, trajectory, options)
 
         for iter_i in range(attempt_iters):
             LOGGER.info(f'-- #{iter_i}')
