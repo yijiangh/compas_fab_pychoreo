@@ -143,6 +143,8 @@ class PyChoreoPlanMotion(PlanMotion):
         pb_custom_limits = {joint_from_name(robot_uid, joint_name) : lims \
             for joint_name, lims in joint_custom_limits.items()}
         # ! currently pp's resolutions and weights only support array not dict
+        if isinstance(joint_resolutions, float):
+            LOGGER.warning('Giving a single number as joint resolution is not supported.')
         pb_joint_resolutions = None if len(joint_resolutions) == 0 else \
             [joint_resolutions[joint_name] for joint_name in joint_names]
         pb_joint_weights = None if len(joint_weights) == 0 else \
@@ -204,13 +206,9 @@ class PyChoreoPlanMotion(PlanMotion):
             if draw_mp_exploration:
                 for q1, q2 in zip(path[:-1], path[1:]):
                     segment_draw_fn(q1, [q1, q2], True, True)
-
-            # assert np.allclose(path[0], start_conf, atol=1e-8), '{} | {}'.format(path[0], start_conf)
-            # assert np.allclose(path[-1], end_conf, atol=1e-8), '{} | {}'.format(path[-1], end_conf)
-
             jt_traj_pts = []
             for i, conf in enumerate(path):
-                jt_traj_pt = JointTrajectoryPoint(joint_values=conf, joint_types=joint_types, time_from_start=Duration(i*1,0))
+                jt_traj_pt = JointTrajectoryPoint(joint_values=list(conf), joint_types=joint_types, time_from_start=Duration(i*1,0))
                 # TODO why don't we have a `joint_names` input for JointTrajectoryPoint?
                 # https://github.com/compas-dev/compas_fab/blob/master/src/compas_fab/robots/trajectory.py#L64
                 jt_traj_pt.joint_names = joint_names

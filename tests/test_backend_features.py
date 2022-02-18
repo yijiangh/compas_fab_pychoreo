@@ -296,7 +296,7 @@ def test_circle_cartesian(fixed_waam_setup, viewer, planner_ik_conf):
 
             with LockRenderer():
                 trajectory = client.plan_cartesian_motion(robot, ee_frames_WCF, group=move_group, options=options)
-            cprint('W/o frame variant solving time: {}'.format(elapsed_time(st_time)), 'blue')
+            cprint('W/o frame variant solving time: {:.2f}'.format(elapsed_time(st_time)), 'blue')
             cprint('Cost: {}'.format(compute_trajectory_cost(trajectory, init_conf_val=init_conf.joint_values)), 'blue')
             print('-'*5)
 
@@ -308,7 +308,7 @@ def test_circle_cartesian(fixed_waam_setup, viewer, planner_ik_conf):
         st_time = time.time()
         with LockRenderer():
             trajectory = client.plan_cartesian_motion(robot, ee_frames_WCF, group=move_group, options=options)
-        cprint('{} solving time: {}'.format('With frame variant ' if planner_id == 'LadderGraph' else 'Direct', elapsed_time(st_time)), 'cyan')
+        cprint('{} solving time: {:.2f}'.format('With frame variant ' if planner_id == 'LadderGraph' else 'Direct', elapsed_time(st_time)), 'cyan')
         cprint('Cost: {}'.format(compute_trajectory_cost(trajectory, init_conf_val=init_conf.joint_values)), 'cyan')
 
         if trajectory is None:
@@ -328,8 +328,8 @@ def test_circle_cartesian(fixed_waam_setup, viewer, planner_ik_conf):
 
 @pytest.mark.plan_motion
 @pytest.mark.parametrize("smooth_iterations", [
-    (None),
-    # (10),
+    # (None),
+    (20),
     ])
 def test_plan_motion(abb_irb4600_40_255_setup, itj_TC_g1_cms, itj_beam_cm, column_obstacle_cm, base_plate_cm,
     itj_tool_changer_grasp_transf, itj_gripper_grasp_transf, itj_beam_grasp_transf, smooth_iterations,
@@ -387,7 +387,7 @@ def test_plan_motion(abb_irb4600_40_255_setup, itj_TC_g1_cms, itj_beam_cm, colum
         client.set_object_frame('^{}$'.format('itj_beam_b2'), Frame.from_transformation(tool0_tf*tool0_from_beam_base))
         client.add_attached_collision_mesh(AttachedCollisionMesh(CollisionMesh(None, 'itj_beam_b2'),
             flange_link_name, touch_links=[]), options={'robot' : robot})
-        wait_if_gui('beam attached.')
+        # wait_if_gui('beam attached.')
 
         vals = [-1.4660765716752369, -0.22689280275926285, 0.27925268031909273, 0.17453292519943295, 0.22689280275926285, -0.22689280275926285]
         start_conf = Configuration(joint_values=vals, joint_types=ik_joint_types, joint_names=ik_joint_names)
@@ -402,8 +402,7 @@ def test_plan_motion(abb_irb4600_40_255_setup, itj_TC_g1_cms, itj_beam_cm, colum
 
         options = {
             'diagnosis' : diagnosis,
-            'joint_resolutions' : 0.05,
-            'rrt_restarts' : 10,
+            'rrt_restarts' : 20,
             'mp_algorithm' : 'birrt',
             'smooth_iterations' : smooth_iterations,
             'verbose' : True,
@@ -413,17 +412,17 @@ def test_plan_motion(abb_irb4600_40_255_setup, itj_TC_g1_cms, itj_beam_cm, colum
 
         goal_constraints = robot.constraints_from_configuration(end_conf, [0.01], [0.01], group=move_group)
 
-        for _ in range(attempt_iters):
+        for attempt_i in range(attempt_iters):
+            LOGGER.info(f'-- #{attempt_i}')
             st_time = time.time()
             trajectory = client.plan_motion(robot, goal_constraints, start_configuration=start_conf, group=move_group, options=options)
-            LOGGER.info('Solving time: {}'.format(elapsed_time(st_time)))
+            LOGGER.info('Solve time: {:.2f}'.format(elapsed_time(st_time)))
 
             if trajectory is None:
                 LOGGER.error('Client motion planner CANNOT find a plan!')
                 assert False, 'Client motion planner CANNOT find a plan!'
             else:
                 LOGGER.info('Client motion planning find a plan!')
-                wait_if_gui('Start sim.')
                 assert is_configurations_close(start_conf, trajectory.points[0], fallback_tol=1e-8)
                 assert is_configurations_close(end_conf, trajectory.points[-1], fallback_tol=1e-8)
                 assert verify_trajectory(client, robot, trajectory, options)
@@ -436,14 +435,18 @@ def test_plan_motion(abb_irb4600_40_255_setup, itj_TC_g1_cms, itj_beam_cm, colum
 #####################################
 
 @pytest.mark.plan_motion_with_polyline
+@pytest.mark.parametrize("smooth_iterations", [
+    (None),
+    # (20),
+    ])
 def test_plan_motion_with_polyline(abb_irb4600_40_255_setup, column_obstacle_cm, base_plate_cm, tube_cms, thin_panel_cm,
-    itj_s1_urdf_path, itj_s1_grasp_transf,
+    itj_s1_urdf_path, itj_s1_grasp_transf, smooth_iterations,
     viewer, diagnosis):
     urdf_filename, semantics = abb_irb4600_40_255_setup
 
     move_group = 'bare_arm'
     ee_touched_link_names = ['link_6']
-    attempt_iters = 100
+    attempt_iters = 10
 
     with PyChoreoClient(viewer=viewer) as client:
         with LockRenderer():
@@ -471,7 +474,7 @@ def test_plan_motion_with_polyline(abb_irb4600_40_255_setup, column_obstacle_cm,
             'joint_jump_tolerances' : {jn : 0.3 for jn in ik_joint_names},
             'rrt_restarts' : 2,
             'mp_algorithm' : 'birrt',
-            'smooth_iterations' : None,
+            'smooth_iterations' : smooth_iterations,
             }
 
         tool0_from_s1_base = itj_s1_grasp_transf
@@ -515,7 +518,7 @@ def test_plan_motion_with_polyline(abb_irb4600_40_255_setup, column_obstacle_cm,
             options['check_sweeping_collision'] = True
             st_time = time.time()
             trajectory = client.plan_motion(robot, goal_constraints, start_configuration=start_conf, group=move_group, options=options)
-            LOGGER.info('Solving time: {}'.format(elapsed_time(st_time)))
+            LOGGER.info('Solve time: {:.2f}'.format(elapsed_time(st_time)))
 
             if trajectory is None:
                 LOGGER.error('Client motion planner CANNOT find a plan!')
@@ -649,5 +652,5 @@ def test_ik(fixed_waam_setup, viewer, ik_engine):
             else:
                 raise ValueError('invalid ik return.')
             wait_if_gui('FK - IK agrees.')
-        cprint('{} | Success {}/{} | Average ik time: {} | avg over {} calls.'.format(ik_engine, len(ee_poses)-failure_cnt, len(ee_poses),
+        cprint('{} | Success {}/{} | Average ik time: {:.2f} | avg over {} calls.'.format(ik_engine, len(ee_poses)-failure_cnt, len(ee_poses),
             ik_time/len(ee_poses), len(ee_poses)), 'cyan')
