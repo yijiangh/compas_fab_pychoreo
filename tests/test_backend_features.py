@@ -328,8 +328,8 @@ def test_circle_cartesian(fixed_waam_setup, viewer, planner_ik_conf):
 
 @pytest.mark.plan_motion
 @pytest.mark.parametrize("smooth_iterations", [
-    # (None),
-    (20),
+    (None),
+    # (20),
     ])
 def test_plan_motion(abb_irb4600_40_255_setup, itj_TC_g1_cms, itj_beam_cm, column_obstacle_cm, base_plate_cm,
     itj_tool_changer_grasp_transf, itj_gripper_grasp_transf, itj_beam_grasp_transf, smooth_iterations,
