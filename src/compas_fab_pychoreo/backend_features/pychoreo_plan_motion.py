@@ -133,6 +133,7 @@ class PyChoreoPlanMotion(PlanMotion):
         max_time = options.get('max_time', INF) # total allowable planning time
         max_iterations = options.get('rrt_iterations', 20) # iterations of rrt explorations
         smooth_iterations = options.get('smooth_iterations', 20) # apply smoothing after finding a solution by default
+        plan_options['coarse_waypoints'] = options.get('coarse_waypoints', False) # smoothing uses refined waypoints by default
 
         # * convert link/joint names to pybullet indices
         joint_names = robot.get_configurable_joint_names(group=group)

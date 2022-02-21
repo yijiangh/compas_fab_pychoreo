@@ -162,3 +162,8 @@ def abb_tolerances():
         # 'joint_custom_limits' : get_gantry_robot_custom_limits(MAIN_ROBOT_ID),
     }
     return tolerances
+
+@pytest.fixture
+def collided_traj_path():
+    HERE = os.path.dirname(__file__)
+    return os.path.abspath(os.path.join(HERE, "..", "data", "collided_traj.json"))

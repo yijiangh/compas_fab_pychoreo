@@ -2,8 +2,9 @@ from termcolor import cprint
 import pybullet_planning as pp
 
 from compas_fab.robots import JointTrajectory, Duration, JointTrajectoryPoint, Configuration
-from compas_fab_pychoreo.backend_features.trajectory_smoother import TrajectorySmoother
-from compas_fab_pychoreo.backend_features.pychoreo_configuration_collision_checker import PyChoreoConfigurationCollisionChecker
+from .trajectory_smoother import TrajectorySmoother
+from .pychoreo_configuration_collision_checker import PyChoreoConfigurationCollisionChecker
+from .pychoreo_sweeping_collision_checker import PyChoreoSweepingCollisionChecker
 
 class PyChoreoTrajectorySmoother(TrajectorySmoother):
     def __init__(self, client):
@@ -33,7 +34,8 @@ class PyChoreoTrajectorySmoother(TrajectorySmoother):
         # ! max_time is prioritized over iterations
         smooth_iterations = options.get('smooth_iterations', 200)
         max_smooth_time = options.get('max_smooth_time', 60) # seconds
-        # frel_tol = options.get('frel_tol', 1e-6) # relative delta tolerance of path distance for termination criteria
+        check_sweeping_collision = options.get('check_sweeping_collision', False)
+        coarse_waypoints = options.get('coarse_waypoints', False) # smoothing uses refined waypoints by default
 
         if trajectory is None or len(trajectory.points) == 0:
             return (False, None, 'Empty trajectory input.')
@@ -50,6 +52,8 @@ class PyChoreoTrajectorySmoother(TrajectorySmoother):
         pb_joint_weights = None if len(joint_weights) == 0 else \
             [joint_weights[joint_name] for joint_name in joint_names]
 
+        sweep_collision_fn = PyChoreoSweepingCollisionChecker(self.client)._get_sweeping_collision_fn(robot, joint_names, options=options) if check_sweeping_collision else None
+
         path = [conf.joint_values for conf in trajectory.points]
         with pp.WorldSaver():
             distance_fn = pp.get_distance_fn(robot_uid, pb_joints, weights=pb_joint_weights)
@@ -57,7 +61,8 @@ class PyChoreoTrajectorySmoother(TrajectorySmoother):
             collision_fn = PyChoreoConfigurationCollisionChecker(self.client)._get_collision_fn(robot, joint_names, options=options)
 
             smoothed_path = pp.smooth_path(path, extend_fn, collision_fn, distance_fn=distance_fn, \
-                max_iterations=smooth_iterations, max_time=max_smooth_time, verbose=False) #, frel_tol=frel_tol)
+                max_smooth_iterations=smooth_iterations, max_time=max_smooth_time, verbose=False,
+                sweep_collision_fn=sweep_collision_fn, coarse_waypoints=coarse_waypoints)
 
         if smoothed_path:
             old_cost = pp.compute_path_cost(path, cost_fn=distance_fn)

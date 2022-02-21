@@ -1,28 +1,25 @@
-from tracemalloc import start
+import os
 from pybullet_planning.interfaces.env_manager.user_io import wait_for_user
 import pytest
-import os
 import numpy as np
 from numpy.testing import assert_almost_equal
 import time
-import random
 from termcolor import cprint
-from itertools import product
+import json
 
-from compas.datastructures import Mesh
+from compas.utilities import DataDecoder, DataEncoder
 from compas.geometry import Frame, Transformation
 from compas.robots import Joint
-from compas_fab.robots import Configuration, AttachedCollisionMesh, CollisionMesh, JointConstraint
+from compas_fab.robots import Configuration, AttachedCollisionMesh, CollisionMesh
 
 import pybullet_planning as pp
-from pybullet_planning import link_from_name, get_link_pose, draw_pose, get_bodies, multiply, Pose, Euler, \
+from pybullet_planning import link_from_name, get_link_pose, draw_pose, multiply, Pose, Euler, \
     joints_from_names, quat_angle_between, unit_pose
-from pybullet_planning import wait_if_gui, wait_for_duration, remove_all_debug
+from pybullet_planning import wait_if_gui, remove_all_debug
 from pybullet_planning import randomize, elapsed_time, BLUE, GREEN, RED, LockRenderer
 
 import ikfast_abb_irb4600_40_255
 
-# from compas_fab.backends import PyBulletClient
 from compas_fab_pychoreo.client import PyChoreoClient
 from compas_fab_pychoreo.conversions import pose_from_frame, frame_from_pose
 from compas_fab_pychoreo.backend_features.pychoreo_frame_variant_generator import PyChoreoFiniteEulerAngleVariantGenerator
@@ -53,6 +50,27 @@ def compute_trajectory_cost(trajectory, init_conf_val=np.zeros(6)):
     for traj_pt1, traj_pt2 in zip(trajectory.points[:-1], trajectory.points[1:]):
         cost += np.linalg.norm(np.array(traj_pt1.joint_values) - np.array(traj_pt2.joint_values))
     return cost
+
+def save_trajectory(traj, file_name='tmp_traj.json'):
+    HERE = os.path.dirname(__file__)
+    save_path = os.path.join(HERE, "data", file_name)
+    with open(save_path, 'w') as f:
+        json.dump(traj, f, cls=DataEncoder, indent=None, sort_keys=True)
+
+def get_data_path():
+    return os.path.join(os.path.dirname(__file__), 'data')
+
+def parse_trajectory(file_name='tmp_traj.json'):
+    save_path = os.path.join(get_data_path(), file_name)
+    with open(save_path, 'r') as f:
+        traj = json.load(f, cls=DataDecoder)
+    return traj
+
+def compare_trajectories(traj0, traj1, options=None):
+    options = options or {}
+    assert len(traj0.points) == len(traj1.points)
+    for conf0, conf1 in zip(traj0.points, traj1.points):
+        assert is_configurations_close(conf0, conf1, options=options)
 
 #####################################
 
@@ -329,7 +347,7 @@ def test_circle_cartesian(fixed_waam_setup, viewer, planner_ik_conf):
 @pytest.mark.plan_motion
 @pytest.mark.parametrize("smooth_iterations", [
     (None),
-    # (20),
+    (200),
     ])
 def test_plan_motion(abb_irb4600_40_255_setup, itj_TC_g1_cms, itj_beam_cm, column_obstacle_cm, base_plate_cm,
     itj_tool_changer_grasp_transf, itj_gripper_grasp_transf, itj_beam_grasp_transf, smooth_iterations,
@@ -342,6 +360,15 @@ def test_plan_motion(abb_irb4600_40_255_setup, itj_TC_g1_cms, itj_beam_cm, colum
     ee_touched_link_names = ['link_6']
     tool_type = 'actuated'
     attempt_iters = 100
+
+    # compare_seed = False
+    # if not compare_seed:
+    #     seed = hash(time.time())
+    # else:
+    #     seed = 961685647856407830
+    # pp.set_numpy_seed(seed)
+    # pp.set_random_seed(seed)
+    # LOGGER.debug(f'Seed {seed}')
 
     with PyChoreoClient(viewer=viewer) as client:
         with LockRenderer():
@@ -406,38 +433,115 @@ def test_plan_motion(abb_irb4600_40_255_setup, itj_TC_g1_cms, itj_beam_cm, colum
             'mp_algorithm' : 'birrt',
             'smooth_iterations' : smooth_iterations,
             'verbose' : True,
-            'check_sweeping_collision' : False,
+            'check_sweeping_collision' : True,
             }
         options.update(abb_tolerances)
 
         goal_constraints = robot.constraints_from_configuration(end_conf, [0.01], [0.01], group=move_group)
 
         for attempt_i in range(attempt_iters):
-            LOGGER.info(f'-- #{attempt_i}')
+            LOGGER.debug(f'-- #{attempt_i}/{attempt_iters}')
             st_time = time.time()
             trajectory = client.plan_motion(robot, goal_constraints, start_configuration=start_conf, group=move_group, options=options)
-            LOGGER.info('Solve time: {:.2f}'.format(elapsed_time(st_time)))
-
             if trajectory is None:
-                LOGGER.error('Client motion planner CANNOT find a plan!')
                 assert False, 'Client motion planner CANNOT find a plan!'
             else:
-                LOGGER.info('Client motion planning find a plan!')
+                LOGGER.debug('Solve time: {:.2f}, plan length {}'.format(elapsed_time(st_time), len(trajectory.points)))
                 assert is_configurations_close(start_conf, trajectory.points[0], fallback_tol=1e-8)
                 assert is_configurations_close(end_conf, trajectory.points[-1], fallback_tol=1e-8)
-                assert verify_trajectory(client, robot, trajectory, options)
+                assert verify_trajectory(client, robot, trajectory, options,
+                    failed_traj_save_filename=os.path.join(get_data_path(), 'plan_motion'))
+
                 # for traj_pt in trajectory.points:
                 #     client.set_robot_configuration(robot, traj_pt)
                 #     wait_if_gui()
+                # if not compare_seed:
+                #     save_trajectory(trajectory, file_name=f'plan_motion_traj_{seed}.json')
+                # else:
+                #     trajectory_seed = parse_trajectory(file_name=f'plan_motion_traj_{seed}.json')
+                #     compare_trajectories(trajectory, trajectory_seed)
 
         wait_if_gui("Finished.")
 
 #####################################
 
+@pytest.mark.sensitive_collision
+def test_sensitive_collision(abb_irb4600_40_255_setup, column_obstacle_cm, base_plate_cm, thin_panel_cm,
+    itj_tool_changer_urdf_path, itj_g1_urdf_path, itj_tool_changer_grasp_transf, itj_gripper_grasp_transf,
+    itj_beam_cm, itj_beam_grasp_transf, collided_traj_path,
+    abb_tolerances, viewer, diagnosis):
+    urdf_filename, semantics = abb_irb4600_40_255_setup
+
+    move_group = 'bare_arm'
+    ee_touched_link_names = ['link_6']
+    attempt_iters = 10
+
+    with PyChoreoClient(viewer=viewer) as client:
+        with LockRenderer():
+            robot = client.load_robot(urdf_filename)
+            robot.semantics = semantics
+            client.disabled_collisions = robot.semantics.disabled_collisions
+            client.add_tool_from_urdf('TC', itj_tool_changer_urdf_path)
+            client.add_tool_from_urdf('g1', itj_g1_urdf_path)
+
+            # * add static obstacles
+            client.add_collision_mesh(base_plate_cm)
+            client.add_collision_mesh(column_obstacle_cm)
+
+        ik_joint_names = robot.get_configurable_joint_names(group=move_group)
+        ik_joint_types = robot.get_joint_types_by_names(ik_joint_names)
+        flange_link_name = robot.get_end_effector_link_name(group=move_group)
+
+        tool0_tf = Transformation.from_frame(client.get_link_frame_from_name(robot, flange_link_name))
+        tool0_from_tool_changer_base = itj_tool_changer_grasp_transf
+        tool0_from_gripper_base = itj_gripper_grasp_transf
+        client.set_object_frame('^{}'.format('TC'), Frame.from_transformation(tool0_tf*tool0_from_tool_changer_base))
+        client.set_object_frame('^{}'.format('g1'), Frame.from_transformation(tool0_tf*tool0_from_gripper_base))
+
+        names = client._get_collision_object_names('^{}'.format('g1')) + \
+            client._get_collision_object_names('^{}'.format('TC'))
+        for ee_name in names:
+            attach_options = {'robot' : robot}
+            attached_child_link_name = 'toolchanger_base' if 'TC' in ee_name else 'gripper_base'
+            attach_options.update({'attached_child_link_name' : attached_child_link_name})
+            client.add_attached_collision_mesh(AttachedCollisionMesh(CollisionMesh(None, ee_name),
+                flange_link_name, touch_links=ee_touched_link_names), options=attach_options)
+
+        #* attach beam
+        client.add_collision_mesh(itj_beam_cm)
+        tool0_tf = Transformation.from_frame(client.get_link_frame_from_name(robot, flange_link_name))
+        tool0_from_beam_base = itj_beam_grasp_transf
+        client.set_object_frame('^{}$'.format('itj_beam_b2'), Frame.from_transformation(tool0_tf*tool0_from_beam_base))
+        client.add_attached_collision_mesh(AttachedCollisionMesh(CollisionMesh(None, 'itj_beam_b2'),
+            flange_link_name, touch_links=[]), options={'robot' : robot})
+
+        options = {
+            'diagnosis' : diagnosis,
+            'verbose' : True,
+            'check_sweeping_collision' : True,
+            }
+        options.update(abb_tolerances)
+
+        for _ in range(attempt_iters):
+            conf_vals = [
+                [-0.3681982760197108, 0.14979060281981388, -0.5807809741625514, -1.0349889615656802, -0.38781559783097475, -3.020799755151662],
+                [-0.9910463102538172, -0.06965373786911955, -0.5600690622479962, -2.4668820270868905, 0.2548571223428986, 1.5310114818423113],
+            ]
+            for vals in conf_vals:
+                conf = Configuration(joint_values=vals, joint_types=ik_joint_types, joint_names=ik_joint_names)
+                assert client.check_collisions(robot, conf, options=options)
+                # client.set_robot_configuration(robot, start_conf)
+                # wait_if_gui()
+
+            with open(collided_traj_path, 'r') as f:
+                trajectory = json.load(f, cls=DataDecoder)
+                assert not verify_trajectory(client, robot, trajectory, options)
+
+
 @pytest.mark.plan_motion_with_polyline
 @pytest.mark.parametrize("smooth_iterations", [
     (None),
-    # (20),
+    (200),
     ])
 def test_plan_motion_with_polyline(abb_irb4600_40_255_setup, column_obstacle_cm, base_plate_cm, tube_cms, thin_panel_cm,
     itj_s1_urdf_path, itj_s1_grasp_transf, smooth_iterations,
@@ -446,7 +550,7 @@ def test_plan_motion_with_polyline(abb_irb4600_40_255_setup, column_obstacle_cm,
 
     move_group = 'bare_arm'
     ee_touched_link_names = ['link_6']
-    attempt_iters = 10
+    attempt_iters = 100
 
     with PyChoreoClient(viewer=viewer) as client:
         with LockRenderer():
@@ -514,17 +618,15 @@ def test_plan_motion_with_polyline(abb_irb4600_40_255_setup, column_obstacle_cm,
         assert not verify_trajectory(client, robot, trajectory, options)
 
         for iter_i in range(attempt_iters):
-            LOGGER.info(f'-- #{iter_i}')
+            LOGGER.debug(f'-- #{iter_i}')
             options['check_sweeping_collision'] = True
             st_time = time.time()
             trajectory = client.plan_motion(robot, goal_constraints, start_configuration=start_conf, group=move_group, options=options)
-            LOGGER.info('Solve time: {:.2f}'.format(elapsed_time(st_time)))
 
             if trajectory is None:
-                LOGGER.error('Client motion planner CANNOT find a plan!')
                 assert False, 'Client motion planner CANNOT find a plan!'
             else:
-                LOGGER.info('Client motion planning find a plan, path length {}'.format(len(trajectory.points)))
+                LOGGER.debug('Solve time: {:.2f}, path length {}'.format(elapsed_time(st_time), len(trajectory.points)))
                 assert is_configurations_close(start_conf, trajectory.points[0], fallback_tol=1e-8)
                 assert is_configurations_close(end_conf, trajectory.points[-1], fallback_tol=1e-8)
                 assert verify_trajectory(client, robot, trajectory, options)
@@ -536,45 +638,60 @@ def test_plan_motion_with_polyline(abb_irb4600_40_255_setup, column_obstacle_cm,
 
         wait_if_gui("Finished.")
 
-@pytest.mark.extend_fn
-def test_extend_fn(abb_irb4600_40_255_setup):
-    urdf_filename, semantics = abb_irb4600_40_255_setup
+# @pytest.mark.extend_fn
+# def test_extend_fn(abb_irb4600_40_255_setup):
+#     urdf_filename, semantics = abb_irb4600_40_255_setup
 
-    move_group = 'bare_arm'
+#     move_group = 'bare_arm'
 
-    attempts = 100
-    with PyChoreoClient(viewer=False) as client:
-        with LockRenderer():
-            robot = client.load_robot(urdf_filename)
+#     attempts = 100
+#     with PyChoreoClient(viewer=False) as client:
+#         with LockRenderer():
+#             robot = client.load_robot(urdf_filename)
 
-        ik_joint_names = robot.get_configurable_joint_names(group=move_group)
+#         ik_joint_names = robot.get_configurable_joint_names(group=move_group)
 
-        robot_uid = client.get_robot_pybullet_uid(robot)
-        joint_names = robot.get_configurable_joint_names(group=move_group)
-        conf_joints = joints_from_names(robot_uid, joint_names)
+#         robot_uid = client.get_robot_pybullet_uid(robot)
+#         joint_names = robot.get_configurable_joint_names(group=move_group)
+#         conf_joints = joints_from_names(robot_uid, joint_names)
 
-        joint_resolutions = {jn : 0.3 for jn in ik_joint_names}
-        pb_joint_resolutions = None if len(joint_resolutions) == 0 else \
-            [joint_resolutions[joint_name] for joint_name in joint_names]
+#         joint_resolutions = {jn : 0.3 for jn in ik_joint_names}
+#         pb_joint_resolutions = None if len(joint_resolutions) == 0 else \
+#             [joint_resolutions[joint_name] for joint_name in joint_names]
 
-        extend_fn = pp.get_extend_fn(robot_uid, conf_joints, resolutions=pb_joint_resolutions, norm=pp.INF)
+#         extend_fn = pp.get_extend_fn(robot_uid, conf_joints, resolutions=pb_joint_resolutions, norm=pp.INF)
 
-        q0 = np.array([0.0, 0.0, 0.59, 0.0, 0.0, 1])
-        q1 = np.array((0.0, 0.0, 0.0, 0.0, 0.0, 0.9))
-        path = list(extend_fn(q0, q1))
-        assert len(path) == 4
+#         # q0 = np.array([0.0, 0.0, 0.29, 0.0, 0.0, 0])
+#         # q1 = np.array((0.0, 0.0, 0.0, 0.0, 0.0, 0))
+#         # path = list(extend_fn(q0, q1))
+#         # assert len(path) == 2
 
-        sample_fn = pp.get_sample_fn(robot_uid, conf_joints)
+#         q0 = np.array([0.0, 0.0, 0.3, 0.0, 0.0, 0])
+#         q1 = np.array((0.0, 0.0, 0.0, 0.0, 0.0, 0))
+#         path = list(extend_fn(q0, q1))
+#         assert len(path) == 2
 
-        for _ in range(attempts):
-            q0 = sample_fn()
-            q1 = sample_fn()
-            path = list(extend_fn(q0, q1))
-            assert np.allclose(q0, path[0])
-            assert np.allclose(q1, path[-1])
-            for qt, qt1 in zip(path[:-1], path[1:]):
-                diff = np.abs(np.array(qt1)-np.array(qt))
-                assert pp.all_between(np.zeros(6), diff, pb_joint_resolutions)
+#         q0 = np.array([0.0, 0.0, 0.31, 0.0, 0.0, 0])
+#         q1 = np.array((0.0, 0.0, 0.0, 0.0, 0.0, 0))
+#         path = list(extend_fn(q0, q1))
+#         assert len(path) == 3
+
+#         q0 = np.array([0.0, 0.0, 0.59, 0.0, 0.0, 1])
+#         q1 = np.array((0.0, 0.0, 0.0, 0.0, 0.0, 0.9))
+#         path = list(extend_fn(q0, q1))
+#         assert len(path) == 4
+
+#         sample_fn = pp.get_sample_fn(robot_uid, conf_joints)
+
+#         for _ in range(attempts):
+#             q0 = sample_fn()
+#             q1 = sample_fn()
+#             path = list(extend_fn(q0, q1))
+#             assert np.allclose(q0, path[0])
+#             assert np.allclose(q1, path[-1])
+#             for qt, qt1 in zip(path[:-1], path[1:]):
+#                 diff = np.abs(np.array(qt1)-np.array(qt))
+#                 assert pp.all_between(np.zeros(6), diff, pb_joint_resolutions)
 
 #####################################
 
