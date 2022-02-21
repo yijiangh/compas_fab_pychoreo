@@ -3,7 +3,7 @@ from collections import defaultdict
 from itertools import product, combinations
 from pybullet_planning import get_all_links
 from compas_fab_pychoreo.backend_features.sweeping_collision_checker import SweepingCollisionChecker
-from compas_fab_pychoreo.utils import is_valid_option, values_as_list, wildcard_keys
+from compas_fab_pychoreo.utils import LOGGER
 
 import pybullet_planning as pp
 from pybullet_planning import get_custom_limits, joints_from_names, link_from_name, get_collision_fn, joint_from_name, \
@@ -105,13 +105,19 @@ class PyChoreoSweepingCollisionChecker(SweepingCollisionChecker):
             True if in collision, False otherwise
         """
         options = options or {}
-        assert len(configuration_1.joint_names) == len(configuration_2.joint_names), '{} - {}'.format(
-                configuration_1.joint_names, configuration_2.joint_names)
-        assert len(configuration_1.joint_names) == len(configuration_1.joint_values), '{} - {}'.format(
-                configuration_1.joint_names, configuration_1.joint_values)
         diagnosis = options.get('diagnosis', False)
-        sweeping_collision_fn = self._get_sweeping_collision_fn(robot, configuration_1.joint_names, options)
-        return sweeping_collision_fn(configuration_1.joint_values, configuration_2.joint_values, diagnosis=diagnosis)
+        if configuration_1.joint_names != configuration_2.joint_names:
+            _conf1 = configuration_1.copy()
+            _conf2 = configuration_2.copy()
+            if configuration_1.joint_names < configuration_2.joint_names:
+                _conf1 = _conf2.merged(_conf1)
+            else:
+                _conf2 = _conf1.merged(_conf2)
+        else:
+            _conf1 = configuration_1
+            _conf2 = configuration_2
+        sweeping_collision_fn = self._get_sweeping_collision_fn(robot, _conf1.joint_names, options)
+        return sweeping_collision_fn(_conf1.joint_values, _conf2.joint_values, diagnosis=diagnosis)
 
     def _get_sweeping_collision_fn(self, robot, joint_names, options=None):
         robot_uid = self.client.get_robot_pybullet_uid(robot)
