@@ -4,6 +4,7 @@ from itertools import product, combinations
 from pybullet_planning import get_all_links
 from compas_fab_pychoreo.backend_features.sweeping_collision_checker import SweepingCollisionChecker
 from compas_fab_pychoreo.utils import LOGGER
+from compas_fab_pychoreo.client import PyChoreoClient
 
 import pybullet_planning as pp
 from pybullet_planning import get_custom_limits, joints_from_names, link_from_name, get_collision_fn, joint_from_name, \
@@ -80,7 +81,7 @@ def get_attachment_sweeping_collision_fn(robot_body, joints, obstacles=[],
 
 
 class PyChoreoSweepingCollisionChecker(SweepingCollisionChecker):
-    def __init__(self, client):
+    def __init__(self, client: PyChoreoClient):
         self.client = client
 
     def step_in_collision(self, robot, configuration_1=None, configuration_2=None, options=None):

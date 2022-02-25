@@ -1,4 +1,3 @@
-from termcolor import cprint
 import pybullet_planning as pp
 
 from compas_fab.robots import JointTrajectory, Duration, JointTrajectoryPoint, Configuration
