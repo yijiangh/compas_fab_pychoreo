@@ -31,5 +31,5 @@ class ConfigurationCollisionChecker(object):
         bool
             True if a collision is detected.
         """
-        pass
+        raise NotImplementedError()
 

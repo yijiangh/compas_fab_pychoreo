@@ -37,9 +37,9 @@ class CustomTrajectorySmoother(TrajectorySmoother):
         max_smooth_time = options.get('max_smooth_time', 60) # seconds
         check_sweeping_collision = options.get('check_sweeping_collision', False)
 
-        # ? usage: check_collisions(self, robot, configuration, options)
+        # ? usage: collision_checker.check_collisions(robot, configuration, options)
         collision_checker = PyChoreoConfigurationCollisionChecker(self.client)
-        # ? usage: check_collisions(self, robot, configuration_1, configuration_2, options)
+        # ? usage: sweep_collision_checker.step_in_collision(robot, configuration_1, configuration_2, options)
         sweep_collision_checker = PyChoreoSweepingCollisionChecker(self.client)
 
         smoothed_trajectory = deepcopy(trajectory)
