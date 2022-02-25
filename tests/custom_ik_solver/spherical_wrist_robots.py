@@ -3,7 +3,7 @@ import math
 from compas.geometry import Point
 from compas.geometry import Frame
 from compas_fab.robots import Configuration
-from compas_fab_pychoreo_examples.ik_solver.ik_spherical_wrist import inverse_kinematics_spherical_wrist
+from .ik_spherical_wrist import inverse_kinematics_spherical_wrist
 
 
 def joint_angles_to_configurations(A1, A2, A3, A4, A5, A6):

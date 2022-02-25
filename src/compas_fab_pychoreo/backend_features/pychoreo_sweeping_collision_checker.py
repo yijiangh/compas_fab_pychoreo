@@ -2,9 +2,9 @@ import numpy as np
 from collections import defaultdict
 from itertools import product, combinations
 from pybullet_planning import get_all_links
-from compas_fab_pychoreo.backend_features.sweeping_collision_checker import SweepingCollisionChecker
-from compas_fab_pychoreo.utils import LOGGER
-from compas_fab_pychoreo.client import PyChoreoClient
+from .sweeping_collision_checker import SweepingCollisionChecker
+from ..utils import LOGGER
+from ..client import PyChoreoClient
 
 import pybullet_planning as pp
 from pybullet_planning import get_custom_limits, joints_from_names, link_from_name, get_collision_fn, joint_from_name, \

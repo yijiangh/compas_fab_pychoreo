@@ -2,7 +2,7 @@ from compas.geometry import Frame
 from compas.geometry import Transformation
 
 from compas_fab_pychoreo.utils import is_valid_option
-from compas_fab_pychoreo_examples.ik_solver.utils import fit_within_bounds
+from .utils import fit_within_bounds
 
 class InverseKinematicsSolver(object):
     """Create a custom InverseKinematicsSolver for a robot.

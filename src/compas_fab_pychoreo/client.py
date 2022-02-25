@@ -22,7 +22,6 @@ from compas_fab.backends import PyBulletClient
 from compas_fab.backends.pybullet.const import ConstraintInfo, STATIC_MASS
 from compas_fab.robots.configuration import Configuration
 
-from compas_fab_pychoreo.planner import PyChoreoPlanner
 from compas_fab_pychoreo.utils import wildcard_keys, is_poses_close
 
 from .exceptions import CollisionError
@@ -41,6 +40,7 @@ class PyChoreoClient(PyBulletClient):
     """
 
     def __init__(self, viewer=True, verbose=False):
+        from compas_fab_pychoreo.planner import PyChoreoPlanner
         # with HideOutput(not verbose):
         # this does not seem to work
         super(PyChoreoClient, self).__init__(connection_type='gui' if viewer else 'direct', verbose=verbose)

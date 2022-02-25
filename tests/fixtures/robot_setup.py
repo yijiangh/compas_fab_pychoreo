@@ -153,7 +153,7 @@ def abb_tolerances():
     joint_names = [f'joint_{i}' for i in range(1,7)]
     for jt_name in joint_names:
         joint_jump_tolerances[jt_name] = 10.0 * np.pi / 180.0 # 0.174 rad
-        joint_compare_tolerances[jt_name] = 0.0025 # rad, try tightened to 0.001 if possible
+        joint_compare_tolerances[jt_name] = 0.0017 # rad, 0.1 degree
         joint_resolutions[jt_name] = 10.0 * np.pi / 180.0 # 0.174 rad
     tolerances = {
         'joint_jump_tolerances' : joint_jump_tolerances,

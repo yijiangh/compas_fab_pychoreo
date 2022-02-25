@@ -75,7 +75,7 @@ def wildcard_keys(data, wildcard):
 
 ############################################
 
-def is_configurations_close(conf1, conf2, options=None, fallback_tol=1e-3):
+def is_configurations_close(conf1, conf2, options=None, fallback_tol=1e-3, report_when_allclose=True):
     """Compare configurations using different tolerances for different joints.
     Return True if same, False if different.
 
@@ -90,13 +90,14 @@ def is_configurations_close(conf1, conf2, options=None, fallback_tol=1e-3):
         {joint_name : joint diff tolerance}
     fallback_tol : float, optional
         fallback tolerance if joint tol is not specified in `diff_tol_from_joint_names`, by default 1e-3
-    verbose : bool, optional
-        Printout for each joint diff, by default True
+    report_when_allclose : bool, optional
+        Printout for each joint diff if configurations are close, otherwise print when joint diff exceeds tolerance,
+        by default True
 
     Returns
     -------
-    [type]
-        [description]
+    bool
+        return True if two configuration's difference under the given tolerance, False otherwise
     """
     options = options or {}
     verbose = options.get('verbose', False)
@@ -118,10 +119,13 @@ def is_configurations_close(conf1, conf2, options=None, fallback_tol=1e-3):
         tol = joint_compare_tolerances[joint_names[i]] if joint_names[i] in joint_compare_tolerances \
             else fallback_tol
         if abs(diff) > tol:
-            if verbose:
+            if verbose and not report_when_allclose:
                 LOGGER.debug('Joint #{} diff: {:.4f} | tol: {:.4f}'.format(joint_names[i],
                     abs(diff), tol))
             return False
+        if verbose and report_when_allclose:
+            LOGGER.debug('Joint #{} diff: {:.4f} | tol: {:.4f}'.format(joint_names[i],
+                abs(diff), tol))
     return True
 
 def does_configurations_jump(conf1, conf2, options=None, fallback_tol=1e-1):
@@ -129,7 +133,7 @@ def does_configurations_jump(conf1, conf2, options=None, fallback_tol=1e-1):
     joint_jump_tolerances = options.get('joint_jump_tolerances', {})
     _options = options.copy()
     _options['joint_compare_tolerances'] = joint_jump_tolerances
-    return not is_configurations_close(conf1, conf2, options=_options, fallback_tol=fallback_tol)
+    return not is_configurations_close(conf1, conf2, options=_options, fallback_tol=fallback_tol, report_when_allclose=False)
 
 ###############################################
 
@@ -170,16 +174,16 @@ def verify_trajectory(client, robot, trajectory, options=None, failed_traj_save_
     seed = pp.get_numpy_seed()
     prev_conf = trajectory.start_configuration or trajectory.points[0]
     for conf_id, jpt in enumerate(trajectory.points):
-        # * traj-point collision checking
+        # * per-configuration collision checking
         point_collision = client.check_collisions(robot, jpt, options=options)
-        # wait_if_gui()
         if point_collision:
             LOGGER.warning('pointwise collision: trajectory point #{}/{}'.format(conf_id,
                 len(trajectory.points)))
             # print('conf: ', jpt.joint_values)
             if failed_traj_save_filename:
-                _save_trajectory(trajectory, failed_traj_save_filename+f'_pointwise_collision_seed_{seed}.json')
+                _save_trajectory(trajectory, failed_traj_save_filename+f'_pointwise-collision_seed_{seed}.json')
             return False
+
         # * prev-conf~conf polyline collision checking
         polyline_collision = client.check_sweeping_collisions(robot, prev_conf, jpt, options=options)
         if check_sweeping_collision and polyline_collision:
@@ -188,13 +192,22 @@ def verify_trajectory(client, robot, trajectory, options=None, failed_traj_save_
             # print('prev conf: ', prev_conf.joint_values)
             # print('curr conf: ', jpt.joint_values)
             if failed_traj_save_filename:
-                _save_trajectory(trajectory, failed_traj_save_filename+f'_polyline_collision_seed_{seed}.json')
+                _save_trajectory(trajectory, failed_traj_save_filename+f'_polyline-collision_seed_{seed}.json')
             return False
+
+        # * check for configuration jump
         if prev_conf and does_configurations_jump(jpt, prev_conf, options=options):
             LOGGER.warning('joint_flip: trajectory point #{}/{}'.format(conf_id, len(trajectory.points)))
             if failed_traj_save_filename:
-                _save_trajectory(trajectory, failed_traj_save_filename+f'_jointflip_seed_{seed}.json')
+                _save_trajectory(trajectory, failed_traj_save_filename+f'_joint-flip_seed_{seed}.json')
             return False
+
+        # * check for configuration duplication
+        if prev_conf and is_configurations_close(jpt, prev_conf, options=options):
+            LOGGER.warning('configuration duplicates: trajectory point #{}/{}'.format(conf_id, len(trajectory.points)))
+            if failed_traj_save_filename:
+                _save_trajectory(trajectory, failed_traj_save_filename+f'_conf-duplicate_seed_{seed}.json')
+            print('---')
         prev_conf = jpt
 
     return True
