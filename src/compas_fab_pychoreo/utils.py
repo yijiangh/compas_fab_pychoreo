@@ -172,7 +172,7 @@ def verify_trajectory(client, robot, trajectory, options=None, failed_traj_save_
     check_sweeping_collision = options.get('check_sweeping_collision', True)
 
     seed = pp.get_numpy_seed()
-    prev_conf = trajectory.start_configuration or trajectory.points[0]
+    prev_conf = None
     for conf_id, jpt in enumerate(trajectory.points):
         # * per-configuration collision checking
         point_collision = client.check_collisions(robot, jpt, options=options)
@@ -184,30 +184,31 @@ def verify_trajectory(client, robot, trajectory, options=None, failed_traj_save_
                 _save_trajectory(trajectory, failed_traj_save_filename+f'_pointwise-collision_seed_{seed}.json')
             return False
 
-        # * prev-conf~conf polyline collision checking
-        polyline_collision = client.check_sweeping_collisions(robot, prev_conf, jpt, options=options)
-        if check_sweeping_collision and polyline_collision:
-            LOGGER.warning('polyline collision: trajectory point #{}/{}'.format(conf_id,
-                len(trajectory.points)))
-            # print('prev conf: ', prev_conf.joint_values)
-            # print('curr conf: ', jpt.joint_values)
-            if failed_traj_save_filename:
-                _save_trajectory(trajectory, failed_traj_save_filename+f'_polyline-collision_seed_{seed}.json')
-            return False
+        if prev_conf:
+            # * prev-conf~conf polyline collision checking
+            polyline_collision = client.check_sweeping_collisions(robot, prev_conf, jpt, options=options)
+            if check_sweeping_collision and polyline_collision:
+                LOGGER.warning('polyline collision: trajectory point #{}/{}'.format(conf_id,
+                    len(trajectory.points)))
+                # print('prev conf: ', prev_conf.joint_values)
+                # print('curr conf: ', jpt.joint_values)
+                if failed_traj_save_filename:
+                    _save_trajectory(trajectory, failed_traj_save_filename+f'_polyline-collision_seed_{seed}.json')
+                return False
 
-        # * check for configuration jump
-        if prev_conf and does_configurations_jump(jpt, prev_conf, options=options):
-            LOGGER.warning('joint_flip: trajectory point #{}/{}'.format(conf_id, len(trajectory.points)))
-            if failed_traj_save_filename:
-                _save_trajectory(trajectory, failed_traj_save_filename+f'_joint-flip_seed_{seed}.json')
-            return False
+            # * check for configuration jump
+            if does_configurations_jump(jpt, prev_conf, options=options):
+                LOGGER.warning('joint_flip: trajectory point #{}/{}'.format(conf_id, len(trajectory.points)))
+                if failed_traj_save_filename:
+                    _save_trajectory(trajectory, failed_traj_save_filename+f'_joint-flip_seed_{seed}.json')
+                return False
 
-        # * check for configuration duplication
-        if prev_conf and is_configurations_close(jpt, prev_conf, options=options):
-            LOGGER.warning('configuration duplicates: trajectory point #{}/{}'.format(conf_id, len(trajectory.points)))
-            if failed_traj_save_filename:
-                _save_trajectory(trajectory, failed_traj_save_filename+f'_conf-duplicate_seed_{seed}.json')
-            print('---')
+            # * check for configuration duplication
+            if is_configurations_close(jpt, prev_conf, options=options):
+                LOGGER.warning('configuration duplicates: trajectory point #{}/{}'.format(conf_id, len(trajectory.points)))
+                # if failed_traj_save_filename:
+                #     _save_trajectory(trajectory, failed_traj_save_filename+f'_conf-duplicate_seed_{seed}.json')
+
         prev_conf = jpt
 
     return True

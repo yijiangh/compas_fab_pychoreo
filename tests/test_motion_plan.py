@@ -110,17 +110,17 @@ def test_plan_motion(abb_irb4600_40_255_setup, itj_TC_g1_cms, itj_beam_cm, colum
         goal_constraints = robot.constraints_from_configuration(end_conf, [0.01], [0.01], group=move_group)
 
         for attempt_i in range(attempt_iters):
-            LOGGER.debug(f'-- #{attempt_i}/{attempt_iters}')
             st_time = time.time()
             trajectory = client.plan_motion(robot, goal_constraints, start_configuration=start_conf, group=move_group, options=options)
             if trajectory is None:
                 assert False, 'Client motion planner CANNOT find a plan!'
             else:
-                LOGGER.debug('Solve time: {:.2f}, plan length {}'.format(elapsed_time(st_time), len(trajectory.points)))
+                # LOGGER.debug('Solve time: {:.2f}, plan length {}'.format(elapsed_time(st_time), len(trajectory.points)))
                 assert is_configurations_close(start_conf, trajectory.points[0], fallback_tol=1e-8)
                 assert is_configurations_close(end_conf, trajectory.points[-1], fallback_tol=1e-8)
                 assert verify_trajectory(client, robot, trajectory, options,
-                    failed_traj_save_filename=os.path.join(get_data_path(), 'plan_motion'))
+                    failed_traj_save_filename=os.path.join(get_data_path(), 'plan_motion')), \
+                    f'-- #{attempt_i}/{attempt_iters}'
 
                 # for traj_pt in trajectory.points:
                 #     client.set_robot_configuration(robot, traj_pt)
@@ -206,7 +206,7 @@ def test_plan_motion_with_polyline(abb_irb4600_40_255_setup, column_obstacle_cm,
 
         goal_constraints = robot.constraints_from_configuration(end_conf, [0.01], [0.01], group=move_group)
 
-        LOGGER.info('Linear interpolation without polyline check')
+        # LOGGER.info('Linear interpolation without polyline check')
         options['check_sweeping_collision'] = False
         trajectory = client.plan_motion(robot, goal_constraints, start_configuration=start_conf, group=move_group, options=options)
         assert is_configurations_close(start_conf, trajectory.points[0], fallback_tol=1e-8)
@@ -214,8 +214,7 @@ def test_plan_motion_with_polyline(abb_irb4600_40_255_setup, column_obstacle_cm,
         options['check_sweeping_collision'] = True
         assert not verify_trajectory(client, robot, trajectory, options)
 
-        for iter_i in range(attempt_iters):
-            LOGGER.debug(f'-- #{iter_i}')
+        for attempt_i in range(attempt_iters):
             options['check_sweeping_collision'] = True
             st_time = time.time()
             trajectory = client.plan_motion(robot, goal_constraints, start_configuration=start_conf, group=move_group, options=options)
@@ -223,10 +222,11 @@ def test_plan_motion_with_polyline(abb_irb4600_40_255_setup, column_obstacle_cm,
             if trajectory is None:
                 assert False, 'Client motion planner CANNOT find a plan!'
             else:
-                LOGGER.debug('Solve time: {:.2f}, path length {}'.format(elapsed_time(st_time), len(trajectory.points)))
+                # LOGGER.debug('Solve time: {:.2f}, path length {}'.format(elapsed_time(st_time), len(trajectory.points)))
                 assert is_configurations_close(start_conf, trajectory.points[0], fallback_tol=1e-8)
                 assert is_configurations_close(end_conf, trajectory.points[-1], fallback_tol=1e-8)
-                assert verify_trajectory(client, robot, trajectory, options)
+                assert verify_trajectory(client, robot, trajectory, options), \
+                    f'-- #{attempt_i}/{attempt_iters}'
                 # if diagnosis:
                 #     wait_if_gui('Start sim.')
                 #     for traj_pt in trajectory.points:
