@@ -3,6 +3,7 @@ import logging
 import re
 from collections.abc import Iterable
 import numpy as np
+from copy import copy
 
 from compas.utilities import DataDecoder, DataEncoder
 import pybullet_planning as pp
@@ -75,7 +76,7 @@ def wildcard_keys(data, wildcard):
 
 ############################################
 
-def is_configurations_close(conf1, conf2, options=None, fallback_tol=1e-3, report_when_allclose=True):
+def is_configurations_close(conf1, conf2, options=None, fallback_tol=1e-3, report_when_close=True):
     """Compare configurations using different tolerances for different joints.
     Return True if same, False if different.
 
@@ -119,13 +120,14 @@ def is_configurations_close(conf1, conf2, options=None, fallback_tol=1e-3, repor
         tol = joint_compare_tolerances[joint_names[i]] if joint_names[i] in joint_compare_tolerances \
             else fallback_tol
         if abs(diff) > tol:
-            if verbose and not report_when_allclose:
+            if verbose and not report_when_close:
                 LOGGER.debug('Joint #{} diff: {:.4f} | tol: {:.4f}'.format(joint_names[i],
                     abs(diff), tol))
             return False
-        if verbose and report_when_allclose:
-            LOGGER.debug('Joint #{} diff: {:.4f} | tol: {:.4f}'.format(joint_names[i],
-                abs(diff), tol))
+        else:
+            if verbose and report_when_close:
+                LOGGER.debug('Joint #{} diff: {:.4f} | tol: {:.4f}'.format(joint_names[i],
+                    abs(diff), tol))
     return True
 
 def does_configurations_jump(conf1, conf2, options=None, fallback_tol=1e-1):
@@ -133,7 +135,7 @@ def does_configurations_jump(conf1, conf2, options=None, fallback_tol=1e-1):
     joint_jump_tolerances = options.get('joint_jump_tolerances', {})
     _options = options.copy()
     _options['joint_compare_tolerances'] = joint_jump_tolerances
-    return not is_configurations_close(conf1, conf2, options=_options, fallback_tol=fallback_tol, report_when_allclose=False)
+    return not is_configurations_close(conf1, conf2, options=_options, fallback_tol=fallback_tol, report_when_close=False)
 
 ###############################################
 
@@ -160,55 +162,83 @@ def is_poses_close(pose0, pose1, options=None):
 def is_frames_close(frame0, frame1, options=None, scale=1.0):
     return is_poses_close(pose_from_frame(frame0, scale), pose_from_frame(frame1, scale), options)
 
+###############################################
+
 def _save_trajectory(trajectory, filename):
     with open(filename, 'w') as f:
         json.dump(trajectory, f, cls=DataEncoder, indent=None, sort_keys=True)
 
-def verify_trajectory(client, robot, trajectory, options=None, failed_traj_save_filename=None):
+def verify_trajectory(client, robot, trajectory, options=None):
+    """verify if a given trajectory is valid, using per-configuration collision check, polyline check
+    between adjacent configurations, joint flip and duplication between between adjacent configurations
+    with given tolerances.
+
+    Parameters
+    ----------
+    client : PyChoreoClient
+    robot : compas_fab.robots.Robot
+    trajectory : JointTrajectory
+    options : dict, optional
+        'failed_traj_save_filename' : str
+            path to save the trajectory if a check is failed. Primirarily used for debugging, by default None
+
+    Returns
+    -------
+    bool, str
+        success, failure_reason
+    """
     if trajectory is None:
         LOGGER.warning('Trajectory None')
         return False
     options = options or {}
     check_sweeping_collision = options.get('check_sweeping_collision', True)
+    failed_trajectory_save_filepath = options.get('failed_trajectory_save_filepath', None)
+
+    from compas_fab_pychoreo.backend_features.pychoreo_configuration_collision_checker import PyChoreoConfigurationCollisionChecker
+    from compas_fab_pychoreo.backend_features.pychoreo_sweeping_collision_checker import PyChoreoSweepingCollisionChecker
+    # * for reusing collision_fn to speed up computation
+    check_options = options.copy()
+    check_options['collision_fn'] = PyChoreoConfigurationCollisionChecker(client)._get_collision_fn(robot, trajectory.points[0].joint_names, options)
+    check_options['sweeping_collision_fn'] = PyChoreoSweepingCollisionChecker(client)._get_sweeping_collision_fn(robot, trajectory.points[0].joint_names, options)
 
     seed = pp.get_numpy_seed()
     prev_conf = None
     for conf_id, jpt in enumerate(trajectory.points):
         # * per-configuration collision checking
-        point_collision = client.check_collisions(robot, jpt, options=options)
+        point_collision = client.check_collisions(robot, jpt, options=check_options)
         if point_collision:
             LOGGER.warning('pointwise collision: trajectory point #{}/{}'.format(conf_id,
                 len(trajectory.points)))
             # print('conf: ', jpt.joint_values)
-            if failed_traj_save_filename:
-                _save_trajectory(trajectory, failed_traj_save_filename+f'_pointwise-collision_seed_{seed}.json')
-            return False
+            if failed_trajectory_save_filepath:
+                _save_trajectory(trajectory, failed_trajectory_save_filepath+f'_pointwise-collision_seed_{seed}.json')
+            return False, 'traj_pointwise_collision'
 
         if prev_conf:
             # * prev-conf~conf polyline collision checking
-            polyline_collision = client.check_sweeping_collisions(robot, prev_conf, jpt, options=options)
-            if check_sweeping_collision and polyline_collision:
-                LOGGER.warning('polyline collision: trajectory point #{}/{}'.format(conf_id,
-                    len(trajectory.points)))
-                # print('prev conf: ', prev_conf.joint_values)
-                # print('curr conf: ', jpt.joint_values)
-                if failed_traj_save_filename:
-                    _save_trajectory(trajectory, failed_traj_save_filename+f'_polyline-collision_seed_{seed}.json')
-                return False
+            if check_sweeping_collision:
+                polyline_collision = client.check_sweeping_collisions(robot, prev_conf, jpt, options=check_options)
+                if polyline_collision:
+                    LOGGER.warning('polyline collision: trajectory point #{}/{}'.format(conf_id,
+                        len(trajectory.points)))
+                    # print('prev conf: ', prev_conf.joint_values)
+                    # print('curr conf: ', jpt.joint_values)
+                    if failed_trajectory_save_filepath:
+                        _save_trajectory(trajectory, failed_trajectory_save_filepath+f'_polyline-collision_seed_{seed}.json')
+                    return False, 'traj_polyline_collision'
 
             # * check for configuration jump
             if does_configurations_jump(jpt, prev_conf, options=options):
                 LOGGER.warning('joint_flip: trajectory point #{}/{}'.format(conf_id, len(trajectory.points)))
-                if failed_traj_save_filename:
-                    _save_trajectory(trajectory, failed_traj_save_filename+f'_joint-flip_seed_{seed}.json')
-                return False
+                if failed_trajectory_save_filepath:
+                    _save_trajectory(trajectory, failed_trajectory_save_filepath+f'_joint-flip_seed_{seed}.json')
+                return False, 'joint_flip'
 
             # * check for configuration duplication
             if is_configurations_close(jpt, prev_conf, options=options):
                 LOGGER.warning('configuration duplicates: trajectory point #{}/{}'.format(conf_id, len(trajectory.points)))
-                # if failed_traj_save_filename:
-                #     _save_trajectory(trajectory, failed_traj_save_filename+f'_conf-duplicate_seed_{seed}.json')
-
+                # if failed_trajectory_save_filepath:
+                #     _save_trajectory(trajectory, failed_trajectory_save_filepath+f'_conf-duplicate_seed_{seed}.json')
+                return False, 'configuration_duplication'
         prev_conf = jpt
-
-    return True
+    return True, None

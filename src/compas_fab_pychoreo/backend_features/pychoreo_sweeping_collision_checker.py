@@ -1,80 +1,89 @@
+from compas.robots.model import robot
 import numpy as np
 from collections import defaultdict
 from itertools import product, combinations
-from pybullet_planning import get_all_links
+
+from pybullet_planning.interfaces.env_manager.pose_transformation import invert
+from pybullet_planning.interfaces.env_manager.user_io import wait_if_gui
 from .sweeping_collision_checker import SweepingCollisionChecker
 from ..utils import LOGGER
 from ..client import PyChoreoClient
 
 import pybullet_planning as pp
-from pybullet_planning import get_custom_limits, joints_from_names, link_from_name, get_collision_fn, joint_from_name, \
-    expand_links, set_joint_positions, get_custom_limits, get_self_link_pairs, get_moving_links, \
-    draw_collision_diagnosis, BASE_LINK, get_num_links, LockRenderer, WorldSaver, draw_point
-from pybullet_planning import vertices_from_rigid, Ray, batch_ray_collision, draw_ray, set_camera_pose, draw_ray_result_diagnosis
-
-from pybullet_planning import wait_if_gui, get_body_name, RED, BLUE, set_color, add_line, apply_affine, get_pose, has_gui
+from pybullet_planning import joints_from_names, expand_links, set_joint_positions, LockRenderer, WorldSaver
+from pybullet_planning import vertices_from_rigid, Ray, batch_ray_collision, draw_ray_result_diagnosis
+from pybullet_planning import add_line, apply_affine, get_pose
 
 def get_attachment_sweeping_collision_fn(robot_body, joints, obstacles=[],
                     attachments=[],
                     extra_disabled_collisions={},
                     body_name_from_id=None, **kwargs):
-    attached_bodies = [attachment.child for attachment in attachments]
-    vertices_from_body = defaultdict(dict)
-    for attached_body in attached_bodies:
-        attached_body, body_links = expand_links(attached_body)
+    # ! the attached multi-link bodies are assumed to be at the same configuration between q1 and q2
+    # TODO get conf if attachment itself is a multi-link body with moving joints
+    cached_vertices_from_body = defaultdict(dict)
+
+    for attachment in attachments:
+        attached_body = attachment.child
+        attach_conf = pp.get_joint_positions(attached_body, pp.get_movable_joints(attached_body))
+        try:
+            # ! clone body is for handling joint-based URDF imports, should investigate why this is needed
+            with pp.HideOutput():
+                attached_body_clone = pp.clone_body(attached_body, visual=False, collision=True)
+        except:
+            attached_body_clone = attached_body
+        _, body_links = expand_links(attached_body_clone)
+        set_joint_positions(attached_body_clone, pp.get_movable_joints(attached_body_clone), attach_conf)
         for body_link in body_links:
-            local_from_vertices = vertices_from_rigid(attached_body, body_link)
-            vertices_from_body[attached_body][body_link] = (local_from_vertices)
+            # ! for some reasons, pybullet cloned body only has collision shapes, and saves them as visual shapes
+            local_from_vertices = vertices_from_rigid(attached_body_clone, body_link, collision=attached_body == attached_body_clone)
+            cached_vertices_from_body[attached_body][body_link] = local_from_vertices
+        if attached_body_clone != attached_body:
+            pp.remove_body(attached_body_clone)
 
     def sweeping_collision_fn(q1, q2, diagnosis=False):
         # * set robot & attachment positions
-        line_from_body = defaultdict(dict)
-        set_joint_positions(robot_body, joints, q1)
-        for attachment in attachments:
-            attachment.assign()
-            line_from_body[attachment.child] = defaultdict(list)
-            for body_link, vertices in vertices_from_body[attachment.child].items():
-                updated_vertices = apply_affine(get_pose(attachment.child), vertices)
-                line_from_body[attachment.child][body_link].append(updated_vertices)
-        set_joint_positions(robot_body, joints, q2)
-        for attachment in attachments:
-            attachment.assign()
-            for body_link, vertices in vertices_from_body[attachment.child].items():
-                updated_vertices = apply_affine(get_pose(attachment.child), vertices)
-                line_from_body[attachment.child][body_link].append(updated_vertices)
+        line_from_body = {attachment.child : defaultdict(list) for attachment in attachments}
 
-        with LockRenderer(False):
-            rays_from_body = defaultdict(dict)
-            for body, lines_from_link in line_from_body.items():
-                for body_link, lines in lines_from_link.items():
-                    rays_from_body[body][body_link] = []
-                    for start, end in zip(lines[0], lines[1]):
-                        rays_from_body[body][body_link].append(Ray(start, end))
-                        # add_line(start, end)
+        def append_vertices_from_conf(line_from_body, q):
+            set_joint_positions(robot_body, joints, q)
+            for attachment in attachments:
+                attachment.assign()
+                for body_link, vertices in cached_vertices_from_body[attachment.child].items():
+                    world_from_current_link_pose = pp.get_link_pose(attachment.child, body_link)
+                    updated_vertices = apply_affine(world_from_current_link_pose, vertices)
+                    line_from_body[attachment.child][body_link].append(updated_vertices)
+            return line_from_body
+
+        line_from_body = append_vertices_from_conf(line_from_body, q1)
+        line_from_body = append_vertices_from_conf(line_from_body, q2)
+        rays_from_body = defaultdict(dict)
+        for body, lines_from_link in line_from_body.items():
+            for body_link, lines in lines_from_link.items():
+                rays_from_body[body][body_link] = []
+                for start, end in zip(lines[0], lines[1]):
+                    rays_from_body[body][body_link].append(Ray(start, end))
 
         # * ray - body check
         # ! TODO check if AABB is updated: https://github.com/bulletphysics/bullet3/pull/2900
         # https://github.com/bulletphysics/bullet3/pull/3331
         # ! pybullet.performCollisionDetection ()
         check_bodies = obstacles
-        # print('obstacles: ', obstacles)
-        with WorldSaver():
-            for body, rays_from_link in rays_from_body.items():
-                for body_link, rays in rays_from_link.items():
-                    for ray, ray_result in zip(rays, batch_ray_collision(rays)):
-                        # TODO ignored collisions
-                        if ray_result.objectUniqueId in check_bodies:
-                            if diagnosis:
-                                all_ray_lines = []
-                                with LockRenderer():
-                                    for r in rays:
-                                        all_ray_lines.append(add_line(r.start, r.end))
-                                draw_ray_result_diagnosis(ray, ray_result, b1=body, l1=body_link,
-                                    point_color=pp.RED, line_color=pp.YELLOW, \
-                                    focus_camera=True, body_name_from_id=body_name_from_id)
-                                with LockRenderer():
-                                    pp.remove_handles(all_ray_lines)
-                            return True
+        for body, rays_from_link in rays_from_body.items():
+            for body_link, rays in rays_from_link.items():
+                for ray, ray_result in zip(rays, batch_ray_collision(rays)):
+                    # TODO ignored collisions
+                    if ray_result.objectUniqueId in check_bodies:
+                        if diagnosis:
+                            all_ray_lines = []
+                            with LockRenderer():
+                                for r in rays:
+                                    all_ray_lines.append(add_line(r.start, r.end))
+                            draw_ray_result_diagnosis(ray, ray_result, b1=body, l1=body_link,
+                                point_color=pp.RED, line_color=pp.YELLOW, \
+                                focus_camera=True, body_name_from_id=body_name_from_id)
+                            with LockRenderer():
+                                pp.remove_handles(all_ray_lines)
+                        return True
         return False
 
     return sweeping_collision_fn
@@ -84,7 +93,7 @@ class PyChoreoSweepingCollisionChecker(SweepingCollisionChecker):
     def __init__(self, client: PyChoreoClient):
         self.client = client
 
-    def step_in_collision(self, robot, configuration_1=None, configuration_2=None, options=None):
+    def check_sweeping_collisions(self, robot, configuration_1=None, configuration_2=None, options=None):
         """Check collisions between the sweeping polylines of attached objects' vertices and the obstacles in the scene.
 
         Parameters
@@ -117,7 +126,8 @@ class PyChoreoSweepingCollisionChecker(SweepingCollisionChecker):
         else:
             _conf1 = configuration_1
             _conf2 = configuration_2
-        sweeping_collision_fn = self._get_sweeping_collision_fn(robot, _conf1.joint_names, options)
+        sweeping_collision_fn = options.get('sweeping_collision_fn',
+            self._get_sweeping_collision_fn(robot, _conf1.joint_names, options)) # for reusing sweeping function
         return sweeping_collision_fn(_conf1.joint_values, _conf2.joint_values, diagnosis=diagnosis)
 
     def _get_sweeping_collision_fn(self, robot, joint_names, options=None):

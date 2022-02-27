@@ -14,7 +14,7 @@ from compas_fab_pychoreo.utils import LOGGER, verify_trajectory
 
 @pytest.mark.collision_check
 @pytest.mark.parametrize("tool_type", [
-    ('static'),
+    # ('static'),
     ('actuated'),
     ])
 def test_collision_checker(abb_irb4600_40_255_setup, itj_TC_g1_cms, itj_beam_cm, column_obstacle_cm, base_plate_cm,
@@ -22,7 +22,7 @@ def test_collision_checker(abb_irb4600_40_255_setup, itj_TC_g1_cms, itj_beam_cm,
     itj_tool_changer_urdf_path, itj_g1_urdf_path,
     viewer, diagnosis):
     # modified from https://github.com/yijiangh/pybullet_planning/blob/dev/tests/test_collisions.py
-    sweep_collision_only = False
+    sweep_collision_only = True
 
     urdf_filename, semantics = abb_irb4600_40_255_setup
 
@@ -45,7 +45,7 @@ def test_collision_checker(abb_irb4600_40_255_setup, itj_TC_g1_cms, itj_beam_cm,
             # * add static obstacles
             client.add_collision_mesh(base_plate_cm)
             client.add_collision_mesh(column_obstacle_cm)
-        wait_if_gui()
+        # wait_if_gui()
 
         ik_joint_names = robot.get_configurable_joint_names(group=move_group)
         ik_joint_types = robot.get_joint_types_by_names(ik_joint_names)
@@ -140,14 +140,18 @@ def test_collision_checker(abb_irb4600_40_255_setup, itj_TC_g1_cms, itj_beam_cm,
 
         LOGGER.debug('Sweeping collision')
         vals = [-0.12217304763960307, -0.73303828583761843, 0.83775804095727824, -2.4609142453120048, 1.2391837689159739, -0.85521133347722145]
+        import numpy as np
+        # vals = list(np.zeros(6))
         conf1 = Configuration(vals, ik_joint_types, ik_joint_names)
         assert not client.check_collisions(robot, conf1, options={'diagnosis':diagnosis})
-        # wait_if_gui()
+        wait_if_gui('first conf')
 
         vals = [-0.12217304763960307, -0.73303828583761843, 0.83775804095727824, -2.4958208303518914, -1.5533430342749532, -0.85521133347722145]
         conf2 = Configuration(vals, ik_joint_types, ik_joint_names)
         assert not client.check_collisions(robot, conf2, options={'diagnosis':diagnosis})
-        # wait_if_gui()
+        wait_if_gui('second conf')
+
+        # TODO smaller sweeping test that involves only tool configuration change
 
         assert client.check_sweeping_collisions(robot, conf1, conf2, options={'diagnosis':diagnosis})
 
@@ -225,4 +229,4 @@ def test_sensitive_collision(abb_irb4600_40_255_setup, column_obstacle_cm, base_
 
             with open(collided_traj_path, 'r') as f:
                 trajectory = json.load(f, cls=DataDecoder)
-                assert not verify_trajectory(client, robot, trajectory, options)
+                assert not verify_trajectory(client, robot, trajectory, options)[0]

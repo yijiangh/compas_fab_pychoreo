@@ -39,7 +39,7 @@ class CustomTrajectorySmoother(TrajectorySmoother):
 
         # ? usage: collision_checker.check_collisions(robot, configuration, options)
         collision_checker = PyChoreoConfigurationCollisionChecker(self.client)
-        # ? usage: sweep_collision_checker.step_in_collision(robot, configuration_1, configuration_2, options)
+        # ? usage: sweep_collision_checker.check_sweeping_collisions(robot, configuration_1, configuration_2, options)
         sweep_collision_checker = PyChoreoSweepingCollisionChecker(self.client)
 
         smoothed_trajectory = deepcopy(trajectory)

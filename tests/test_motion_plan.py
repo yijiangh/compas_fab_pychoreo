@@ -104,6 +104,7 @@ def test_plan_motion(abb_irb4600_40_255_setup, itj_TC_g1_cms, itj_beam_cm, colum
             'smooth_iterations' : smooth_iterations,
             'verbose' : True,
             'check_sweeping_collision' : True,
+            'failed_trajectory_save_filepath' : os.path.join(get_data_path(), 'plan_motion'),
             }
         options.update(abb_tolerances)
 
@@ -118,9 +119,7 @@ def test_plan_motion(abb_irb4600_40_255_setup, itj_TC_g1_cms, itj_beam_cm, colum
                 # LOGGER.debug('Solve time: {:.2f}, plan length {}'.format(elapsed_time(st_time), len(trajectory.points)))
                 assert is_configurations_close(start_conf, trajectory.points[0], fallback_tol=1e-8)
                 assert is_configurations_close(end_conf, trajectory.points[-1], fallback_tol=1e-8)
-                assert verify_trajectory(client, robot, trajectory, options,
-                    failed_traj_save_filename=os.path.join(get_data_path(), 'plan_motion')), \
-                    f'-- #{attempt_i}/{attempt_iters}'
+                assert verify_trajectory(client, robot, trajectory, options)[0], f'-- #{attempt_i}/{attempt_iters}'
 
                 # for traj_pt in trajectory.points:
                 #     client.set_robot_configuration(robot, traj_pt)
@@ -212,7 +211,7 @@ def test_plan_motion_with_polyline(abb_irb4600_40_255_setup, column_obstacle_cm,
         assert is_configurations_close(start_conf, trajectory.points[0], fallback_tol=1e-8)
         assert is_configurations_close(end_conf, trajectory.points[-1], fallback_tol=1e-8)
         options['check_sweeping_collision'] = True
-        assert not verify_trajectory(client, robot, trajectory, options)
+        assert not verify_trajectory(client, robot, trajectory, options)[0]
 
         for attempt_i in range(attempt_iters):
             options['check_sweeping_collision'] = True
@@ -225,8 +224,7 @@ def test_plan_motion_with_polyline(abb_irb4600_40_255_setup, column_obstacle_cm,
                 # LOGGER.debug('Solve time: {:.2f}, path length {}'.format(elapsed_time(st_time), len(trajectory.points)))
                 assert is_configurations_close(start_conf, trajectory.points[0], fallback_tol=1e-8)
                 assert is_configurations_close(end_conf, trajectory.points[-1], fallback_tol=1e-8)
-                assert verify_trajectory(client, robot, trajectory, options), \
-                    f'-- #{attempt_i}/{attempt_iters}'
+                assert verify_trajectory(client, robot, trajectory, options)[0], f'-- #{attempt_i}/{attempt_iters}'
                 # if diagnosis:
                 #     wait_if_gui('Start sim.')
                 #     for traj_pt in trajectory.points:

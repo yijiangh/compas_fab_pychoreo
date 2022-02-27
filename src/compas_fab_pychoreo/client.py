@@ -232,7 +232,6 @@ class PyChoreoClient(PyBulletClient):
     def _get_collision_object_names(self, wildcard):
         return wildcard_keys(self.collision_objects, wildcard)
 
-    # TODO separation between attached and collision objects might cause problems in mode changes
     def _get_collision_object_bodies(self, wildcard):
         bodies = []
         for n in self._get_collision_object_names(wildcard):
@@ -242,7 +241,6 @@ class PyChoreoClient(PyBulletClient):
     def _get_attachment_names(self, wildcard):
         return wildcard_keys(self.pychoreo_attachments, wildcard)
 
-    # TODO separation between attached and collision objects might cause problems in mode changes
     def _get_attached_bodies(self, wildcard):
         bodies = []
         for n in self._get_attachment_names(wildcard):
@@ -413,7 +411,7 @@ class PyChoreoClient(PyBulletClient):
 
             # TODO additional disabled collisions in options
             extra_disabled_collision_names = values_as_list(self.extra_disabled_collision_links)
-            option_disabled_link_names = options.get('extra_disabled_collisions') or set()
+            option_disabled_link_names = options.get('extra_disabled_collisions', set())
             extra_disabled_collisions = set()
             for bpair in list(extra_disabled_collision_names) + list(option_disabled_link_names):
                 b1, b1link_name = bpair[0]

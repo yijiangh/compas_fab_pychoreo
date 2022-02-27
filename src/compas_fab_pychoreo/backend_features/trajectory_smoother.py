@@ -13,7 +13,7 @@ class TrajectorySmoother(object):
     __metaclass__ = ABCMeta
 
     def __call__(self, robot, trajectory, options=None):
-        return self.step_in_collision(robot, trajectory, options)
+        return self.smooth_trajectory(robot, trajectory, options)
 
     @abstractmethod
     def smooth_trajectory(self, robot, trajectory, options=None):

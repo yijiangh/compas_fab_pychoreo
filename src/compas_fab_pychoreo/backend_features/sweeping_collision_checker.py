@@ -3,20 +3,20 @@ from abc import abstractmethod
 
 class SweepingCollisionChecker(object):
     """Interface for a Planner's sweeping collision checker feature.  Any implementation of
-    ``SweepingCollisionChecker`` must define the method ``step_in_collision``.
+    ``SweepingCollisionChecker`` must define the method ``check_sweeping_collisions``.
     The ``__call__`` magic method allows an instance of an implementation of
 
-    ``SweepingCollisionChecker`` to be treated as its ``step_in_collision`` method.
+    ``SweepingCollisionChecker`` to be treated as its ``check_sweeping_collisions`` method.
     See <https://docs.python.org/3/reference/datamodel.html#object.__call__> and
     <https://en.wikipedia.org/wiki/Function_object#In_Python>.
     """
     __metaclass__ = ABCMeta
 
     def __call__(self, robot, configuration_1=None, configuration_2=None, options=None):
-        return self.step_in_collision(robot, configuration_1, configuration_2, options)
+        return self.check_sweeping_collisions(robot, configuration_1, configuration_2, options)
 
     @abstractmethod
-    def step_in_collision(self, robot, configuration_1=None, configuration_2=None, options=None):
+    def check_sweeping_collisions(self, robot, configuration_1=None, configuration_2=None, options=None):
         """....
 
         Parameters

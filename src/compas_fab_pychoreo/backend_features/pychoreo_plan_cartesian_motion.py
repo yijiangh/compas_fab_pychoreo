@@ -279,7 +279,7 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
 
         if path is None:
             if verbose:
-                LOGGER.debug('No Cartesian motion found, due to {}!'.format(failure_reason), 'red')
+                LOGGER.debug('No Cartesian motion found, due to {}!'.format(failure_reason))
             return None
         else:
             # TODO start_conf might have different number of joints with the given group?
@@ -291,7 +291,7 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
 
             jt_traj_pts = []
             for i, (conf, target_pose) in enumerate(zip(path, ee_poses)):
-                jt_traj_pt = JointTrajectoryPoint(joint_values=conf, joint_names = joint_names, joint_types=joint_types)
+                jt_traj_pt = JointTrajectoryPoint(joint_values=conf, joint_names=joint_names, joint_types=joint_types)
                 if start_traj_pt is not None:
                     jtp = start_traj_pt.copy()
                     # ! TrajectoryPoint doesn't copy over joint_names...
@@ -302,8 +302,8 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
 
                 # * check start_conf joint value agreement
                 if i == 0 and start_configuration is not None and \
-                    not is_configurations_close(start_configuration, jt_traj_pt, options=options):
-                    LOGGER.error('plan_cartesian_motion: planned traj\'s first conf does not agree with the given start conf.', 'red')
+                    not is_configurations_close(start_configuration, jt_traj_pt, options=options, report_when_close=False):
+                    LOGGER.error('plan_cartesian_motion: planned traj\'s first conf does not agree with the given start conf.')
                     return None
 
                 # * check FK and target frame agreement
