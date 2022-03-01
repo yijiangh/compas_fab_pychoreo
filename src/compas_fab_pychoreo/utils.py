@@ -98,7 +98,7 @@ def is_configurations_close(conf1, conf2, options=None, fallback_tol=1e-3, repor
     Returns
     -------
     bool
-        return True if two configuration's difference under the given tolerance, False otherwise
+        return True if two configuration's difference under the given tolerance (deemed close), False otherwise
     """
     options = options or {}
     verbose = options.get('verbose', False)
@@ -120,11 +120,13 @@ def is_configurations_close(conf1, conf2, options=None, fallback_tol=1e-3, repor
         tol = joint_compare_tolerances[joint_names[i]] if joint_names[i] in joint_compare_tolerances \
             else fallback_tol
         if abs(diff) > tol:
+            # not close
             if verbose and not report_when_close:
                 LOGGER.debug('Joint #{} diff: {:.4f} | tol: {:.4f}'.format(joint_names[i],
                     abs(diff), tol))
             return False
         else:
+            # close
             if verbose and report_when_close:
                 LOGGER.debug('Joint #{} diff: {:.4f} | tol: {:.4f}'.format(joint_names[i],
                     abs(diff), tol))

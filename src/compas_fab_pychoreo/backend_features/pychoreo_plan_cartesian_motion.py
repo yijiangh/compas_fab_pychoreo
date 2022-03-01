@@ -296,6 +296,7 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
                     jtp = start_traj_pt.copy()
                     # ! TrajectoryPoint doesn't copy over joint_names...
                     jtp.joint_names = start_traj_pt.joint_names
+                    # the new jt_traj_pt takes precedence
                     jtp.merge(jt_traj_pt)
                     jt_traj_pt = jtp
                 jt_traj_pt.time_from_start = Duration(i*1,0)
@@ -305,8 +306,8 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
                     not is_configurations_close(start_configuration, jt_traj_pt, options=options, report_when_close=False):
                     # ! in case there is numerical error that causes the first computed conf differ from the given
                     # start conf, we add the start conf into the trajectory
-                    conf_temp = start_traj_pt.copy()
-                    conf_temp.merge(jt_traj_pt)
+                    conf_temp = jt_traj_pt.copy()
+                    conf_temp.merge(start_traj_pt)
                     jt_traj_pts.append(conf_temp)
                     # LOGGER.error('plan_cartesian_motion: planned traj\'s first conf does not agree with the given start conf.')
 
