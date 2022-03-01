@@ -193,6 +193,7 @@ def verify_trajectory(client, robot, trajectory, options=None):
     options = options or {}
     check_sweeping_collision = options.get('check_sweeping_collision', True)
     failed_trajectory_save_filepath = options.get('failed_trajectory_save_filepath', None)
+    fail_fast = options.get('fail_fast', True)
 
     from compas_fab_pychoreo.backend_features.pychoreo_configuration_collision_checker import PyChoreoConfigurationCollisionChecker
     from compas_fab_pychoreo.backend_features.pychoreo_sweeping_collision_checker import PyChoreoSweepingCollisionChecker
@@ -203,7 +204,18 @@ def verify_trajectory(client, robot, trajectory, options=None):
 
     seed = pp.get_numpy_seed()
     prev_conf = None
+    failure_reasons = []
     for conf_id, jpt in enumerate(trajectory.points):
+        if prev_conf:
+            # * check for configuration jump
+            if does_configurations_jump(jpt, prev_conf, options=options):
+                LOGGER.warning('joint_flip: trajectory point #{}/{}'.format(conf_id, len(trajectory.points)))
+                if failed_trajectory_save_filepath:
+                    _save_trajectory(trajectory, failed_trajectory_save_filepath+f'_joint-flip_seed_{seed}.json')
+                if fail_fast:
+                    return False, 'joint_flip'
+                failure_reasons.append('joint_flip')
+
         # * per-configuration collision checking
         point_collision = client.check_collisions(robot, jpt, options=check_options)
         if point_collision:
@@ -212,7 +224,9 @@ def verify_trajectory(client, robot, trajectory, options=None):
             # print('conf: ', jpt.joint_values)
             if failed_trajectory_save_filepath:
                 _save_trajectory(trajectory, failed_trajectory_save_filepath+f'_pointwise-collision_seed_{seed}.json')
-            return False, 'traj_pointwise_collision'
+            if fail_fast:
+                return False, 'traj_pointwise_collision'
+            failure_reasons.append('traj_pointwise_collision')
 
         if prev_conf:
             # * prev-conf~conf polyline collision checking
@@ -225,20 +239,20 @@ def verify_trajectory(client, robot, trajectory, options=None):
                     # print('curr conf: ', jpt.joint_values)
                     if failed_trajectory_save_filepath:
                         _save_trajectory(trajectory, failed_trajectory_save_filepath+f'_polyline-collision_seed_{seed}.json')
-                    return False, 'traj_polyline_collision'
-
-            # * check for configuration jump
-            if does_configurations_jump(jpt, prev_conf, options=options):
-                LOGGER.warning('joint_flip: trajectory point #{}/{}'.format(conf_id, len(trajectory.points)))
-                if failed_trajectory_save_filepath:
-                    _save_trajectory(trajectory, failed_trajectory_save_filepath+f'_joint-flip_seed_{seed}.json')
-                return False, 'joint_flip'
+                    if fail_fast:
+                        return False, 'traj_polyline_collision'
+                    failure_reasons.append('traj_polyline_collision')
 
             # * check for configuration duplication
             if is_configurations_close(jpt, prev_conf, options=options):
                 LOGGER.warning('configuration duplicates: trajectory point #{}/{}'.format(conf_id, len(trajectory.points)))
                 # if failed_trajectory_save_filepath:
                 #     _save_trajectory(trajectory, failed_trajectory_save_filepath+f'_conf-duplicate_seed_{seed}.json')
-                return False, 'configuration_duplication'
+                if fail_fast:
+                    return False, 'configuration_duplication'
+                failure_reasons.append('configuration_duplication')
         prev_conf = jpt
-    return True, None
+    if len(failure_reasons) > 0:
+        return False, ', '.join(failure_reasons)
+    else:
+        return True, None

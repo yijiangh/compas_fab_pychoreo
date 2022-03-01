@@ -303,8 +303,12 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
                 # * check start_conf joint value agreement
                 if i == 0 and start_configuration is not None and \
                     not is_configurations_close(start_configuration, jt_traj_pt, options=options, report_when_close=False):
-                    LOGGER.error('plan_cartesian_motion: planned traj\'s first conf does not agree with the given start conf.')
-                    return None
+                    # ! in case there is numerical error that causes the first computed conf differ from the given
+                    # start conf, we add the start conf into the trajectory
+                    conf_temp = start_traj_pt.copy()
+                    conf_temp.merge(jt_traj_pt)
+                    jt_traj_pts.append(conf_temp)
+                    # LOGGER.error('plan_cartesian_motion: planned traj\'s first conf does not agree with the given start conf.')
 
                 # * check FK and target frame agreement
                 fk_frame = self.client.forward_kinematics(robot, jt_traj_pt, group=group, options={'link' : tool_link_name})
