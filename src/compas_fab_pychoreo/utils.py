@@ -115,6 +115,8 @@ def is_configurations_close(conf1, conf2, options=None, fallback_tol=1e-3, repor
             _conf2 = _conf1.merged(_conf2)
     assert _conf1.joint_names == _conf2.joint_names
     joint_names = _conf1.joint_names
+    # negative if not close
+    joint_diffs_when_close = -1. * np.ones(len(joint_names))
     for i, diff in enumerate(_conf1.iter_differences(_conf2)):
         # cprint('Joint #{} diff: {}'.format(joint_names[i], diff), 'yellow')
         tol = joint_compare_tolerances[joint_names[i]] if joint_names[i] in joint_compare_tolerances \
@@ -122,14 +124,15 @@ def is_configurations_close(conf1, conf2, options=None, fallback_tol=1e-3, repor
         if abs(diff) > tol:
             # not close
             if verbose and not report_when_close:
-                LOGGER.debug('Joint #{} diff: {:.4f} | tol: {:.4f}'.format(joint_names[i],
+                LOGGER.debug('Joint #{} diff: {:.6f} | tol: {:.6f}'.format(joint_names[i],
                     abs(diff), tol))
             return False
         else:
-            # close
-            if verbose and report_when_close:
-                LOGGER.debug('Joint #{} diff: {:.4f} | tol: {:.4f}'.format(joint_names[i],
-                    abs(diff), tol))
+            joint_diffs_when_close[i] = diff
+    if verbose and report_when_close and np.all(joint_diffs_when_close > 0):
+        for i, diff in joint_diffs_when_close:
+            LOGGER.debug('Joint #{} diff: {:.6f} | tol: {:.6f}'.format(joint_names[i],
+                abs(diff), tol))
     return True
 
 def does_configurations_jump(conf1, conf2, options=None, fallback_tol=1e-1):

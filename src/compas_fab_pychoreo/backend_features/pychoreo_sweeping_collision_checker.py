@@ -27,8 +27,8 @@ def get_attachment_sweeping_collision_fn(robot_body, joints, obstacles=[],
         attach_conf = pp.get_joint_positions(attached_body, pp.get_movable_joints(attached_body))
         try:
             # ! clone body is for handling joint-based URDF imports, should investigate why this is needed
-            with pp.HideOutput():
-                attached_body_clone = pp.clone_body(attached_body, visual=False, collision=True)
+            # with pp.HideOutput():
+            attached_body_clone = pp.clone_body(attached_body, visual=False, collision=True)
         except:
             attached_body_clone = attached_body
         _, body_links = expand_links(attached_body_clone)
