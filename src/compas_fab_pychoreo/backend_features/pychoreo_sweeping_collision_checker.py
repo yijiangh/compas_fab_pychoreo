@@ -3,15 +3,13 @@ import numpy as np
 from collections import defaultdict
 from itertools import product, combinations
 
-from pybullet_planning.interfaces.env_manager.pose_transformation import invert
-from pybullet_planning.interfaces.env_manager.user_io import wait_if_gui
 from .sweeping_collision_checker import SweepingCollisionChecker
 from ..utils import LOGGER
 from ..client import PyChoreoClient
 
 import pybullet_planning as pp
-from pybullet_planning import joints_from_names, expand_links, set_joint_positions, LockRenderer, WorldSaver
-from pybullet_planning import vertices_from_rigid, Ray, batch_ray_collision, draw_ray_result_diagnosis
+from pybullet_planning import joints_from_names, expand_links, set_joint_positions, LockRenderer
+from pybullet_planning import Ray, batch_ray_collision, draw_ray_result_diagnosis, vertices_from_link
 from pybullet_planning import add_line, apply_affine, get_pose
 
 def get_attachment_sweeping_collision_fn(robot_body, joints, obstacles=[],
@@ -26,8 +24,6 @@ def get_attachment_sweeping_collision_fn(robot_body, joints, obstacles=[],
         attached_body = attachment.child
         attach_conf = pp.get_joint_positions(attached_body, pp.get_movable_joints(attached_body))
         try:
-            # ! clone body is for handling joint-based URDF imports, should investigate why this is needed
-            # with pp.HideOutput():
             attached_body_clone = pp.clone_body(attached_body, visual=False, collision=True)
         except:
             attached_body_clone = attached_body
@@ -35,7 +31,7 @@ def get_attachment_sweeping_collision_fn(robot_body, joints, obstacles=[],
         set_joint_positions(attached_body_clone, pp.get_movable_joints(attached_body_clone), attach_conf)
         for body_link in body_links:
             # ! for some reasons, pybullet cloned body only has collision shapes, and saves them as visual shapes
-            local_from_vertices = vertices_from_rigid(attached_body_clone, body_link, collision=attached_body == attached_body_clone)
+            local_from_vertices = vertices_from_link(attached_body_clone, body_link, collision=attached_body == attached_body_clone)
             cached_vertices_from_body[attached_body][body_link] = local_from_vertices
         if attached_body_clone != attached_body:
             pp.remove_body(attached_body_clone)
@@ -78,9 +74,8 @@ def get_attachment_sweeping_collision_fn(robot_body, joints, obstacles=[],
                             with LockRenderer():
                                 for r in rays:
                                     all_ray_lines.append(add_line(r.start, r.end))
-                            draw_ray_result_diagnosis(ray, ray_result, b1=body, l1=body_link,
-                                point_color=pp.RED, line_color=pp.YELLOW, \
-                                focus_camera=True, body_name_from_id=body_name_from_id)
+                            draw_ray_result_diagnosis(ray, ray_result, sweep_body=body, sweep_link=body_link,
+                                point_color=pp.RED, focus_camera=True, body_name_from_id=body_name_from_id)
                             with LockRenderer():
                                 pp.remove_handles(all_ray_lines)
                         return True

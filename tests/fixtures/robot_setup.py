@@ -86,6 +86,12 @@ def itj_beam_cm():
     return parse_collision_mesh_from_path(data_dir, "itj_beam_b2.obj")
 
 @pytest.fixture
+def itj_beam_cm_from_stl():
+    HERE = os.path.dirname(__file__)
+    data_dir = os.path.abspath(os.path.join(HERE, "..", "data"))
+    return parse_collision_mesh_from_path(data_dir, "itj_beam_b2.stl")
+
+@pytest.fixture
 def itj_s1_urdf_path():
     HERE = os.path.dirname(__file__)
     urdf_path = os.path.abspath(os.path.join(HERE, "..", "data", 's1', 'urdf', 's1.urdf'))

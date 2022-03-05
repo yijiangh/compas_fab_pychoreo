@@ -46,27 +46,23 @@ class PyChoreoPlanner(PlannerInterface):
         return PyChoreoSweepingCollisionChecker(self.client)(*args, **kwargs)
 
     ###################################################
-
+    # ! using main-branch
     def add_collision_mesh(self, *args, **kwargs):
-        # ! using main-branch
         return PyBulletAddCollisionMesh(self.client)(*args, **kwargs)
 
     def append_collision_mesh(self, *args, **kwargs):
-        # ! using main-branch
         return PyBulletAppendCollisionMesh(self.client)(*args, **kwargs)
 
     def remove_collision_mesh(self, *args, **kwargs):
-        # ! using main-branch
         return PyBulletRemoveCollisionMesh(self.client)(*args, **kwargs)
 
     #####
+    # ! the following functions we use our implementations in the client
 
     # def add_attached_collision_mesh(self, *args, **kwargs):
-    #     # ! using main-branch
     #     return PyBulletAddAttachedCollisionMesh(self.client)(*args, **kwargs)
 
     # def remove_attached_collision_mesh(self, *args, **kwargs):
-    #     # ! using main-branch
     #     return PyBulletRemoveAttachedCollisionMesh(self.client)(*args, **kwargs)
 
 

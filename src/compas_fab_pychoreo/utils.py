@@ -129,6 +129,7 @@ def is_configurations_close(conf1, conf2, options=None, fallback_tol=1e-3, repor
             return False
         else:
             joint_diffs_when_close[i] = diff
+    # * print only when all the joints are close
     if verbose and report_when_close and np.all(joint_diffs_when_close > 0):
         for i, diff in joint_diffs_when_close:
             LOGGER.debug('Joint #{} diff: {:.6f} | tol: {:.6f}'.format(joint_names[i],

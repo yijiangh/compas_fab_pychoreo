@@ -54,6 +54,8 @@ class PyChoreoClient(PyBulletClient):
         # PybulletClient keeps
         #   self.collision_objects
         #   self.attached_collision_objects
+        # TODO remove temp dir even if key interrupted
+        self._cache_dir = tempfile.TemporaryDirectory()
 
     def connect(self):
         with HideOutput(not self.verbose):
@@ -80,21 +82,65 @@ class PyChoreoClient(PyBulletClient):
         name = collision_mesh.id
         for body in self.collision_objects[name]:
             set_color(body, color)
-            # INFO_FROM_BODY[self.client.client_id, body] = ModelInfo(None, path, False, 1.0)
 
     def convert_mesh_to_body(self, mesh, frame, _name=None, concavity=False, mass=STATIC_MASS):
-        # ! override the pybyllet client behavior
-        # ! see: https://github.com/compas-dev/compas_fab/issues/305
-        tmp_dir = tempfile.mkdtemp()
-        tmp_obj_path = os.path.join(tmp_dir, 'temp.obj')
-        try:
-            mesh.to_obj(tmp_obj_path)
-            tmp_obj_path = self._handle_concavity(tmp_obj_path, tmp_dir, concavity, mass)
-            pyb_body_id = self.body_from_obj(tmp_obj_path, concavity=concavity, mass=mass)
-            self._set_base_frame(frame, pyb_body_id)
-        finally:
-            shutil.rmtree(tmp_dir)
+        """Convert compas mesh and its frame to a pybullet body.
+
+        Parameters
+        ----------
+        mesh : :class:`compas.datastructures.Mesh`
+        frame : :class:`compas.geometry.Frame`
+        _name : :obj:`str`, optional
+            Name of the mesh for tagging in PyBullet's GUI
+        concavity : :obj:`bool`, optional
+            When ``False`` (the default), the mesh will be loaded as its convex hull for collision checking purposes.
+            When ``True``, a non-static mesh will be decomposed into convex parts using v-HACD.
+        mass : :obj:`float`, optional
+            Mass of the body to be created, in kg.  If ``0`` mass is given (the default),
+            the object is static.
+
+        Returns
+        -------
+        :obj:`int`
+
+        Notes
+        -----
+        If this method is called several times with the same ``mesh`` instance, but the ``mesh`` has been modified
+        in between calls, PyBullet's default caching behavior will prevent it from recognizing these changes.  It
+        is best practice to create a new mesh instance or to make use of the `frame` argument, if applicable.  If
+        this is not possible, PyBullet's caching behavior can be changed with
+        ``pybullet.setPhysicsEngineParameter(enableFileCaching=0)``.
+        """
+        tmp_obj_path = os.path.join(self._cache_dir.name, '{}.obj'.format(mesh.guid))
+        mesh.to_obj(tmp_obj_path)
+        tmp_obj_path = self._handle_concavity(tmp_obj_path, self._cache_dir.name, concavity, mass)
+        pyb_body_id = self.body_from_obj(tmp_obj_path, concavity=concavity, mass=mass)
+        self._set_base_frame(frame, pyb_body_id)
+        # need to keep this information since pybullet does not store file_path when parsing from obj file
+        # but it does store filepath when parsing from a URDF
+        INFO_FROM_BODY[self.client_id, pyb_body_id] = ModelInfo(name=None, path=tmp_obj_path, fixed_base=False, scale=1.0)
         return pyb_body_id
+
+    def remove_collision_mesh(self, id, options=None):
+        """Remove a collision mesh from the planning scene.
+
+        Parameters
+        ----------
+        id : str
+            Name of collision mesh to be removed.
+        options : dict, optional
+            Unused parameter.
+
+        Returns
+        -------
+        ``None``
+        """
+        if id not in self.client.collision_objects:
+            LOGGER.warning("Collision object with name '{}' does not exist in scene.".format(id))
+            return
+
+        for body_id in self.client.collision_objects[id]:
+            pp.remove_body(body_id)
 
     def add_tool_from_urdf(self, tool_name, urdf_file):
         # TODO return compas_fab Tool class
@@ -211,7 +257,8 @@ class PyChoreoClient(PyBulletClient):
             # * add detached attachments to collision_objects
             self.collision_objects[name] = [at.child for at in attachments]
             for constraint_info in self.attached_collision_objects[name]:
-                remove_constraint(constraint_info.constraint_id)
+                if constraint_info.constraint_id in pp.get_constraints():
+                    remove_constraint(constraint_info.constraint_id)
             del self.attached_collision_objects[name]
             del self.pychoreo_attachments[name]
             del self.extra_disabled_collision_links[name]

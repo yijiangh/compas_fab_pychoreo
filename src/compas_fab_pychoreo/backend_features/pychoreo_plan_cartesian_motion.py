@@ -18,7 +18,6 @@ from compas_fab_pychoreo.backend_features.pychoreo_configuration_collision_check
 from pybullet_planning import WorldSaver, joints_from_names, joint_from_name, \
     link_from_name, interpolate_poses, plan_cartesian_motion_lg, get_labeled_configuration
 
-from pybullet_planning import HideOutput, draw_pose
 from pybullet_planning import all_between, get_custom_limits, get_movable_joints, set_joint_positions, get_link_pose, \
     get_link_subtree
 from pybullet_planning import prune_fixed_joints, get_configuration

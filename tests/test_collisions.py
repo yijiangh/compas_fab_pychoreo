@@ -14,7 +14,7 @@ from compas_fab_pychoreo.utils import LOGGER, verify_trajectory
 
 @pytest.mark.collision_check
 @pytest.mark.parametrize("tool_type", [
-    # ('static'),
+    ('static'),
     ('actuated'),
     ])
 def test_collision_checker(abb_irb4600_40_255_setup, itj_TC_g1_cms, itj_beam_cm, column_obstacle_cm, base_plate_cm,
@@ -22,8 +22,6 @@ def test_collision_checker(abb_irb4600_40_255_setup, itj_TC_g1_cms, itj_beam_cm,
     itj_tool_changer_urdf_path, itj_g1_urdf_path,
     viewer, diagnosis):
     # modified from https://github.com/yijiangh/pybullet_planning/blob/dev/tests/test_collisions.py
-    sweep_collision_only = True
-
     urdf_filename, semantics = abb_irb4600_40_255_setup
 
     move_group = 'bare_arm'
@@ -70,35 +68,43 @@ def test_collision_checker(abb_irb4600_40_255_setup, itj_TC_g1_cms, itj_beam_cm,
         # wait_if_gui('EE attached.')
 
         if tool_type == 'actuated':
+            # * attached tool sublink collision
             # lower 0.0008 upper 0.01
-            tool_bodies = client._get_bodies('^{}'.format('itj_PG500'))
-            tool_conf = Configuration(joint_values=[0.01, 0.01], joint_types=[Joint.PRISMATIC, Joint.PRISMATIC],
-                joint_names=['joint_gripper_jaw_l', 'joint_gripper_jaw_r'])
-            for b in tool_bodies:
-                client._set_body_configuration(b, tool_conf)
-            # wait_if_gui('Open Gripper')
+            vals = [-0.36302848441482055, -0.24434609527920614, -0.12217304763960307, 0.0, 0.0, 1.5707963267948966]
+            conf = Configuration(vals, ik_joint_types, ik_joint_names)
+            # client.set_robot_configuration(robot, conf)
 
+            tool_bodies = client._get_bodies('^{}'.format('g1'))
             tool_conf = Configuration(joint_values=[0.0008, 0.0008], joint_types=[Joint.PRISMATIC, Joint.PRISMATIC],
                 joint_names=['joint_gripper_jaw_l', 'joint_gripper_jaw_r'])
             for b in tool_bodies:
                 client._set_body_configuration(b, tool_conf)
             # wait_if_gui('Close Gripper')
-
-        if not sweep_collision_only:
-            LOGGER.debug('safe start conf')
-            conf = Configuration([0.]*6, ik_joint_types, ik_joint_names)
+            LOGGER.debug('no-collision when gripper closed')
             assert not client.check_collisions(robot, conf, options={'diagnosis':diagnosis})
 
-            LOGGER.debug('joint over limit')
-            conf = Configuration([0., 0., 1.5, 0, 0, 0], ik_joint_types, ik_joint_names)
+            tool_conf = Configuration(joint_values=[0.01, 0.01], joint_types=[Joint.PRISMATIC, Joint.PRISMATIC],
+                joint_names=['joint_gripper_jaw_l', 'joint_gripper_jaw_r'])
+            for b in tool_bodies:
+                client._set_body_configuration(b, tool_conf)
+            # wait_if_gui('Open Gripper')
+            LOGGER.debug('in-collision when gripper opened')
             assert client.check_collisions(robot, conf, options={'diagnosis':diagnosis})
 
-            LOGGER.debug('attached gripper-obstacle collision - column')
-            vals = [-0.33161255787892263, -0.43633231299858238, 0.43633231299858238, -1.0471975511965976, 0.087266462599716474, 0.0]
-            # conf = Configuration(vals, ik_joint_types, ik_joint_names)
-            # client.set_robot_configuration(robot, conf)
-            # wait_if_gui()
-            assert client.check_collisions(robot, conf, options={'diagnosis':diagnosis})
+        LOGGER.debug('safe start conf')
+        conf = Configuration([0.]*6, ik_joint_types, ik_joint_names)
+        assert not client.check_collisions(robot, conf, options={'diagnosis':diagnosis})
+
+        LOGGER.debug('joint over limit')
+        conf = Configuration([0., 0., 1.5, 0, 0, 0], ik_joint_types, ik_joint_names)
+        assert client.check_collisions(robot, conf, options={'diagnosis':diagnosis})
+
+        LOGGER.debug('attached gripper-obstacle collision - column')
+        vals = [-0.33161255787892263, -0.43633231299858238, 0.43633231299858238, -1.0471975511965976, 0.087266462599716474, 0.0]
+        # conf = Configuration(vals, ik_joint_types, ik_joint_names)
+        # client.set_robot_configuration(robot, conf)
+        # wait_if_gui()
+        assert client.check_collisions(robot, conf, options={'diagnosis':diagnosis})
 
         #* attach beam
         client.add_collision_mesh(itj_beam_cm)
@@ -112,48 +118,30 @@ def test_collision_checker(abb_irb4600_40_255_setup, itj_TC_g1_cms, itj_beam_cm,
         if diagnosis:
             client._print_object_summary()
 
-        if not sweep_collision_only:
-            LOGGER.debug('attached beam-robot body self collision')
-            vals = [0.73303828583761843, -0.59341194567807209, 0.54105206811824214, -0.17453292519943295, 1.064650843716541, 1.7278759594743862]
-            conf = Configuration(vals, ik_joint_types, ik_joint_names)
-            assert client.check_collisions(robot, conf, options={'diagnosis':diagnosis})
+        LOGGER.debug('attached beam-robot body self collision')
+        vals = [0.73303828583761843, -0.59341194567807209, 0.54105206811824214, -0.17453292519943295, 1.064650843716541, 1.7278759594743862]
+        conf = Configuration(vals, ik_joint_types, ik_joint_names)
+        assert client.check_collisions(robot, conf, options={'diagnosis':diagnosis})
 
-            LOGGER.debug('attached beam-obstacle collision - column')
-            vals = [0.087266462599716474, -0.19198621771937624, 0.20943951023931956, 0.069813170079773182, 1.2740903539558606, 0.069813170079773182]
-            conf = Configuration(vals, ik_joint_types, ik_joint_names)
-            assert client.check_collisions(robot, conf, options={'diagnosis':diagnosis})
+        LOGGER.debug('attached beam-obstacle collision - column')
+        vals = [0.087266462599716474, -0.19198621771937624, 0.20943951023931956, 0.069813170079773182, 1.2740903539558606, 0.069813170079773182]
+        conf = Configuration(vals, ik_joint_types, ik_joint_names)
+        assert client.check_collisions(robot, conf, options={'diagnosis':diagnosis})
 
-            LOGGER.debug('attached beam-obstacle collision - ground')
-            vals = [-0.017453292519943295, 0.6108652381980153, 0.20943951023931956, 1.7627825445142729, 1.2740903539558606, 0.069813170079773182]
-            conf = Configuration(vals, ik_joint_types, ik_joint_names)
-            assert client.check_collisions(robot, conf, options={'diagnosis':diagnosis})
+        LOGGER.debug('attached beam-obstacle collision - ground')
+        vals = [-0.017453292519943295, 0.6108652381980153, 0.20943951023931956, 1.7627825445142729, 1.2740903539558606, 0.069813170079773182]
+        conf = Configuration(vals, ik_joint_types, ik_joint_names)
+        assert client.check_collisions(robot, conf, options={'diagnosis':diagnosis})
 
-            LOGGER.debug('robot link-obstacle collision - column')
-            vals = [-0.41887902047863912, 0.20943951023931956, 0.20943951023931956, 1.7627825445142729, 1.2740903539558606, 0.069813170079773182]
-            conf = Configuration(vals, ik_joint_types, ik_joint_names)
-            assert client.check_collisions(robot, conf, options={'diagnosis':diagnosis})
+        LOGGER.debug('robot link-obstacle collision - column')
+        vals = [-0.41887902047863912, 0.20943951023931956, 0.20943951023931956, 1.7627825445142729, 1.2740903539558606, 0.069813170079773182]
+        conf = Configuration(vals, ik_joint_types, ik_joint_names)
+        assert client.check_collisions(robot, conf, options={'diagnosis':diagnosis})
 
-            LOGGER.debug('robot link-obstacle collision - ground')
-            vals = [0.33161255787892263, 1.4660765716752369, 0.27925268031909273, 0.17453292519943295, 0.22689280275926285, 0.54105206811824214]
-            conf = Configuration(vals, ik_joint_types, ik_joint_names)
-            assert client.check_collisions(robot, conf, options={'diagnosis':diagnosis})
-
-        LOGGER.debug('Sweeping collision')
-        vals = [-0.12217304763960307, -0.73303828583761843, 0.83775804095727824, -2.4609142453120048, 1.2391837689159739, -0.85521133347722145]
-        import numpy as np
-        # vals = list(np.zeros(6))
-        conf1 = Configuration(vals, ik_joint_types, ik_joint_names)
-        assert not client.check_collisions(robot, conf1, options={'diagnosis':diagnosis})
-        wait_if_gui('first conf')
-
-        vals = [-0.12217304763960307, -0.73303828583761843, 0.83775804095727824, -2.4958208303518914, -1.5533430342749532, -0.85521133347722145]
-        conf2 = Configuration(vals, ik_joint_types, ik_joint_names)
-        assert not client.check_collisions(robot, conf2, options={'diagnosis':diagnosis})
-        wait_if_gui('second conf')
-
-        # TODO smaller sweeping test that involves only tool configuration change
-
-        assert client.check_sweeping_collisions(robot, conf1, conf2, options={'diagnosis':diagnosis})
+        LOGGER.debug('robot link-obstacle collision - ground')
+        vals = [0.33161255787892263, 1.4660765716752369, 0.27925268031909273, 0.17453292519943295, 0.22689280275926285, 0.54105206811824214]
+        conf = Configuration(vals, ik_joint_types, ik_joint_names)
+        assert client.check_collisions(robot, conf, options={'diagnosis':diagnosis})
 
         wait_if_gui("Finished.")
 
