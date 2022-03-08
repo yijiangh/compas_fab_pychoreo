@@ -1,7 +1,7 @@
 from copy import deepcopy
 
 from compas_fab.robots import JointTrajectory, Robot
-from .trajectory_smoother import TrajectorySmoother
+from .feature_base.trajectory_smoother import TrajectorySmoother
 from ..client import PyChoreoClient
 from .pychoreo_configuration_collision_checker import PyChoreoConfigurationCollisionChecker
 from .pychoreo_sweeping_collision_checker import PyChoreoSweepingCollisionChecker

@@ -3,13 +3,13 @@ import numpy as np
 from collections import defaultdict
 from itertools import product, combinations
 
-from .sweeping_collision_checker import SweepingCollisionChecker
+from .feature_base import SweepingCollisionChecker
 from ..utils import LOGGER
 from ..client import PyChoreoClient
 
 import pybullet_planning as pp
 from pybullet_planning import joints_from_names, expand_links, set_joint_positions, LockRenderer
-from pybullet_planning import Ray, batch_ray_collision, draw_ray_result_diagnosis, vertices_from_link
+from pybullet_planning import Ray, batch_ray_collision, draw_ray_result_diagnosis, vertices_from_rigid
 from pybullet_planning import add_line, apply_affine, get_pose
 
 def get_attachment_sweeping_collision_fn(robot_body, joints, obstacles=[],
@@ -17,24 +17,17 @@ def get_attachment_sweeping_collision_fn(robot_body, joints, obstacles=[],
                     extra_disabled_collisions={},
                     body_name_from_id=None, **kwargs):
     # ! the attached multi-link bodies are assumed to be at the same configuration between q1 and q2
-    # TODO get conf if attachment itself is a multi-link body with moving joints
     cached_vertices_from_body = defaultdict(dict)
-
     for attachment in attachments:
         attached_body = attachment.child
-        attach_conf = pp.get_joint_positions(attached_body, pp.get_movable_joints(attached_body))
-        try:
-            attached_body_clone = pp.clone_body(attached_body, visual=False, collision=True)
-        except:
-            attached_body_clone = attached_body
-        _, body_links = expand_links(attached_body_clone)
-        set_joint_positions(attached_body_clone, pp.get_movable_joints(attached_body_clone), attach_conf)
+        body_links = pp.get_links(attached_body)
+        # * get links except for BASE_LINK
         for body_link in body_links:
-            # ! for some reasons, pybullet cloned body only has collision shapes, and saves them as visual shapes
-            local_from_vertices = vertices_from_link(attached_body_clone, body_link, collision=attached_body == attached_body_clone)
+            local_from_vertices = vertices_from_rigid(attached_body, body_link, collision=True)
             cached_vertices_from_body[attached_body][body_link] = local_from_vertices
-        if attached_body_clone != attached_body:
-            pp.remove_body(attached_body_clone)
+        # * base link handling
+        base_local_from_vertices = vertices_from_rigid(attached_body, pp.BASE_LINK, collision=True)
+        cached_vertices_from_body[attached_body][pp.BASE_LINK] = base_local_from_vertices
 
     def sweeping_collision_fn(q1, q2, diagnosis=False):
         # * set robot & attachment positions
@@ -45,8 +38,12 @@ def get_attachment_sweeping_collision_fn(robot_body, joints, obstacles=[],
             for attachment in attachments:
                 attachment.assign()
                 for body_link, vertices in cached_vertices_from_body[attachment.child].items():
-                    world_from_current_link_pose = pp.get_link_pose(attachment.child, body_link)
-                    updated_vertices = apply_affine(world_from_current_link_pose, vertices)
+                    if pp.get_link_parent(attachment.child, body_link):
+                        world_from_com = pp.get_com_pose(attachment.child, body_link)
+                    else:
+                        # BASE_LINK
+                        world_from_com = pp.get_link_pose(attachment.child, body_link)
+                    updated_vertices = apply_affine(world_from_com, vertices)
                     line_from_body[attachment.child][body_link].append(updated_vertices)
             return line_from_body
 

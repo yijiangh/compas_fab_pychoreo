@@ -149,6 +149,13 @@ def thin_panel_cm():
     data_dir = os.path.abspath(os.path.join(HERE, "..", "data"))
     return parse_collision_mesh_from_path(data_dir, "thin_panel.obj", scale=1)
 
+@pytest.fixture
+def duck_obj_path():
+    HERE = os.path.dirname(__file__)
+    data_dir = os.path.abspath(os.path.join(HERE, "..", "data"))
+    # return parse_collision_mesh_from_path(data_dir, "thin_panel.obj", scale=1)
+    return os.path.join(data_dir, "duck.obj")
+
 ##########################################
 
 @pytest.fixture

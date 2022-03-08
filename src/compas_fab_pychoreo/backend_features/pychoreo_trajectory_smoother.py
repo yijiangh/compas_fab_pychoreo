@@ -1,7 +1,7 @@
 import pybullet_planning as pp
 
 from compas_fab.robots import JointTrajectory, Duration, JointTrajectoryPoint, Configuration
-from .trajectory_smoother import TrajectorySmoother
+from .feature_base import TrajectorySmoother
 from .pychoreo_configuration_collision_checker import PyChoreoConfigurationCollisionChecker
 from .pychoreo_sweeping_collision_checker import PyChoreoSweepingCollisionChecker
 

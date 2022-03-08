@@ -101,9 +101,8 @@ def test_collision_checker(abb_irb4600_40_255_setup, itj_TC_g1_cms, itj_beam_cm,
 
         LOGGER.debug('attached gripper-obstacle collision - column')
         vals = [-0.33161255787892263, -0.43633231299858238, 0.43633231299858238, -1.0471975511965976, 0.087266462599716474, 0.0]
-        # conf = Configuration(vals, ik_joint_types, ik_joint_names)
-        # client.set_robot_configuration(robot, conf)
-        # wait_if_gui()
+        conf = Configuration(vals, ik_joint_types, ik_joint_names)
+        client.set_robot_configuration(robot, conf)
         assert client.check_collisions(robot, conf, options={'diagnosis':diagnosis})
 
         #* attach beam

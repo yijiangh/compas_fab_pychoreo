@@ -4,7 +4,7 @@ from pybullet_planning import multiply, Pose, Euler
 
 from compas_fab_pychoreo.conversions import pose_from_frame, frame_from_pose
 from compas_fab_pychoreo.utils import is_valid_option
-from compas_fab_pychoreo.backend_features.frame_variant_generator import FrameVariantGenerator
+from compas_fab_pychoreo.backend_features.feature_base import FrameVariantGenerator
 
 # See also: # practical example: https://github.com/gramaziokohler/algorithmic_details/blob/e1d5e24a34738822638a157ca29a98afe05beefd/src/algorithmic_details/accessibility/reachability_map.py#L30
 class PyChoreoFiniteEulerAngleVariantGenerator(FrameVariantGenerator):

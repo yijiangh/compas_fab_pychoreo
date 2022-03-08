@@ -1,6 +1,6 @@
 from itertools import product, combinations
 from pybullet_planning import get_all_links
-from compas_fab_pychoreo.backend_features.configuration_collision_checker import ConfigurationCollisionChecker
+from compas_fab_pychoreo.backend_features.feature_base import ConfigurationCollisionChecker
 from compas_fab_pychoreo.utils import is_valid_option, values_as_list, wildcard_keys
 
 from pybullet_planning import get_custom_limits, joints_from_names, link_from_name, get_collision_fn, joint_from_name

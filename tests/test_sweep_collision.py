@@ -11,6 +11,7 @@ from compas.robots import Joint
 from compas.geometry import Frame, Transformation
 from compas_fab.robots import Configuration, AttachedCollisionMesh, CollisionMesh
 from compas_fab_pychoreo.client import PyChoreoClient
+from compas_fab_pychoreo.conversions import transformation_from_pose
 from compas_fab_pychoreo.utils import is_configurations_close, verify_trajectory, LOGGER
 
 from testing_utils import get_data_path
@@ -24,7 +25,7 @@ from testing_utils import get_data_path
     ('static'),
     ])
 def test_vertices_update(abb_irb4600_40_255_setup, itj_g1_urdf_path, itj_beam_cm,
-        viewer, body_type):
+        viewer, body_type, duck_obj_path):
     with PyChoreoClient(viewer=viewer) as client:
         tool_id = 'g1'
         pp.draw_pose(pp.unit_pose())
@@ -46,6 +47,7 @@ def test_vertices_update(abb_irb4600_40_255_setup, itj_g1_urdf_path, itj_beam_cm
         elif body_type == 'static':
             client.add_collision_mesh(itj_beam_cm)
             body = client._get_collision_object_bodies('^itj_beam_b2$')[0]
+            # body = pp.create_obj(duck_obj_path, scale=1e-3)
 
         # print('initial joint conf: ', pp.get_joint_positions(body, pp.get_movable_joints(body)))
         pp.set_pose(body, pp.Pose(point=(2,0,0)))
@@ -77,7 +79,7 @@ def test_vertices_update(abb_irb4600_40_255_setup, itj_g1_urdf_path, itj_beam_cm
         wait_if_gui('Finish')
 
 @pytest.mark.polyline_collision_check
-def test_polyline_collision_check(abb_irb4600_40_255_setup, itj_TC_g1_cms, itj_beam_cm, column_obstacle_cm, base_plate_cm,
+def test_polyline_collision_check(abb_irb4600_40_255_setup, itj_beam_cm, column_obstacle_cm, base_plate_cm,
     itj_tool_changer_grasp_transf, itj_gripper_grasp_transf, itj_beam_grasp_transf,
     itj_tool_changer_urdf_path, itj_g1_urdf_path,
     viewer, diagnosis):
@@ -172,5 +174,69 @@ def test_polyline_collision_check(abb_irb4600_40_255_setup, itj_TC_g1_cms, itj_b
         wait_if_gui("Finished.")
 
 
-# TODO revolute_joint_tool_polyline_check
-# * gripper (prismatic joint) sublink polyline check when updating tool configuration
+@pytest.mark.polyline_collision_check_rev_joint_tool
+def test_polyline_collision_check_rev_joint_tool(abb_irb4600_40_255_setup, itj_beam_cm, column_obstacle_cm, base_plate_cm,
+    itj_tool_changer_grasp_transf, itj_gripper_grasp_transf, itj_tool_changer_urdf_path,
+    viewer, diagnosis):
+    urdf_filename, semantics = abb_irb4600_40_255_setup
+
+    move_group = 'bare_arm'
+    ee_touched_link_names = ['link_6']
+
+    with PyChoreoClient(viewer=viewer) as client:
+        with LockRenderer():
+            robot = client.load_robot(urdf_filename)
+            robot.semantics = semantics
+            client.disabled_collisions = robot.semantics.disabled_collisions
+
+            client.add_tool_from_urdf('TC', itj_tool_changer_urdf_path)
+            client.add_tool_from_urdf('abb_robot_tool', urdf_filename)
+
+            # * add static obstacles
+            client.add_collision_mesh(base_plate_cm)
+            client.add_collision_mesh(column_obstacle_cm)
+
+        ik_joint_names = robot.get_configurable_joint_names(group=move_group)
+        ik_joint_types = robot.get_joint_types_by_names(ik_joint_names)
+        flange_link_name = robot.get_end_effector_link_name(group=move_group)
+
+        tool0_tf = Transformation.from_frame(client.get_link_frame_from_name(robot, flange_link_name))
+        tool0_from_tool_changer_base = itj_tool_changer_grasp_transf
+        tool0_from_gripper_base = itj_gripper_grasp_transf # transformation_from_pose(pp.unit_pose())
+        client.set_object_frame('^{}'.format('TC'), Frame.from_transformation(tool0_tf*tool0_from_tool_changer_base))
+        client.set_object_frame('^{}'.format('abb_robot_tool'), Frame.from_transformation(tool0_tf*tool0_from_gripper_base))
+
+        names = client._get_collision_object_names('^{}'.format('abb_robot_tool')) + \
+            client._get_collision_object_names('^{}'.format('TC'))
+        for ee_name in names:
+            attach_options = {'robot' : robot}
+            attached_child_link_name = 'toolchanger_base' if 'TC' in ee_name else 'base_link'
+            attach_options.update({'attached_child_link_name' : attached_child_link_name})
+            client.add_attached_collision_mesh(AttachedCollisionMesh(CollisionMesh(None, ee_name),
+                flange_link_name, touch_links=ee_touched_link_names), options=attach_options)
+
+        # client._print_object_summary()
+        # wait_if_gui()
+
+        LOGGER.debug('Sweeping not in collision before updating tool conf')
+        vals = [0.0, -0.78539816339744828, 0.0, 0.0, 0.0, 0.0]
+        conf1 = Configuration(vals, ik_joint_types, ik_joint_names)
+        assert not client.check_collisions(robot, conf1, options={'diagnosis':diagnosis})
+        wait_if_gui()
+
+        vals = [-1.3255775668896934, -0.78539816339744828, 0.0, 0.0, 0.0, 0.0]
+        conf2 = Configuration(vals, ik_joint_types, ik_joint_names)
+        assert not client.check_collisions(robot, conf2, options={'diagnosis':diagnosis})
+        wait_if_gui()
+        assert not client.check_sweeping_collisions(robot, conf1, conf2, options={'diagnosis':diagnosis})
+
+        # * tool (revolute joint) sublink polyline check when updating tool configuration
+        tool_bodies = client._get_bodies('^{}'.format('abb_robot_tool'))
+        tool_vals = [0.0, 1.3264502315156905, 0.0, 0.0, 0.0, 0.0]
+        tool_conf = Configuration.from_revolute_values(tool_vals, ik_joint_names)
+        for b in tool_bodies:
+            client._set_body_configuration(b, tool_conf)
+        wait_if_gui()
+        assert client.check_sweeping_collisions(robot, conf1, conf2, options={'diagnosis':diagnosis})
+
+        wait_if_gui("Finished.")

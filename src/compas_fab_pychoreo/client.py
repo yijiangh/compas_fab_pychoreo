@@ -13,21 +13,16 @@ from pybullet_planning import BASE_LINK, RED, GREY, YELLOW, BLUE
 from pybullet_planning import get_link_pose, link_from_name, get_disabled_collisions, get_all_links
 from pybullet_planning import set_joint_positions
 from pybullet_planning import joints_from_names, get_joint_positions
-from pybullet_planning import set_pose, set_color, get_name, Attachment
-from pybullet_planning import add_fixed_constraint, remove_constraint
-from pybullet_planning import draw_pose, get_pose
+from pybullet_planning import set_pose, set_color, get_name
+from pybullet_planning import get_pose
 from pybullet_planning import draw_collision_diagnosis, expand_links, pairwise_link_collision, pairwise_link_collision_info
 
 from compas_fab.backends import PyBulletClient
 from compas_fab.backends.pybullet.const import ConstraintInfo, STATIC_MASS
 from compas_fab.robots.configuration import Configuration
 
-from compas_fab_pychoreo.utils import wildcard_keys, is_poses_close
-
-from .exceptions import CollisionError
-from .exceptions import InverseKinematicsError
 from .conversions import frame_from_pose, pose_from_transformation, pose_from_frame
-from .utils import values_as_list, LOGGER
+from .utils import values_as_list, LOGGER, wildcard_keys, is_poses_close
 
 class PyChoreoClient(PyBulletClient):
     """Interface to use pybullet as backend via the **pybullet_plannning**.
@@ -75,14 +70,6 @@ class PyChoreoClient(PyBulletClient):
 
     ###########################################################
 
-    def add_collision_mesh(self, collision_mesh, options=None):
-        options = options or {}
-        self.planner.add_collision_mesh(collision_mesh, options=options)
-        color = options.get('color', GREY)
-        name = collision_mesh.id
-        for body in self.collision_objects[name]:
-            set_color(body, color)
-
     def convert_mesh_to_body(self, mesh, frame, _name=None, concavity=False, mass=STATIC_MASS):
         """Convert compas mesh and its frame to a pybullet body.
 
@@ -121,27 +108,6 @@ class PyChoreoClient(PyBulletClient):
         INFO_FROM_BODY[self.client_id, pyb_body_id] = ModelInfo(name=None, path=tmp_obj_path, fixed_base=False, scale=1.0)
         return pyb_body_id
 
-    def remove_collision_mesh(self, id, options=None):
-        """Remove a collision mesh from the planning scene.
-
-        Parameters
-        ----------
-        id : str
-            Name of collision mesh to be removed.
-        options : dict, optional
-            Unused parameter.
-
-        Returns
-        -------
-        ``None``
-        """
-        if id not in self.client.collision_objects:
-            LOGGER.warning("Collision object with name '{}' does not exist in scene.".format(id))
-            return
-
-        for body_id in self.client.collision_objects[id]:
-            pp.remove_body(body_id)
-
     def add_tool_from_urdf(self, tool_name, urdf_file):
         # TODO return compas_fab Tool class
         # TODO we might need to keep track of tools as robots too
@@ -149,120 +115,6 @@ class PyChoreoClient(PyBulletClient):
             tool_robot = load_pybullet(urdf_file, fixed_base=False)
         self.collision_objects[tool_name] = [tool_robot]
         # INFO_FROM_BODY[self.client.client_id, tool_robot] = ModelInfo(tool_name, urdf_file, False, 1.0)
-
-    def add_attached_collision_mesh(self, attached_collision_mesh, options=None):
-        """Adds an attached collision object to the planning scene.
-
-        If no grasp pose is passed in, by default the grasp is set according to the
-        **current** relative pose in the scene. Thus, the robot conf needs to be set to the right values to
-        make the grasp pose right.
-
-        Note: the pybullet fixed constraint only affects physics simulation by adding an artificial force,
-        Thus, by `set_joint_configuration` and `step_simulation`, the attached object will not move together.
-        Thus, we use `pybullet_planning`'s `Attachment` class to simplify kinematics.
-
-        Parameters
-        ----------
-        attached_collision_mesh : :class:`compas_fab.robots.AttachedCollisionMesh`
-
-        Returns
-        -------
-        attachment : a pybullet_planning `Attachment` object
-        """
-        options = options or {}
-        assert 'robot' in options, 'The robot option must be specified!'
-        robot = options['robot']
-        mass = options.get('mass', STATIC_MASS)
-        options['mass'] = mass
-        color = options.get('color', None)
-        attached_child_link_name = options.get('attached_child_link_name', None)
-        parent_link_from_child_link = options.get('parent_link_from_child_link_transformation', None)
-
-        robot_uid = self.get_robot_pybullet_uid(robot)
-        name = attached_collision_mesh.collision_mesh.id
-        attached_bodies = []
-        # ! mimic ROS' behavior: collision object with same name is replaced
-        if name in self.attached_collision_objects:
-            # cprint('Replacing existing attached collision mesh {}'.format(name), 'yellow')
-            self.detach_attached_collision_mesh(name, options=options)
-            # self.remove_attached_collision_mesh(name, options=options)
-        if name not in self.collision_objects:
-            # ! I don't want to add another copy of the objects
-            # self.planner.add_attached_collision_mesh(attached_collision_mesh, options=options)
-            # attached_bodies = [constr.body_id for constr in self.attached_collision_objects[name]]
-            self.planner.add_collision_mesh(attached_collision_mesh.collision_mesh, options=options)
-
-        attached_bodies = self.collision_objects[name]
-        del self.collision_objects[name]
-        self.attached_collision_objects[name] = []
-
-        tool_attach_link = link_from_name(robot_uid, attached_collision_mesh.link_name)
-        for body in attached_bodies:
-            # TODO let user choose to include the direct touch link collision or not
-            # * update attachment collision links
-            for touched_link_name in attached_collision_mesh.touch_links:
-                self.extra_disabled_collision_links[name].add(
-                    ((robot_uid, touched_link_name), (body, None))
-                    )
-            links = get_all_links(body)
-            if color:
-                for link in links:
-                    set_color(body, color, link=link)
-            attach_child_link = BASE_LINK if not attached_child_link_name else link_from_name(body, attached_child_link_name)
-            if not parent_link_from_child_link:
-                # * create attachment based on their *current* pose
-                attachment = pp.create_attachment(robot_uid, tool_attach_link, body, attach_child_link)
-            else:
-                # * create attachment based on a given grasp transformation
-                grasp_pose = pose_from_transformation(parent_link_from_child_link)
-                attachment = Attachment(robot_uid, tool_attach_link, grasp_pose, body)
-
-            parent_link_pose = pp.get_link_pose(robot_uid, tool_attach_link)
-            attached_body_pose = pp.get_link_pose(body, attach_child_link)
-            if is_poses_close(parent_link_pose, attached_body_pose, options=options):
-                attachment.assign()
-            # else:
-            #     LOGGER.warning('Attaching {} (link {}) to robot link {}, but they are not in the same pose in pybullet scene.'.format(name, attached_child_link_name if attached_child_link_name else 'BASE_LINK',
-            #                attached_collision_mesh.link_name))
-
-            self.pychoreo_attachments[name].append(attachment)
-            # create fixed constraint to conform to PybulletClient (we don't use it though)
-            constraint_id = add_fixed_constraint(attachment.child, attachment.parent, attachment.parent_link)
-            constraint_info = ConstraintInfo(constraint_id, attachment.child, attachment.parent)
-            self.attached_collision_objects[name].append(constraint_info)
-
-        return self.pychoreo_attachments[name]
-
-    def remove_attached_collision_mesh(self, name, options=None):
-        # ! Remove and detach, ambiguity?
-        # self.planner.remove_attached_collision_mesh(name, options=options)
-        wildcard = options.get('wildcard') or '^{}$'.format(name)
-        names = wildcard_keys(self.pychoreo_attachments, wildcard)
-        for name in names:
-            del self.attached_collision_objects[name]
-            del self.pychoreo_attachments[name]
-            del self.extra_disabled_collision_links[name]
-
-    def detach_attached_collision_mesh(self, name, options=None):
-        # detach attached collision mesh, and leave them in the world as collision objects
-        wildcard = options.get('wildcard') or '^{}$'.format(name)
-        names = wildcard_keys(self.pychoreo_attachments, wildcard)
-        if len(names) == 0:
-            LOGGER.warning('No attachment with name {} found.'.format(name), 'yellow')
-            return None
-        detached_attachments = []
-        for name in names:
-            attachments = self.pychoreo_attachments[name]
-            detached_attachments.extend(attachments)
-            # * add detached attachments to collision_objects
-            self.collision_objects[name] = [at.child for at in attachments]
-            for constraint_info in self.attached_collision_objects[name]:
-                if constraint_info.constraint_id in pp.get_constraints():
-                    remove_constraint(constraint_info.constraint_id)
-            del self.attached_collision_objects[name]
-            del self.pychoreo_attachments[name]
-            del self.extra_disabled_collision_links[name]
-        return detached_attachments
 
     ########################################
     # Collision / Attached pybullet body managment
@@ -355,7 +207,7 @@ class PyChoreoClient(PyBulletClient):
         LOGGER.info('Attachments:')
         for name, attachments in self.pychoreo_attachments.items():
             LOGGER.info('\t{}: {}'.format(name, [at.child for at in attachments]))
-        LOGGER.debug('Extra disabled collision links:')
+        LOGGER.info('Extra disabled collision links:')
         for name, blink_pairs in self.extra_disabled_collision_links.items():
             LOGGER.info('\t{}:'.format(name))
             for (b1,l1_name), (b2,l2_name) in blink_pairs:
