@@ -2,7 +2,7 @@ import pybullet_planning as pp
 from .feature_base import DetachAttachedCollisionMesh
 from ..utils import wildcard_keys, LOGGER
 
-class PychoreoDetachAttachedCollisionMesh(DetachAttachedCollisionMesh):
+class PyChoreoDetachAttachedCollisionMesh(DetachAttachedCollisionMesh):
     """Callable to detach an attached collision mesh from the robot."""
     def __init__(self, client):
         self.client = client

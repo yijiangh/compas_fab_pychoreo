@@ -118,6 +118,9 @@ class PyChoreoClient(PyBulletClient):
 
     ########################################
     # Collision / Attached pybullet body managment
+    def detach_attached_collision_mesh(self, name, options=None):
+        self.planner.detach_attached_collision_mesh(name, options=options)
+
     def get_object_names_and_status(self, wildcard):
         status = self._get_body_status(wildcard)
         if status == 'collision_object':

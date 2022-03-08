@@ -10,6 +10,7 @@ from .backend_features.pychoreo_add_attached_collision_mesh import PyChoreoAddAt
 from .backend_features.pychoreo_remove_attached_collision_mesh import PyChoreoRemoveAttachedCollisionMesh
 from .backend_features.pychoreo_add_collision_mesh import PyChoreoAddCollisionMesh
 from .backend_features.pychoreo_remove_collision_mesh import PyBulletRemoveCollisionMesh
+from .backend_features.pychoreo_detach_attached_collision_mesh import PyChoreoDetachAttachedCollisionMesh
 
 from .backend_features.pychoreo_configuration_collision_checker import PyChoreoConfigurationCollisionChecker
 from .backend_features.pychoreo_sweeping_collision_checker import PyChoreoSweepingCollisionChecker
@@ -63,3 +64,6 @@ class PyChoreoPlanner(PlannerInterface):
 
     def remove_attached_collision_mesh(self, *args, **kwargs):
         return PyChoreoRemoveAttachedCollisionMesh(self.client)(*args, **kwargs)
+
+    def detach_attached_collision_mesh(self, *args, **kwargs):
+        return PyChoreoDetachAttachedCollisionMesh(self.client)(*args, **kwargs)

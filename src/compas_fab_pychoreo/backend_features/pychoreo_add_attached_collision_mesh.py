@@ -43,7 +43,7 @@ class PyChoreoAddAttachedCollisionMesh(AddAttachedCollisionMesh):
         # ! mimic ROS' behavior: collision object with same name is replaced
         if name in self.client.attached_collision_objects:
             # cprint('Replacing existing attached collision mesh {}'.format(name), 'yellow')
-            self.client.detach_attached_collision_mesh(name, options=options)
+            self.client.planner.detach_attached_collision_mesh(name, options=options)
             # self.remove_attached_collision_mesh(name, options=options)
         if name not in self.client.collision_objects:
             # ! I don't want to add another copy of the objects
