@@ -18,31 +18,34 @@ from testing_utils import get_data_path
 
 @pytest.mark.clone_body
 @pytest.mark.parametrize("body_type", [
+    ('gripper'),
+    ('screwdriver'),
     ('robot'),
-    ('tool'),
     ('obj'),
     ('stl'),
     ])
-def test_clone_body(abb_irb4600_40_255_setup, itj_g1_urdf_path, itj_beam_cm, itj_beam_cm_from_stl,
+def test_clone_body(abb_irb4600_40_255_setup, itj_g1_urdf_path, itj_beam_cm, itj_beam_cm_from_stl, itj_s1_urdf_path,
         viewer, body_type):
     with PyChoreoClient(viewer=viewer, verbose=False) as client:
         pp.draw_pose(pp.unit_pose())
 
-        if body_type == 'tool':
+        copy_links = None # means all links will be copied
+        if body_type == 'gripper':
             tool_id = 'g1'
             client.add_tool_from_urdf(tool_id, itj_g1_urdf_path)
             body = client._get_bodies('^{}$'.format(tool_id))[0]
-            conf = Configuration([0.01, 0.01], [Joint.PRISMATIC, Joint.PRISMATIC],
-                ["joint_gripper_jaw_l", "joint_gripper_jaw_r"])
+            copy_links = [pp.link_from_name(body, name) for name in ["gripper_jaw_l"]]
+        elif body_type == 'screwdriver':
+            tool_id = 's1'
+            client.add_tool_from_urdf(tool_id, itj_s1_urdf_path)
+            body = client._get_bodies('^{}$'.format(tool_id))[0]
+            copy_links = [pp.link_from_name(body, 'gripper_base')]
+            # copy_links = [pp.link_from_name(body, name) for name in ['screwdriver_screw']]
         elif body_type == 'robot':
             urdf_filename, _ = abb_irb4600_40_255_setup
             robot = client.load_robot(urdf_filename)
             body = client.get_robot_pybullet_uid(robot)
-
-            ik_joint_names = robot.get_configurable_joint_names(group='bare_arm')
-            ik_joint_types = robot.get_joint_types_by_names(ik_joint_names)
-            vals = [0.1,0,0,0,0,0]
-            conf = Configuration(joint_values=vals, joint_types=ik_joint_types, joint_names=ik_joint_names)
+            copy_links = [pp.link_from_name(body, 'link_4')]
         elif body_type == 'obj':
             client.add_collision_mesh(itj_beam_cm)
             body = client._get_collision_object_bodies('^itj_beam_b2$')[0]
@@ -50,10 +53,18 @@ def test_clone_body(abb_irb4600_40_255_setup, itj_g1_urdf_path, itj_beam_cm, itj
             client.add_collision_mesh(itj_beam_cm_from_stl)
             body = client._get_collision_object_bodies('^itj_beam_b2$')[0]
 
+        # * full body clone
         cloned_body = pp.clone_body(body, collision=True, visual=False)
-        # LOGGER.info(f'collision body cloned {cloned_body}')
+        # LOGGER.info(f'full collision body cloned {cloned_body}')
         pp.set_pose(cloned_body, pp.Pose(point=(2,0,0)))
         pp.set_color(cloned_body, pp.RED)
+
+        # * partial body clone
+        if copy_links:
+            cloned_body = pp.clone_body(body, links=copy_links, collision=True, visual=False)
+            # LOGGER.info(f'partial collision body cloned {cloned_body}')
+            pp.set_pose(cloned_body, pp.Pose(point=(4,0,0)))
+            pp.set_color(cloned_body, pp.BLUE)
 
         # cloned_body = pp.clone_body(body, collision=False, visual=True)
         # # LOGGER.info(f'visual body cloned {cloned_body}')
