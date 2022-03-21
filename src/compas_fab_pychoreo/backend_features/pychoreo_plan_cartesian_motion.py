@@ -1,19 +1,11 @@
-from compas_fab.backends.ros.fileserver_loader import LOGGER
 import numpy as np
-import time
-import math
-from pybullet_planning.interfaces.env_manager.user_io import wait_for_user
-from pybullet_planning.interfaces.robots.body import dump_body
-from termcolor import cprint
-from compas_fab.robots import Configuration, JointTrajectory, JointTrajectoryPoint, Duration, robot
-from compas.robots import Joint
+import pybullet_planning as pp
+from compas_fab.robots import JointTrajectory, JointTrajectoryPoint, Duration
 from compas.geometry import distance_point_point
 from compas_fab.backends.interfaces import PlanCartesianMotion
-from compas_fab.backends.interfaces import InverseKinematics
-from compas_fab.backends.pybullet.utils import redirect_stdout
 
 from compas_fab_pychoreo.conversions import pose_from_frame, frame_from_pose
-from compas_fab_pychoreo.utils import is_valid_option, values_as_list, is_configurations_close, is_poses_close, is_frames_close
+from compas_fab_pychoreo.utils import is_valid_option, values_as_list, is_configurations_close, is_poses_close, is_frames_close, LOGGER
 from compas_fab_pychoreo.backend_features.pychoreo_configuration_collision_checker import PyChoreoConfigurationCollisionChecker
 from pybullet_planning import WorldSaver, joints_from_names, joint_from_name, \
     link_from_name, interpolate_poses, plan_cartesian_motion_lg, get_labeled_configuration
@@ -34,7 +26,7 @@ def create_sub_robot(robot, first_joint, target_link):
     return sub_robot, selected_joints, sub_target_link
 
 def plan_cartesian_motion_from_links(robot, selected_links, target_link, waypoint_poses,
-        max_iterations=200, custom_limits={}, get_sub_conf=False, options=None):
+        max_iterations=10, custom_limits={}, get_sub_conf=False, options=None, attachments=None):
     """Plan a cartesian path using iterative pybullet IK"""
     options = options or {}
     lower_limits, upper_limits = get_custom_limits(robot, get_movable_joints(robot), custom_limits)
@@ -43,31 +35,61 @@ def plan_cartesian_motion_from_links(robot, selected_links, target_link, waypoin
     selected_target_link = selected_links.index(target_link)
     sub_robot = clone_body(robot, links=selected_links, visual=False, collision=False) # TODO: joint limits
     sub_movable_joints = get_movable_joints(sub_robot)
-    #null_space = get_null_space(robot, selected_movable_joints, custom_limits=custom_limits)
+
+    movable_joint_names = [pp.get_joint_name(robot, j) for j in get_movable_joints(robot)]
     null_space = None
+    # for link_name, ll, ul in zip(movable_joint_names, lower_limits, upper_limits):
+    #     LOGGER.info(f'{link_name} | lower_limit {ll} | upper_limit {ul}')
+    # null_space = pp.get_null_space(robot, selected_movable_joints, custom_limits=custom_limits)
+    # LOGGER.info(f'nullspace : {null_space}')
 
     solutions = []
-    for target_pose in waypoint_poses:
+    for pose_id, target_pose in enumerate(waypoint_poses):
         for iteration in range(max_iterations):
+            # sub_kinematic_conf0 = inverse_kinematics_helper(sub_robot, selected_target_link, target_pose, null_space=null_space)
+            # if sub_kinematic_conf0 is None:
+            #     remove_body(sub_robot)
+            #     LOGGER.debug(f'Iterative IK Failed at iter{iteration}: no ik solution found')
+            #     return None
+            #     # continue
+            # set_joint_positions(sub_robot, sub_movable_joints, sub_kinematic_conf0)
+
             sub_kinematic_conf = inverse_kinematics_helper(sub_robot, selected_target_link, target_pose, null_space=null_space)
             if sub_kinematic_conf is None:
                 remove_body(sub_robot)
+                LOGGER.debug(f'Iterative IK Failed at pose#{pose_id}: no ik solution found')
                 return None
-                # continue
             set_joint_positions(sub_robot, sub_movable_joints, sub_kinematic_conf)
-            # pos_tolerance=1e-3, ori_tolerance=1e-3*np.pi
+
             if is_poses_close(get_link_pose(sub_robot, selected_target_link), target_pose, options=options):
                 set_joint_positions(robot, selected_movable_joints, sub_kinematic_conf)
+
+                # for attachment in attachments:
+                #     attachment.assign()
+                # pp.wait_if_gui(f'{iteration}) - pose {pose_id}/{len(waypoint_poses)}')
+
                 kinematic_conf = get_configuration(robot)
                 if not all_between(lower_limits, kinematic_conf, upper_limits):
+                    LOGGER.debug(f'Iterative IK Failed at pose#{pose_id}: limit violated')
+                    cr = np.less(kinematic_conf, lower_limits), np.less(upper_limits, kinematic_conf)
+                    # LOGGER.warning('joint limit violation : {} / {}'.format(cr[0], cr[1]))
+                    for i, (cr_l, cr_u) in enumerate(zip(cr[0], cr[1])):
+                        if cr_l:
+                            LOGGER.debug('J{} ({}): {} < lower limit {}'.format(i, movable_joint_names[i],
+                                kinematic_conf[i], lower_limits[i]))
+                        if cr_u:
+                            LOGGER.debug('J{} ({}): {} > upper limit {}'.format(i, movable_joint_names[i],
+                                kinematic_conf[i], upper_limits[i]))
                     remove_body(sub_robot)
                     return None
+
                 if not get_sub_conf:
                     solutions.append(kinematic_conf)
                 else:
                     solutions.append(sub_kinematic_conf)
                 break
         else:
+            LOGGER.debug(f'Iterative IK Failed at iter{iteration}: exhaustion')
             remove_body(sub_robot)
             return None
     remove_body(sub_robot)
@@ -229,7 +251,7 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
                 selected_links = [link_from_name(robot_uid, l) for l in robot.get_link_names(group=group)]
                 if customized_ikinfo is None:
                     path = plan_cartesian_motion_from_links(robot_uid, selected_links, tool_link,
-                        ee_poses, custom_limits=pb_custom_limits, get_sub_conf=False, options=options)
+                        ee_poses, custom_limits=pb_custom_limits, get_sub_conf=False, options=options, attachments=attachments)
                 else:
                     assert tool_link_name == customized_ikinfo.ee_link_name
                     path = plan_cartesian_motion_with_customized_ik(robot_uid, customized_ikinfo, ee_poses,
@@ -278,7 +300,7 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
 
         if path is None:
             if verbose:
-                LOGGER.debug('No Cartesian motion found, due to {}!'.format(failure_reason))
+                LOGGER.debug('No Cartesian motion found using {} planner, due to {}!'.format(planner_id, failure_reason))
             return None
         else:
             # TODO start_conf might have different number of joints with the given group?

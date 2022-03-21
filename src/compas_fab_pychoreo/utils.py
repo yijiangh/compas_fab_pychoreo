@@ -156,12 +156,12 @@ def is_poses_close(pose0, pose1, options=None):
     R1 = pp.matrix_from_quat(quat1)
     if pp.get_distance(point0, point1) > frame_compare_distance_tolerance:
         if verbose:
-            LOGGER.warning("Point distance: {:.6f} m | tol: {:.6f}".format(pp.get_distance(point0, point1), frame_compare_distance_tolerance))
+            LOGGER.warning("is_poses_close: frame coordinate origin distance: {:.6f} m | tol: {:.6f}".format(pp.get_distance(point0, point1), frame_compare_distance_tolerance))
         return False
     for i in range(3):
         if pp.angle_between(R0[:,i], R1[:,i]) > frame_compare_axis_angle_tolerance:
             if verbose:
-                LOGGER.warning("Axis {} angle: {:.6f} | tol: {:.6f}".format(i, pp.angle_between(R0[:,i], R1[:,i]), frame_compare_axis_angle_tolerance))
+                LOGGER.warning("is_poses_close: frame coordinate axis {} angle: {:.6f} | tol: {:.6f}".format(i, pp.angle_between(R0[:,i], R1[:,i]), frame_compare_axis_angle_tolerance))
             return False
     return True
 
