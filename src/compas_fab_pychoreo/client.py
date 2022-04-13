@@ -205,8 +205,7 @@ class PyChoreoClient(PyBulletClient):
         LOGGER.info('PychoreoClient scene summary:')
         body_name_from_id = self._name_from_body_id
         LOGGER.info('Collision Objects:')
-        for name, bodies in self.collision_objects.items():
-            LOGGER.info('\t{}: {}'.format(name, bodies))
+        LOGGER.info('\t{}'.format(['{}: {}'.format(name, bodies) for name, bodies in self.collision_objects.items()]))
         LOGGER.info('Attachments:')
         for name, attachments in self.pychoreo_attachments.items():
             LOGGER.info('\t{}: {}'.format(name, [at.child for at in attachments]))
@@ -370,6 +369,7 @@ def _check_bodies_collisions(moving_bodies : list, obstacles : list,
     for (body1, link1), (body2, link2) in check_body_link_pairs:
         if pairwise_link_collision(body1, link1, body2, link2, **kwargs):
             if diagnosis:
+                LOGGER.debug('check_attachment_collisions:')
                 cr = pairwise_link_collision_info(body1, link1, body2, link2)
                 draw_collision_diagnosis(cr, body_name_from_id=body_name_from_id)
             return True

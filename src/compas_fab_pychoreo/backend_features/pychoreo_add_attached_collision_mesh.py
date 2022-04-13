@@ -78,6 +78,7 @@ class PyChoreoAddAttachedCollisionMesh(AddAttachedCollisionMesh):
 
             parent_link_pose = pp.get_link_pose(robot_uid, tool_attach_link)
             attached_body_pose = pp.get_link_pose(body, attach_child_link)
+            # ! only update attachment pose when two bodies are close
             if is_poses_close(parent_link_pose, attached_body_pose, options=options):
                 attachment.assign()
             # else:
