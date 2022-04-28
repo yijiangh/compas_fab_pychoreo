@@ -68,6 +68,8 @@ class PyChoreoInverseKinematics(InverseKinematics):
         pb_custom_limits = {joint_from_name(robot_uid, joint_name) : lims \
             for joint_name, lims in joint_custom_limits.items()}
 
+        # ! no need to do robot_base_link transformation or flaneg_from_tool transformation here
+        # since the robot is cloned in place and pybullet handles those. We can directly feed in world_pose here
         target_pose = pose_from_frame(frame_WCF)
         with WorldSaver():
             if start_configuration is not None:
@@ -125,6 +127,6 @@ class PyChoreoInverseKinematics(InverseKinematics):
             remove_body(sub_robot)
             return []
         remove_body(sub_robot)
-        conf = [kinematic_conf[i] for i, jt in enumerate(selected_movable_joints) if jt in ik_joints]
+        conf = [kinematic_conf[i] for i, jt in enumerate(get_movable_joints(robot_uid)) if jt in ik_joints]
         # TODO in RFL case, the base_link will give us 17 joint, needs some pruning according to the ik_joints
         return [conf]
