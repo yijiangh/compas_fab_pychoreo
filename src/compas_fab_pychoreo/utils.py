@@ -5,10 +5,12 @@ from collections.abc import Iterable
 import numpy as np
 from copy import copy
 
+from compas_fab.robots import Configuration
 from compas.utilities import DataDecoder, DataEncoder
 import pybullet_planning as pp
 from pybullet_planning.interfaces.env_manager.user_io import wait_if_gui
 from .conversions import pose_from_frame
+from .backend_features.pychoreo_dense_sample_sweep_collision_checker import PyChoreoDenseSampleSweepingCollisionChecker
 
 ###########################################
 # borrowed from: https://github.com/compas-dev/compas_fab/blob/3efe608c07dc5b08653ee4132a780a3be9fb93af/src/compas_fab/backends/pybullet/utils.py#L83
@@ -75,6 +77,20 @@ def wildcard_keys(data, wildcard):
     return matched_keys
 
 ############################################
+
+def align_configurations(configuration_1: Configuration, configuration_2: Configuration):
+    """merge two configurations based on their joint name set inclusiveness."""
+    if configuration_1.joint_names != configuration_2.joint_names:
+        _conf1 = configuration_1.copy()
+        _conf2 = configuration_2.copy()
+        if configuration_1.joint_names < configuration_2.joint_names:
+            _conf1 = _conf2.merged(_conf1)
+        else:
+            _conf2 = _conf1.merged(_conf2)
+    else:
+        _conf1 = configuration_1
+        _conf2 = configuration_2
+    return _conf1, _conf2
 
 def is_configurations_close(conf1, conf2, options=None, fallback_tol=1e-3, report_when_close=True):
     """Compare configurations using different tolerances for different joints.
@@ -241,13 +257,21 @@ def verify_trajectory(client, robot, trajectory, options=None):
                 if polyline_collision:
                     LOGGER.warning('polyline collision: trajectory point #{}/{}'.format(conf_id,
                         len(trajectory.points)))
-                    # print('prev conf: ', prev_conf.joint_values)
-                    # print('curr conf: ', jpt.joint_values)
                     if failed_trajectory_save_filepath:
                         _save_trajectory(trajectory, failed_trajectory_save_filepath+f'_polyline-collision_seed_{seed}.json')
                     if fail_fast:
                         return False, 'traj_polyline_collision'
                     failure_reasons.append('traj_polyline_collision')
+
+                dense_convex_hull_collision = PyChoreoDenseSampleSweepingCollisionChecker(client)(robot, prev_conf, jpt, options=check_options)
+                if dense_convex_hull_collision:
+                    LOGGER.warning('dense sampled convex hull collision: trajectory point #{}/{}'.format(conf_id,
+                        len(trajectory.points)))
+                    if failed_trajectory_save_filepath:
+                        _save_trajectory(trajectory, failed_trajectory_save_filepath+f'_dense-convhull-collision_seed_{seed}.json')
+                    if fail_fast:
+                        return False, 'traj_dense_convex_hull_collision'
+                    failure_reasons.append('traj_dense_convex_hull_collision')
 
             # * check for configuration duplication
             if is_configurations_close(jpt, prev_conf, options=options):

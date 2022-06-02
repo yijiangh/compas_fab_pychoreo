@@ -267,6 +267,7 @@ class PyChoreoClient(PyBulletClient):
 
     def check_sweeping_collisions(self, *args, **kwargs):
         """Check collisions between the sweeping polylines of attached objects' vertices and the obstacles in the scene.
+        No Robot links are checked here!
         """
         return self.planner.check_sweeping_collisions(*args, **kwargs)
 

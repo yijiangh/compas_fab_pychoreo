@@ -4,7 +4,7 @@ from collections import defaultdict
 from itertools import product, combinations
 
 from .feature_base import SweepingCollisionChecker
-from ..utils import LOGGER
+from ..utils import LOGGER, align_configurations
 from ..client import PyChoreoClient
 
 import pybullet_planning as pp
@@ -87,6 +87,7 @@ class PyChoreoSweepingCollisionChecker(SweepingCollisionChecker):
 
     def check_sweeping_collisions(self, robot, configuration_1=None, configuration_2=None, options=None):
         """Check collisions between the sweeping polylines of attached objects' vertices and the obstacles in the scene.
+        This DOES NOT check for robot bodies, ONLY the attached objects.
 
         Parameters
         ----------
@@ -94,12 +95,9 @@ class PyChoreoSweepingCollisionChecker(SweepingCollisionChecker):
         group: str, optional
         options : dict, optional
             Dictionary containing the following key-value pairs:
-            - "self_collisions": bool, set to True if checking self collisions of the robot, defaults to True
-            - "collision_object_wildcards": list of str, to check against a subset of collision objects, not everything
-                in the scene. Each entry of the list is a wildcard rule, learn more at:
-                    https://docs.python.org/3/library/re.html
-                Example: exact name match: `"^{}$".format(object_name)`
-                         partial name match: `"^{}_".format(object_name)` for all objects with the name "object_name_*"
+            - "sweeping_collision_fn": function handle for the sweep_collision_fn, this is only for reusing the same
+            sweep_collision_fn to avoid some computation overhead. Can be constructred by `self._get_sweeping_collision_fn`.
+            Default to None, meaning that a new sweeping_collision_fn is constructed every time the function is called.
 
         Returns
         -------
@@ -108,16 +106,7 @@ class PyChoreoSweepingCollisionChecker(SweepingCollisionChecker):
         """
         options = options or {}
         diagnosis = options.get('diagnosis', False)
-        if configuration_1.joint_names != configuration_2.joint_names:
-            _conf1 = configuration_1.copy()
-            _conf2 = configuration_2.copy()
-            if configuration_1.joint_names < configuration_2.joint_names:
-                _conf1 = _conf2.merged(_conf1)
-            else:
-                _conf2 = _conf1.merged(_conf2)
-        else:
-            _conf1 = configuration_1
-            _conf2 = configuration_2
+        _conf1, _conf2 = align_configurations()
         sweeping_collision_fn = options.get('sweeping_collision_fn',
             self._get_sweeping_collision_fn(robot, _conf1.joint_names, options)) # for reusing sweeping function
         return sweeping_collision_fn(_conf1.joint_values, _conf2.joint_values, diagnosis=diagnosis)
