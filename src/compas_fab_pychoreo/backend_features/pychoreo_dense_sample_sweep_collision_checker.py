@@ -37,6 +37,7 @@ class PyChoreoDenseSampleSweepingCollisionChecker(SweepingCollisionChecker):
         """
         options = options or {}
         _conf1, _conf2 = align_configurations(configuration_1, configuration_2)
+        diagnosis = options.get('diagnosis', False)
         num_steps = options.get('dense_sample_sweeping_check_num_steps', 5)
 
         robot_uid = self.client.get_robot_pybullet_uid(robot)
@@ -46,5 +47,5 @@ class PyChoreoDenseSampleSweepingCollisionChecker(SweepingCollisionChecker):
 
         collision_fn = options.get('collision_fn', PyChoreoConfigurationCollisionChecker(self.client)._get_collision_fn(robot, joint_names, options=options))
         path = pp.direct_path(_conf1.joint_values, _conf2.joint_values, refine_fn, collision_fn, \
-            sweep_collision_fn=None)
+            diagnosis=diagnosis, sweep_collision_fn=None)
         return path is None

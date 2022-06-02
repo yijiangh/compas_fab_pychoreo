@@ -10,7 +10,6 @@ from compas.utilities import DataDecoder, DataEncoder
 import pybullet_planning as pp
 from pybullet_planning.interfaces.env_manager.user_io import wait_if_gui
 from .conversions import pose_from_frame
-from .backend_features.pychoreo_dense_sample_sweep_collision_checker import PyChoreoDenseSampleSweepingCollisionChecker
 
 ###########################################
 # borrowed from: https://github.com/compas-dev/compas_fab/blob/3efe608c07dc5b08653ee4132a780a3be9fb93af/src/compas_fab/backends/pybullet/utils.py#L83
@@ -219,6 +218,8 @@ def verify_trajectory(client, robot, trajectory, options=None):
 
     from compas_fab_pychoreo.backend_features.pychoreo_configuration_collision_checker import PyChoreoConfigurationCollisionChecker
     from compas_fab_pychoreo.backend_features.pychoreo_sweeping_collision_checker import PyChoreoSweepingCollisionChecker
+    from compas_fab_pychoreo.backend_features.pychoreo_dense_sample_sweep_collision_checker import PyChoreoDenseSampleSweepingCollisionChecker
+
     # * for reusing collision_fn to speed up computation
     check_options = options.copy()
     check_options['collision_fn'] = PyChoreoConfigurationCollisionChecker(client)._get_collision_fn(robot, trajectory.points[0].joint_names, options)

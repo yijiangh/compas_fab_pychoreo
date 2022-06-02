@@ -106,7 +106,7 @@ class PyChoreoSweepingCollisionChecker(SweepingCollisionChecker):
         """
         options = options or {}
         diagnosis = options.get('diagnosis', False)
-        _conf1, _conf2 = align_configurations()
+        _conf1, _conf2 = align_configurations(configuration_1, configuration_2)
         sweeping_collision_fn = options.get('sweeping_collision_fn',
             self._get_sweeping_collision_fn(robot, _conf1.joint_names, options)) # for reusing sweeping function
         return sweeping_collision_fn(_conf1.joint_values, _conf2.joint_values, diagnosis=diagnosis)
