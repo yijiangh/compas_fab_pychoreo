@@ -39,13 +39,22 @@ class PyChoreoDenseSampleSweepingCollisionChecker(SweepingCollisionChecker):
         _conf1, _conf2 = align_configurations(configuration_1, configuration_2)
         diagnosis = options.get('diagnosis', False)
         num_steps = options.get('dense_sample_sweeping_check_num_steps', 5)
+        skip_start_end = options.get('dense_sample_skip_start_end', False)
+        if num_steps < 1:
+            # featured turned off in this case
+            return False
 
         robot_uid = self.client.get_robot_pybullet_uid(robot)
         joint_names = _conf1.joint_names
         joints = joints_from_names(robot_uid, joint_names)
         refine_fn = pp.get_refine_fn(robot_uid, joints, num_steps=num_steps)
-
         collision_fn = options.get('collision_fn', PyChoreoConfigurationCollisionChecker(self.client)._get_collision_fn(robot, joint_names, options=options))
-        path = pp.direct_path(_conf1.joint_values, _conf2.joint_values, refine_fn, collision_fn, \
-            diagnosis=diagnosis, sweep_collision_fn=None)
-        return path is None
+
+        start = _conf1.joint_values
+        goal = _conf2.joint_values
+        if not skip_start_end and (collision_fn(start, diagnosis=diagnosis) or collision_fn(goal, diagnosis=diagnosis)):
+            return True
+        path = list(refine_fn(start, goal))[1:-1]
+        if any(collision_fn(q, diagnosis=diagnosis) for q in pp.default_selector(path)):
+            return True
+        return False
