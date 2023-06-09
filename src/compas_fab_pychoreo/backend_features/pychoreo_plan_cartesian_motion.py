@@ -360,7 +360,7 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
         return pruned_conf
 
     def _get_sample_ik_fn(self, robot, ik_options=None):
-        LOGGER.debug('Ladder graph using client default IK solver.', 'yellow')
+        LOGGER.debug('Ladder graph using client default IK solver.')
         ik_options = ik_options or {}
         def sample_ik_fn(pose):
             # pb pose -> list(conf values)
