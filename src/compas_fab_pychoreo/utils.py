@@ -6,7 +6,7 @@ import numpy as np
 from copy import copy
 
 from compas_fab.robots import Configuration
-from compas.utilities import DataDecoder, DataEncoder
+from compas.data import DataDecoder, DataEncoder
 import pybullet_planning as pp
 from pybullet_planning.interfaces.env_manager.user_io import wait_if_gui
 from .conversions import pose_from_frame

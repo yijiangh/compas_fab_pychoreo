@@ -3,7 +3,7 @@ import json
 
 from pybullet_planning import wait_if_gui, LockRenderer
 
-from compas.utilities import DataDecoder
+from compas.data import DataDecoder
 from compas.geometry import Frame, Transformation
 from compas.robots import Joint
 from compas_fab.robots import Configuration, AttachedCollisionMesh, CollisionMesh

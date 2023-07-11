@@ -4,7 +4,7 @@ import json
 
 from pybullet_planning import multiply, Pose, Euler
 
-from compas.utilities import DataDecoder, DataEncoder
+from compas.data import DataDecoder, DataEncoder
 from compas_fab_pychoreo.utils import is_configurations_close
 
 ####################################################
