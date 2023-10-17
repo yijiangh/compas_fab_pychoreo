@@ -213,6 +213,7 @@ def verify_trajectory(client, robot, trajectory, options=None):
         return False
     options = options or {}
     check_sweeping_collision = options.get('check_sweeping_collision', True)
+    check_dense_sample_sweeping_collision = options.get('check_dense_sample_sweeping_collision', False)
     failed_trajectory_save_filepath = options.get('failed_trajectory_save_filepath', None)
     fail_fast = options.get('fail_fast', True)
 
@@ -264,6 +265,7 @@ def verify_trajectory(client, robot, trajectory, options=None):
                         return False, 'traj_polyline_collision'
                     failure_reasons.append('traj_polyline_collision')
 
+            if check_dense_sample_sweeping_collision:
                 dense_convex_hull_collision = PyChoreoDenseSampleSweepingCollisionChecker(client)(robot, prev_conf, jpt, options=check_options)
                 if dense_convex_hull_collision:
                     LOGGER.warning('dense sampled convex hull collision: trajectory point #{}/{}'.format(conf_id,

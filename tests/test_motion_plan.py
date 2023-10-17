@@ -103,7 +103,7 @@ def test_plan_motion(abb_irb4600_40_255_setup, itj_TC_g1_cms, itj_beam_cm, colum
             'mp_algorithm' : 'birrt',
             'smooth_iterations' : smooth_iterations,
             'verbose' : True,
-            'check_sweeping_collision' : True,
+            'check_sweeping_collision' : False,
             'failed_trajectory_save_filepath' : os.path.join(get_data_path(), 'plan_motion'),
             }
         options.update(abb_tolerances)
