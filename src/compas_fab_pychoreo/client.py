@@ -249,6 +249,11 @@ class PyChoreoClient(PyBulletClient):
         robot_uid = self.get_robot_pybullet_uid(robot)
         return frame_from_pose(get_link_pose(robot_uid, link_from_name(robot_uid, link_name)))
 
+    def set_tool_configuration(self, tool_name, configuration):
+        tool_bodies = client._get_bodies('^{}$'.format(tool_name))
+        for tool_body in tool_bodies:
+            client._set_body_configuration(tool_body, configuration)
+
     ###########################################################
 
     def check_collisions(self, *args, **kwargs):
