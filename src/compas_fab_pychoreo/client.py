@@ -9,7 +9,6 @@ from itertools import combinations
 import numpy as np
 import pybullet_planning as pp
 from pybullet_planning import HideOutput, CLIENTS, load_pybullet, INFO_FROM_BODY, ModelInfo
-from pybullet_planning import BASE_LINK, RED, GREY, YELLOW, BLUE
 from pybullet_planning import get_link_pose, link_from_name, get_disabled_collisions, get_all_links
 from pybullet_planning import set_joint_positions
 from pybullet_planning import joints_from_names, get_joint_positions
@@ -18,11 +17,11 @@ from pybullet_planning import get_pose
 from pybullet_planning import draw_collision_diagnosis, expand_links, pairwise_link_collision, pairwise_link_collision_info
 
 from compas_fab.backends import PyBulletClient
-from compas_fab.backends.pybullet.const import ConstraintInfo, STATIC_MASS
+from compas_fab.backends.pybullet.const import STATIC_MASS
 from compas_fab.robots.configuration import Configuration
 
-from .conversions import frame_from_pose, pose_from_transformation, pose_from_frame
-from .utils import values_as_list, LOGGER, wildcard_keys, is_poses_close
+from .conversions import frame_from_pose, pose_from_frame
+from .utils import values_as_list, LOGGER, wildcard_keys
 
 class PyChoreoClient(PyBulletClient):
     """Interface to use pybullet as backend via the **pybullet_plannning**.
@@ -250,9 +249,9 @@ class PyChoreoClient(PyBulletClient):
         return frame_from_pose(get_link_pose(robot_uid, link_from_name(robot_uid, link_name)))
 
     def set_tool_configuration(self, tool_name, configuration):
-        tool_bodies = client._get_bodies('^{}$'.format(tool_name))
+        tool_bodies = self._get_bodies('^{}$'.format(tool_name))
         for tool_body in tool_bodies:
-            client._set_body_configuration(tool_body, configuration)
+            self._set_body_configuration(tool_body, configuration)
 
     ###########################################################
 
