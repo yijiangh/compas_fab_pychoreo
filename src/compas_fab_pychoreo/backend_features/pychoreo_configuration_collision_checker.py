@@ -31,7 +31,7 @@ class PyChoreoConfigurationCollisionChecker(ConfigurationCollisionChecker):
                 Example: exact name match: `"^{}$".format(object_name)`
                          partial name match: `"^{}_".format(object_name)` for all objects with the name "object_name_*"
             - "collision_fn": function handle for the collision_fn, this is only for reusing the same
-            collision_fn to avoid some computation overhead. 
+            collision_fn to avoid some computation overhead.
             Default to None, meaning that a new collision_fn is constructed every time the function is called.
 
         Returns

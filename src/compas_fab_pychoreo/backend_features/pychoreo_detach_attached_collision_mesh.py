@@ -23,6 +23,7 @@ class PyChoreoDetachAttachedCollisionMesh(DetachAttachedCollisionMesh):
         xxx
         """
         # detach attached collision mesh, and leave them in the world as collision objects
+        options = options or {}
         wildcard = options.get('wildcard') or '^{}$'.format(name)
         names = wildcard_keys(self.client.pychoreo_attachments, wildcard)
         if len(names) == 0:
