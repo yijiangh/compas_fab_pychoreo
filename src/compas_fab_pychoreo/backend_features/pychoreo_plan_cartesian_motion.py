@@ -248,7 +248,11 @@ class PyChoreoPlanCartesianMotion(PlanCartesianMotion):
                 #     pos_tolerance=pos_tolerance, ori_tolerance=ori_tolerance))
 
             if planner_id == 'IterativeIK':
-                selected_links = [link_from_name(robot_uid, l) for l in robot.get_link_names(group=group)]
+                selected_links = []
+                for l in robot.get_link_names(group=group):
+                    link_id = link_from_name(robot_uid, l)
+                    if link_id != pp.BASE_LINK:
+                        selected_links.append(link_id)
                 if customized_ikinfo is None:
                     path = plan_cartesian_motion_from_links(robot_uid, selected_links, tool_link,
                         ee_poses, custom_limits=pb_custom_limits, get_sub_conf=False, options=options, attachments=attachments)
